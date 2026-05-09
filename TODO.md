@@ -24,6 +24,7 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 |---|---|---|---|
 | Lucas | POC-PIPE | Pipeline POC standalone bajo `poc/pipeline/` (foundation para B-01..B-07: docker-compose nginx-rtmp + webhooks on_publish/on_publish_done + ffmpeg audio/frames + tmi.js chat + context tick en terminal) | 2026-05-09 |
 | Franco | P0-13 + P0-21 | `[INFRA]` App Alchemy en Base mainnet (`ALCHEMY_RPC_URL`) + ~$1 ETH a treasury para gas de las 9 wallets | 2026-05-09 |
+| Jere | D-09 + UX | Demo Display + UX/UI polish pass (home hub, dock, settings nav, demo display) | 2026-05-09 |
 
 ---
 
@@ -142,7 +143,7 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 - ⬜ **D-06** Brand console `apps/web/src/app/brands/[brandId]/page.tsx`: saldo, library viewer, mandate editor, performance stats — deps: P0-02, C-04, A-05
 - ⬜ **D-07** Ad uploader `apps/web/src/components/brands/AdUploader.tsx` (form + Vercel Blob upload + insert en `ads`) — deps: D-06, P0-14, C-04
 - ⬜ **D-08** Audit log panel en brand console: lista placements + `<video src={clip_url}>` + viewer JSON de `agent_reasoning` + transcript de negociación + export CSV/JSON — deps: D-06, C-05, B-11
-- ⬜ **D-09** Demo Display `apps/web/src/app/demo-display/page.tsx`: bid leaderboard + tx feed + negotiation chat con standing offers actualizándose en vivo — deps: P0-02, A-10, C-10
+- 🟡 **D-09** Demo Display `apps/web/src/app/demo-display/page.tsx`: bid leaderboard + tx feed + negotiation chat con standing offers actualizándose en vivo — deps: P0-02, A-10, C-10
 - ⬜ **D-10** `scripts/pregen-brand-ads.ts` — genera 32 ads (8 brands × 4 variants) con ElevenLabs Creative + insert en `ads` — deps: P0-10, C-04, P0-14
 - ⬜ **D-11** Correr el script de pre-gen el sábado de noche (~1.5 hs en background, paralelo con cualquier track) — deps: D-10
 - ⬜ **D-12** CSS fallback render (banda negra + logo + colores corporativos) si un ad no tiene `asset_url` — deps: D-02
