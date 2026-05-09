@@ -14,15 +14,16 @@ import { BRANDS, type Brand } from "@/lib/brands";
 
 import type { BrandPick, ContextChunk } from "./types";
 
-const SYSTEM_PROMPT = `Sos el manager de placements de Addie. Recibís el contexto actual de un stream en vivo (últimos 30 segundos) y la biblioteca de brands disponibles. Tu trabajo es decidir si este momento amerita pautar y, si sí, qué brand encaja mejor.
+const SYSTEM_PROMPT = `Sos el manager de placements de Addie. Recibís el texto transcripto del audio de un stream en vivo (últimos ~15-30 segundos) y la lista de brands disponibles con sus keywords de referencia.
 
-Sos crítico: SKIP es la opción default. Solo emití un placement si:
-1. el momento es genuinamente interesante (reacción fuerte, mención explícita de marca/producto, recomendación clara, surge de viewers, energía épica) — NO talking heads neutro, NO transición, NO dead air;
-2. hay una brand cuya persona y target_moods calzan con el contexto sin forzarlo.
+Tu ÚNICO trabajo: decidir si el streamer mencionó algo relacionado con alguna de las brands. No tiene que ser una mención literal — si el contexto es claramente sobre el tema de una brand (ej: hablan de tomar algo y una brand es de bebidas), eso cuenta.
 
-Si dudás, SKIP. Devolvé moment_quality y brand_match honestos — un 0.5 es una señal válida de "no estoy seguro". Si encontrás una mención explícita de la marca (audio_mentions o audio_text) eso eleva fuerte el brand_match.
-
-El message tiene que estar en español rioplatense (vos), ≤25 palabras, en la voz/persona de la brand elegida. Nunca menciones competidores. Nunca hables de precios o descuentos.`;
+Reglas:
+- Si el audio menciona o habla sobre algo relacionado con UNA de las brands → should_emit=true, brand_id=<el id>, message=<display_name de la brand>.
+- Si el audio NO tiene nada que ver con ninguna brand → should_emit=false, brand_id=null, message="...".
+- moment_quality y brand_match: poné valores razonables (0.8+ si es mención directa, 0.5-0.7 si es indirecta).
+- reason: explicá brevemente por qué matcheó o no (español, 1 oración).
+- El campo "message" SIEMPRE debe ser exactamente el display_name de la brand elegida (ej: "Yerba Mate", "Ropa Adidas", "Fernet Branca") o "..." si no hay match.`;
 
 const TOOL_NAME = "emit_decision";
 const TOOL: Anthropic.Tool = {
@@ -32,17 +33,17 @@ const TOOL: Anthropic.Tool = {
   input_schema: {
     type: "object",
     properties: {
-      should_emit: { type: "boolean", description: "true solo si moment_quality y brand_match son altos." },
+      should_emit: { type: "boolean", description: "true si el audio se relaciona con alguna brand, false si no." },
       brand_id: {
         type: ["string", "null"],
-        description: "El brand_id exacto del registry (adidas/nike/quilmes/mp/steam/rappi/globant/cocacola), o null si SKIP.",
+        description: "El brand_id exacto del registry (yerba_mate/adidas/fernet_branca), o null si no hay match.",
       },
       moment_quality: { type: "number", description: "0..1 — qué tan auctionable es el momento por sí solo." },
       brand_match: { type: "number", description: "0..1 — qué tan bien la brand elegida calza con este momento." },
       reason: { type: "string", description: "Español, ≤2 oraciones. Explica el call (audit)." },
       message: {
         type: ["string", "null"],
-        description: "Español rioplatense, ≤25 palabras, en voz de la brand. Null si SKIP.",
+        description: "Exactamente el display_name de la brand (ej: 'Yerba Mate') o '...' si no hay match.",
       },
     },
     required: ["should_emit", "brand_id", "moment_quality", "brand_match", "reason", "message"],
@@ -84,63 +85,63 @@ export function makeClaudePicker(apiKey: string, model: string): Picker {
 }
 
 /**
- * Heuristic stub picker — no API key needed. Mirrors the worker's stub:
- * picks the first brand whose target_moods overlaps the chunk's mood_tags
- * (or `any`-tagged brand as fallback) and emits a synthetic message.
+ * Heuristic stub picker — no API key needed.
+ * Checks audio_text against each brand's match_keywords (case-insensitive).
+ * Returns brand display_name if match found, "..." otherwise.
  */
 export function makeStubPicker(): Picker {
   return async function pickBrand(chunk) {
-    const moodTags = chunk.mood_tags ?? [];
-    const match = BRANDS.find(
-      (b) => b.target_moods.includes("any") || b.target_moods.some((m) => moodTags.includes(m)),
+    const text = (chunk.audio_text ?? "").toLowerCase();
+    if (!text) {
+      return {
+        should_emit: true,
+        brand_id: null,
+        moment_quality: 0.1,
+        brand_match: 0,
+        reason: "[DRY_RUN] sin audio",
+        message: "...",
+      };
+    }
+    const match = BRANDS.find((b) =>
+      b.match_keywords.some((kw) => text.includes(kw)),
     );
     if (!match) {
       return {
-        should_emit: false,
+        should_emit: true,
         brand_id: null,
-        moment_quality: 0.6,
-        brand_match: 0.2,
-        reason: "[DRY_RUN] ningún brand tiene target_moods que matcheen los mood_tags del chunk",
-        message: null,
+        moment_quality: 0.3,
+        brand_match: 0,
+        reason: "[DRY_RUN] ningún keyword de brand encontrado en audio_text",
+        message: "...",
       };
     }
     return {
       should_emit: true,
       brand_id: match.id,
       moment_quality: 0.7,
-      brand_match: 0.7,
-      reason: `[DRY_RUN] match heurístico por mood_tags=${moodTags.join(",") || "<vacío>"} → ${match.id}`,
-      message: `[DRY_RUN ${match.display_name}] ${chunk.audio_summary ?? "momento detectado"}`.slice(0, 200),
+      brand_match: 0.8,
+      reason: `[DRY_RUN] keyword match en audio_text → ${match.id}`,
+      message: match.display_name,
     };
   };
 }
 
 function renderPrompt(chunk: ContextChunk, brands: readonly Brand[]): string {
   return [
-    `## CONTEXTO ACTUAL (ventana ${chunk.duration_s}s, stream "${chunk.stream_key}")`,
+    `## AUDIO TRANSCRIPTO (ventana ${chunk.duration_s}s, stream "${chunk.stream_key}")`,
     "",
-    `- Audio summary: ${chunk.audio_summary ?? "(sin resumen)"}`,
-    `- Audio intent: ${chunk.audio_intent ?? "?"}`,
-    `- Audio mentions: ${fmtArray(chunk.audio_mentions)}`,
-    `- Audio topics: ${fmtArray(chunk.audio_topics)}`,
-    `- Audio (transcript bruto, último 30s): ${truncate(chunk.audio_text, 400)}`,
-    `- Escena: ${chunk.scene_type ?? "?"} | energy=${chunk.energy_level ?? "?"} | mood=${fmtArray(chunk.mood_tags)}`,
-    `- On-screen text: ${truncate(chunk.on_screen_text, 120)}`,
-    `- Chat: vel_avg=${chunk.chat_velocity_avg ?? "?"} peak=${chunk.chat_velocity_peak ?? "?"} sentiment=${chunk.sentiment_avg ?? "?"} keywords=${fmtArray(chunk.chat_recent_keywords)}`,
-    `- Audiencia: viewers=${chunk.viewers ?? "?"} (Δ30s=${chunk.viewers_delta_30s ?? "?"}) game="${chunk.game_category ?? "?"}" title="${chunk.stream_title ?? "?"}"`,
+    `Texto del audio: ${truncate(chunk.audio_text, 600) || "(sin audio)"}`,
     "",
     `## BRANDS DISPONIBLES (${brands.length})`,
     "",
     ...brands.map(
       (b) =>
         `### ${b.id} — ${b.display_name}\n` +
-        `- target_moods: ${fmtArray(b.target_moods)}\n` +
-        `- safety_keywords (auto-skip si suenan): ${fmtArray(b.safety_keywords)}\n` +
-        (b.always_bid_floor ? `- default_bidder: true (acepta cualquier contexto no-unsafe)\n` : "") +
+        `- keywords de referencia: ${fmtArray(b.match_keywords)}\n` +
         `- persona: ${truncate(b.default_persona, 240)}`,
     ),
     "",
-    "Decidí ahora. Llamá la tool `emit_decision` con tu output.",
+    "Decidí ahora. Llamá la tool `emit_decision` con tu output. Recordá: message = display_name exacto de la brand si matchea, o \"...\" si no.",
   ].join("\n");
 }
 

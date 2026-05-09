@@ -2,19 +2,15 @@
  * managerTick — single cron tick worth of work.
  *
  * 1. Fetch latest context_chunks row for stream_key.
- * 2. Fetch latest render_events row for creator_id (= stream_key today).
- * 3. If we're inside cooldown window since the last emit → skip.
- * 4. Stage 1 semantic filter on the chunk → maybe skip.
- * 5. Stage 2 Claude (or stub) picker → maybe skip on score thresholds.
- * 6. INSERT render_events + pg_notify (same shape the existing /render
- *    route writes), so the SSE consumer at /o/<id> gets the message.
+ * 2. Emit raw firehose event.
+ * 3. Claude (or stub) picker analyses audio_text against 3 brands.
+ * 4. ALWAYS emit to SSE: brand display_name if match, "..." if not.
  *
  * No HTTP roundtrip — we hit the DB directly via the shared pg pool.
  */
 
 import { pool } from "@/lib/pg";
 
-import { stage1Filter } from "./intensity";
 import { makeClaudePicker, makeStubPicker, type Picker } from "./pickBrand";
 import type { ChunkMeta, ContextChunk, TickResult } from "./types";
 
@@ -147,42 +143,9 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
       `${config.creatorId}:${rawInsert.rows[0]!.id}`,
     ]);
 
-    // 2. Last BRAND emit timestamp (cooldown anchor). Filter by kind so the
-    //    raw-chunk firehose (kind='raw') doesn't keep cooldown permanently active.
-    const lastEmitRes = await client.query<{ created_at: string }>(
-      `select created_at from render_events
-        where creator_id = $1 and kind = 'brand'
-        order by created_at desc
-        limit 1`,
-      [config.creatorId],
-    );
-    const lastEmit = lastEmitRes.rows[0];
-    if (lastEmit) {
-      const sinceEmit = Date.now() - new Date(lastEmit.created_at).getTime();
-      if (sinceEmit < config.cooldownMs) {
-        return {
-          decision: "cooldown",
-          stream_key: config.streamKey,
-          ms_remaining: config.cooldownMs - sinceEmit,
-          chunk: toChunkMeta(chunk),
-        };
-      }
-    }
-
     const meta = toChunkMeta(chunk);
 
-    // 3. Stage 1
-    const s1 = stage1Filter(chunk);
-    if (!s1.pass) {
-      return {
-        decision: "skip:stage1",
-        stream_key: config.streamKey,
-        chunk: meta,
-        reason: s1.reason,
-      };
-    }
-
-    // 4. Stage 2
+    // 2. Claude (or stub) picker decides: brand display_name or "..."
     const picker: Picker = config.dryRun
       ? makeStubPicker()
       : (() => {
@@ -196,25 +159,14 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
 
     const pick = await picker(chunk);
 
-    if (!pick.should_emit || !pick.brand_id) {
-      return { decision: "skip:llm_no_match", stream_key: config.streamKey, chunk: meta, pick };
-    }
-    if (pick.moment_quality < config.momentQualityMin) {
-      return { decision: "skip:moment_quality", stream_key: config.streamKey, chunk: meta, pick };
-    }
-    if (pick.brand_match < config.brandMatchMin) {
-      return { decision: "skip:brand_match", stream_key: config.streamKey, chunk: meta, pick };
-    }
-    if (!pick.message) {
-      return { decision: "skip:empty_message", stream_key: config.streamKey, chunk: meta, pick };
-    }
+    // Always emit: brand display_name if Claude matched, "..." otherwise.
+    const message = pick.message ?? "...";
 
-    // 5. Emit — kind='brand' so cooldown query picks it up next tick.
     const insert = await client.query<{ id: string }>(
       `insert into render_events (creator_id, message, kind)
        values ($1, $2, 'brand')
        returning id`,
-      [config.creatorId, pick.message.slice(0, 280)],
+      [config.creatorId, message.slice(0, 280)],
     );
     const event_id = insert.rows[0]!.id;
     await client.query("select pg_notify('render_events', $1)", [
