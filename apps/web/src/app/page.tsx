@@ -38,6 +38,17 @@ const PAGES = [
   },
 ];
 
+const BRANDS = [
+  { id: "adidas",   label: "Adidas",       color: "#e8e8e8" },
+  { id: "nike",     label: "Nike",         color: "#ff6600" },
+  { id: "quilmes",  label: "Quilmes",      color: "#f5c400" },
+  { id: "mp",       label: "Mercado Pago", color: "#009ee3" },
+  { id: "steam",    label: "Steam",        color: "#66c0f4" },
+  { id: "rappi",    label: "Rappi",        color: "#ff441f" },
+  { id: "globant",  label: "Globant",      color: "#b8d430" },
+  { id: "cocacola", label: "Coca-Cola",    color: "#f40009" },
+];
+
 export default function Home() {
   return (
     <main className="min-h-screen bg-[#0a0a0f] text-[#f0f0f5] flex flex-col items-center justify-center p-8">
@@ -75,6 +86,23 @@ export default function Home() {
             </Link>
           ))}
         </nav>
+
+        {/* Brand consoles */}
+        <div className="mt-6">
+          <p className="text-[10px] uppercase tracking-wider text-[#3a3a4a] font-medium mb-2">Brand consoles</p>
+          <div className="grid grid-cols-4 gap-1.5">
+            {BRANDS.map((b) => (
+              <Link
+                key={b.id}
+                href={`/brands/${b.id}`}
+                className="group flex items-center gap-2 rounded-lg border border-[#1e1e2a] bg-[#0d0d14] px-3 py-2 hover:border-[#2a2a38] hover:bg-[#111118] transition-all"
+              >
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: b.color }} />
+                <span className="text-xs text-[#55556a] group-hover:text-[#9090a8] truncate transition-colors">{b.label}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
 
         <p className="text-center text-xs text-[#2a2a38] mt-8">
           Platanus Hack BSAS 2026 · Track 🤑 Agentic Money
