@@ -8,14 +8,19 @@ interface ActiveSession {
   session: StreamSession;
   pollCount: number;
   lastBytesIn: number;
+  lastPollAt: number;
   interval: NodeJS.Timeout;
 }
 
 const sessions = new Map<string, ActiveSession>();
 
-function flattenStats(stats: StreamStats): Record<string, unknown> {
+function flattenStats(stats: StreamStats, bwEffectiveKbps: number): Record<string, unknown> {
   return {
     uptime_s: stats.uptime_seconds,
+    // bw_effective deriva del delta de bytes_in entre ticks → siempre poblado.
+    // bw_in/bw_video/bw_audio del XML solo se llenan cuando hay subscribers,
+    // los dejo abajo como referencia pero suelen ser 0 con solo publisher.
+    bw_effective_kbps: bwEffectiveKbps,
     bw_in_kbps: stats.bw_in_kbps,
     bw_video_kbps: stats.bw_video_kbps,
     bw_audio_kbps: stats.bw_audio_kbps,
@@ -43,11 +48,11 @@ export function startSession(session: StreamSession): void {
     session,
     pollCount: 0,
     lastBytesIn: 0,
+    lastPollAt: 0,
     interval: setInterval(async () => {
       state.pollCount += 1;
       const stats = await fetchStreamStats(key);
       if (!stats) {
-        // nginx-rtmp puede tardar 1–2 ticks en exponer el stream tras el on_publish.
         if (state.pollCount <= 3) {
           log.info(`tick #${String(state.pollCount).padStart(3, '0')} — esperando metadata del stream…`);
         } else {
@@ -55,8 +60,14 @@ export function startSession(session: StreamSession): void {
         }
         return;
       }
+      const now = Date.now();
+      const dtSec = state.lastPollAt > 0 ? (now - state.lastPollAt) / 1000 : 0;
+      const dBytes = stats.bytes_in - state.lastBytesIn;
+      const bwEffectiveKbps =
+        dtSec > 0 && dBytes >= 0 ? Math.round((dBytes * 8) / 1000 / dtSec) : 0;
       state.lastBytesIn = stats.bytes_in;
-      log.tick(state.pollCount, flattenStats(stats));
+      state.lastPollAt = now;
+      log.tick(state.pollCount, flattenStats(stats, bwEffectiveKbps));
     }, POLL_INTERVAL_MS),
   };
 
