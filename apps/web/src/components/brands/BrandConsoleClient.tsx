@@ -54,7 +54,7 @@ export default function BrandConsoleClient({ brandId, initial }: { brandId: stri
       <div className="border-b border-[var(--line)] bg-[var(--page-2)]">
         <div className="max-w-3xl mx-auto px-6 py-5">
           <div className="flex items-center justify-between">
-            <Link href="/dashboard/brand" className="text-[var(--text-3)] hover:text-[var(--text-2)] text-xs transition-colors">← Brands</Link>
+            <Link href="/brand/dashboard" className="text-[var(--text-3)] hover:text-[var(--text-2)] text-xs transition-colors">← Marcas</Link>
             <ThemeToggle />
           </div>
           <div className="flex items-center gap-3 mt-3">

@@ -64,6 +64,12 @@ export interface DockHooks {
   onStatusChange?: (handler: (id: string, s: PlacementStatus) => void) => () => void;
 }
 
+const ZONE_LABELS: Record<string, string> = {
+  lower_third: "Banner inferior",
+  bottom_right_corner: "Logo esquina",
+  fullscreen_takeover: "Pantalla completa",
+};
+
 export default function DockClient({ hooks }: { hooks?: DockHooks }) {
   const [state, dispatch] = useReducer(reducer, INITIAL);
   const lastActionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -134,14 +140,14 @@ export default function DockClient({ hooks }: { hooks?: DockHooks }) {
     <div className="flex flex-col gap-3 p-3 min-w-[260px] max-w-[380px] font-sans text-sm select-none bg-[var(--page)] text-[var(--text)]">
       {/* Balance */}
       <section className="rounded-lg bg-[var(--card)] border border-[var(--line)] p-3">
-        <p className="text-[var(--text-2)] text-xs uppercase tracking-wider mb-1">Creator balance</p>
+        <p className="text-[var(--text-2)] text-xs uppercase tracking-wider mb-1">Saldo creador</p>
         {state.balanceUsdc !== null ? (
           <p className="text-2xl font-bold text-[#22d3ee]">
             ${state.balanceUsdc.toFixed(2)}{" "}
             <span className="text-xs font-normal text-[#2775ca]">USDC</span>
           </p>
         ) : (
-          <p className="text-[var(--text-3)] text-sm">Connecting…</p>
+          <p className="text-[var(--text-3)] text-sm">Conectando…</p>
         )}
       </section>
 
@@ -152,16 +158,22 @@ export default function DockClient({ hooks }: { hooks?: DockHooks }) {
           disabled={state.forceEventPending}
           className="w-full rounded-lg py-2.5 px-3 font-semibold bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-between text-white"
         >
-          <span>⚡ FORCE EVENT</span>
-          <kbd className="text-[10px] bg-[#4f46e5] rounded px-1.5 py-0.5 opacity-70">F</kbd>
+          <div className="flex flex-col items-start text-left">
+            <span>⚡ AD momento</span>
+            <span className="text-[10px] opacity-60 font-normal">Dispara un aviso en el momento actual</span>
+          </div>
+          <kbd className="text-[10px] bg-[#4f46e5] rounded px-1.5 py-0.5 opacity-70 shrink-0">F</kbd>
         </button>
         <button
           onClick={triggerFullBreak}
           disabled={state.fullBreakPending}
           className="w-full rounded-lg py-2.5 px-3 font-semibold bg-[#ef4444] hover:bg-[#dc2626] disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-between text-white"
         >
-          <span>🎬 FULL BREAK</span>
-          <kbd className="text-[10px] bg-[#dc2626] rounded px-1.5 py-0.5 opacity-70">B</kbd>
+          <div className="flex flex-col items-start text-left">
+            <span>🎬 Corte publicitario</span>
+            <span className="text-[10px] opacity-60 font-normal">Pantalla completa para una marca</span>
+          </div>
+          <kbd className="text-[10px] bg-[#dc2626] rounded px-1.5 py-0.5 opacity-70 shrink-0">B</kbd>
         </button>
       </section>
 
@@ -172,9 +184,9 @@ export default function DockClient({ hooks }: { hooks?: DockHooks }) {
 
       {/* Recent placements */}
       <section className="rounded-lg bg-[var(--card)] border border-[var(--line)] p-3">
-        <p className="text-[var(--text-2)] text-xs uppercase tracking-wider mb-2">Recent placements</p>
+        <p className="text-[var(--text-2)] text-xs uppercase tracking-wider mb-2">Avisos recientes</p>
         {state.placements.length === 0 ? (
-          <p className="text-[var(--text-3)] text-xs">No placements yet</p>
+          <p className="text-[var(--text-3)] text-xs">Sin avisos todavía</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {state.placements.map((p) => (
@@ -198,10 +210,10 @@ function PlacementRow({ placement: p }: { placement: RecentPlacement }) {
     <li className="flex items-start justify-between gap-2 text-xs">
       <div className="flex flex-col min-w-0">
         <span className="font-medium truncate text-[var(--text)]">
-          {p.brand} · {p.ad_label}
+          {p.brand}
         </span>
         <span className="text-[var(--text-3)]">
-          {p.zone} · {formatAgo(p.ts)}
+          {ZONE_LABELS[p.zone] ?? p.zone} · {formatAgo(p.ts)}
         </span>
       </div>
       <div className="flex flex-col items-end gap-1 shrink-0">
