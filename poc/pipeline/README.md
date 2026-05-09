@@ -68,7 +68,7 @@ npm run demo                 # express webhook server en :3000
    ELEVENLABS_API_KEY=sk_...
    ELEVENLABS_STT_LANGUAGE=es
    # Opcional: keyterms para sesgar a slang argentino + nombres propios del demo
-   ELEVENLABS_STT_KEYTERMS=che,boludo,groso,quilombo,laburo,Coscu,adidas,Quilmes
+   ELEVENLABS_STT_KEYTERMS=che,boludo,groso,quilombo,laburo,addie,adidas,Quilmes
    ```
 6. Reiniciá `npm run demo` para que tome las env vars.
 
@@ -83,16 +83,16 @@ Si la key NO está, el POC arranca igual y los ticks tienen `audio_30s: "(no com
 1. OBS → Settings → Stream
 2. Service: **Custom**
 3. Server: `rtmp://localhost/live`
-4. Stream Key: `coscu-test` (o lo que quieras, free-form)
+4. Stream Key: `team-stream` (o lo que quieras, free-form)
 5. Click **Start Streaming**
 
 En la terminal donde corre `npm run demo` deberías ver:
 
 ```
-◆ on_publish · name="coscu-test"
+◆ on_publish · name="team-stream"
 ▶ session started
 polling nginx-rtmp /stat every 1000ms
-[transcribe coscu-test] WS open · model=scribe_v2_realtime · lang=es
+[transcribe team-stream] WS open · model=scribe_v2_realtime · lang=es
 
 ▶ tick #001
     uptime_s               1
@@ -106,7 +106,7 @@ polling nginx-rtmp /stat every 1000ms
     audio_30s              "dale loco vamos"
     audio_partial          "qué jugada hizo"
 ...
-[transcribe coscu-test] ✓ "dale loco vamos qué jugada hizo"
+[transcribe team-stream] ✓ "dale loco vamos qué jugada hizo"
 ```
 
 Cuando paras OBS → llega `on_publish_done` → la sesión se cierra y se imprime el resumen.
@@ -135,7 +135,7 @@ curl -X POST http://localhost:3000/api/stream/on-publish-done \
 ## Verificar el stream con ffprobe
 
 ```bash
-ffprobe rtmp://localhost/live/coscu-test
+ffprobe rtmp://localhost/live/team-stream
 ```
 
 ## ✅ Verificación end-to-end (2026-05-09)
@@ -231,14 +231,14 @@ Este pipeline produce **el contexto que los brand-agents necesitan para decidir 
 -- Última ventana de contexto del stream activo
 SELECT *
 FROM context_chunks
-WHERE stream_key = 'coscu'
+WHERE stream_key = 'team-stream'
 ORDER BY ts_start DESC
 LIMIT 1;
 
 -- History reciente (cold start, debug, replay)
 SELECT *
 FROM context_chunks
-WHERE stream_key = 'coscu'
+WHERE stream_key = 'team-stream'
   AND ts_start > now() - interval '5 minutes'
 ORDER BY ts_start ASC;
 ```
@@ -249,7 +249,7 @@ Una row aparece cada **`CHUNK_INTERVAL_MS`** (default 30s). Los brand-agents pol
 
 | Columna | Tipo | Significado |
 |---|---|---|
-| `stream_key` | text | Identificador del stream (nginx-rtmp key, ej `coscu`) |
+| `stream_key` | text | Identificador del stream (nginx-rtmp key, ej `team-stream`) |
 | `ts_start` / `duration_s` | timestamptz / int | Ventana cubierta por el chunk |
 | `audio_text` | text | **Transcript completo** de los últimos 30s (Scribe v2 realtime, español) |
 | `audio_partial_at_end` | text | Lo que se está diciendo cuando se cerró el chunk (puede no estar comiteado todavía) |

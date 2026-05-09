@@ -11,7 +11,7 @@ const server = app.listen(PORT, () => {
   log.info(`expecting nginx-rtmp on rtmp://localhost:1935/live`);
   log.info(`OBS → Settings → Stream → Service "Custom"`);
   log.info(`     Server: rtmp://localhost/live`);
-  log.info(`     Stream Key: cualquier-cosa-key (ej "coscu-test")`);
+  log.info(`     Stream Key: cualquier-cosa-key (ej "team-stream")`);
   log.info(`waiting for on_publish webhook…`);
 });
 

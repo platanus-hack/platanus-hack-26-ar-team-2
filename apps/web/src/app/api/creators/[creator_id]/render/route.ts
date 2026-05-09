@@ -1,7 +1,7 @@
 /**
  * POST /api/creators/[creator_id]/render
  *
- *   curl -X POST https://addie.app/api/creators/coscu-test/render \
+ *   curl -X POST https://addie.app/api/creators/team-stream/render \
  *     -H "Content-Type: application/json" \
  *     -d '{"message":"Hola desde curl"}'
  *

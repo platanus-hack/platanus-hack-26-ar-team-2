@@ -13,7 +13,7 @@
 create table render_events (
   id uuid primary key default gen_random_uuid(),
   -- creator_id stored as text for MVP — works with arbitrary slugs in tests
-  -- (e.g. 'coscu-test'). Migrates to FK on accounts(id) when seed-wallets (A-05)
+  -- (e.g. 'team-stream'). Migrates to FK on accounts(id) when seed-wallets (A-05)
   -- populates the creators table.
   creator_id text not null,
   -- MVP: pure text message. Future: replaced/extended by structured ad payload.
