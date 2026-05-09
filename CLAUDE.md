@@ -72,6 +72,7 @@ git checkout track/a-onchain          # o b-pipeline / c-agents / d-ui
 - ✅ Cero `git push --force` a `main`. Cero `git reset --hard` sin confirmar.
 - ✅ Nunca skipear pre-commit hooks (`--no-verify`) salvo acuerdo explícito del team.
 - ✅ Nunca commitear secrets ni `.env*` (ya cubierto por `.gitignore` para `.claude/`, agregar reglas si hace falta).
+- ✅ `tmp/` está gitignored y es para scratch local (notas para mentor, drafts, debug). **Nada de `tmp/` se sube** — si algo merece persistir, movelo al doc correspondiente.
 - ✅ Si algo de Phase 0 no está listo, fixearlo es prioridad sobre todo lo demás.
 - ⛔ Cero features fuera del [§15 DESIGN.md](./DESIGN.md) (YAGNI duro durante 24h).
 - ⛔ Cero generación de creative en runtime — todo pre-subido por la marca (ver §6 DESIGN.md).
