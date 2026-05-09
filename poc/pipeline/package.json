@@ -9,9 +9,11 @@
     "rtmp:up": "docker compose up -d",
     "rtmp:down": "docker compose down",
     "rtmp:logs": "docker compose logs -f rtmp",
-    "smoke": "tsx scripts/smoke.ts"
+    "smoke": "tsx scripts/smoke.ts",
+    "smoke:summary": "tsx scripts/smoke-summary.ts"
   },
   "dependencies": {
+    "@ai-sdk/google": "^3.0.71",
     "@elevenlabs/elevenlabs-js": "^2.46.0",
     "@supabase/supabase-js": "^2.105.4",
     "ai": "^6.0.177",

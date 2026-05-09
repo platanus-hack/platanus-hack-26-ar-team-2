@@ -3,6 +3,7 @@ import type { TranscribeHandle } from './transcribe.js';
 import type { FrameHandle } from './frame.js';
 import type { TwitchHandle } from './twitch.js';
 import type { ChatHandle } from './chat.js';
+import { summarizeAudio } from './audioSummary.js';
 import { log } from './log.js';
 
 const CHUNK_INTERVAL_MS = Number(process.env.CHUNK_INTERVAL_MS ?? 30_000);
@@ -31,6 +32,10 @@ interface ChunkRow {
   duration_s: number;
   audio_text: string | null;
   audio_partial_at_end: string | null;
+  audio_summary: string | null;
+  audio_topics: string[] | null;
+  audio_mentions: string[] | null;
+  audio_intent: 'discussion' | 'recommendation' | 'complaint' | 'question' | 'reaction' | 'silence' | null;
   scene_type: string | null;
   energy_level: 'calm' | 'medium' | 'high' | 'epic' | null;
   mood_tags: string[];
@@ -105,6 +110,18 @@ export function startChunkWriter(sources: ChunkSources): ChunkWriterHandle {
     const audio_text = transcribe?.getAudio30s() || null;
     const audio_partial = transcribe?.getPartial() || null;
 
+    // Pre-procesa el audio_text con Gemini Flash UNA vez por chunk → ahorra
+    // re-procesamiento por parte de cada brand-agent. Si la call falla o no
+    // hay AI_GATEWAY_API_KEY, el chunk se escribe igual con summary=NULL.
+    const summary = audio_text
+      ? await summarizeAudio(sources.streamKey, {
+          audioText: audio_text,
+          sceneType: frameLatest?.result.scene_type,
+          onScreenText: frameLatest?.result.on_screen_text,
+          gameCategory: tw?.game_category,
+        })
+      : null;
+
     const chunk: ChunkRow = {
       stream_key: sources.streamKey,
       stream_id: null, // POC: no creamos fila en streams. Lo llena el handler real en apps/web.
@@ -113,6 +130,10 @@ export function startChunkWriter(sources: ChunkSources): ChunkWriterHandle {
 
       audio_text,
       audio_partial_at_end: audio_partial,
+      audio_summary: summary?.summary ?? null,
+      audio_topics: summary?.topics ?? null,
+      audio_mentions: summary?.mentions ?? null,
+      audio_intent: summary?.intent ?? null,
 
       scene_type: frameLatest?.result.scene_type ?? null,
       energy_level: frameLatest?.result.energy_level ?? null,
@@ -138,7 +159,8 @@ export function startChunkWriter(sources: ChunkSources): ChunkWriterHandle {
       `[chunk ${sources.streamKey}] #${chunkCount} · ${ticksAggregated} ticks · ${framesAggregated} frames · ` +
         `viewers=${viewers ?? '—'} (Δ${viewersDelta ?? '—'}) · ` +
         `chat=${chatMetrics ? `${chatMetrics.velocity_avg.toFixed(1)}msg/s ${chatMetrics.sentiment}` : '—'} · ` +
-        `scene="${chunk.scene_type ?? '—'}"`,
+        `scene="${chunk.scene_type ?? '—'}" · ` +
+        `audio=${summary ? `${summary.intent} topics=[${summary.topics.join(',')}] mentions=[${summary.mentions.join(',')}]` : '—'}`,
     );
 
     if (supabase) {

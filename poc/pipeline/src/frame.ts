@@ -1,10 +1,15 @@
 import { spawn, type ChildProcess } from 'child_process';
 import { generateObject } from 'ai';
 import { z } from 'zod';
+import { resolveModel, isUsingDirectProvider } from './aiModel.js';
 import { log } from './log.js';
 
-const MODEL = process.env.FRAME_MODEL ?? 'google/gemini-2.5-flash';
-const FPS = Number(process.env.FRAME_FPS ?? 1); // frames por segundo capturados del stream
+const MODEL_STRING = process.env.FRAME_MODEL ?? 'gemini-3.1-flash-lite';
+const MODEL = resolveModel(MODEL_STRING);
+// Frames por segundo capturados del stream. Default 0.5 (1 cada 2s) por el
+// rate limit del free tier de Google AI Studio (15 RPM en Flash-Lite). Con 1
+// FPS chocábamos. Subí esto si usás un tier pagado.
+const FPS = Number(process.env.FRAME_FPS ?? 0.5);
 
 // Schema agnóstico al contenido. El modelo NO debe asumir gaming, IRL, cocina,
 // charla — solo describir lo que VE. Estos campos se mergean al ContextTick y
@@ -56,9 +61,12 @@ async function analyzeFrame(jpegBuffer: Buffer): Promise<FrameAnalysisResult> {
 }
 
 export async function startFrameAnalysis(streamKey: string): Promise<FrameHandle | null> {
-  const apiKey = process.env.AI_GATEWAY_API_KEY;
-  if (!apiKey) {
-    log.warn(`[frame ${streamKey}] AI_GATEWAY_API_KEY missing → frame pipe disabled`);
+  const hasKey =
+    process.env.GEMINI_API_KEY ||
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
+    process.env.AI_GATEWAY_API_KEY;
+  if (!hasKey) {
+    log.warn(`[frame ${streamKey}] no GEMINI_API_KEY ni AI_GATEWAY_API_KEY → frame pipe disabled`);
     return null;
   }
 
@@ -148,7 +156,9 @@ export async function startFrameAnalysis(streamKey: string): Promise<FrameHandle
     if (active) log.info(`[frame ${streamKey}] ffmpeg exited code=${code}`);
   });
 
-  log.success(`[frame ${streamKey}] pipe arrancado · model=${MODEL} · fps=${FPS}`);
+  log.success(
+    `[frame ${streamKey}] pipe arrancado · model=${MODEL_STRING} · provider=${isUsingDirectProvider() ? 'google-direct' : 'ai-gateway'} · fps=${FPS}`,
+  );
 
   return {
     getLatest: () => {
