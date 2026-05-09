@@ -82,18 +82,27 @@ async function fetchStreamInfo(
 /**
  * Pulla métricas del canal de Twitch cada N segundos. Si el canal no está en
  * vivo, devuelve un TwitchMetrics con is_live=false y viewers=0. Si las creds
- * faltan o auth falla, el módulo se desactiva graciosamente y getLatest() devuelve null.
+ * Helix faltan, el módulo se desactiva graciosamente y getLatest() devuelve null.
+ *
+ * IMPORTANTE: `twitchChannel` es **per-stream**, NO global. Para multi-stream
+ * cada sesión llama startTwitchPoll() con SU canal propio. En producción el
+ * handler del on_publish lookups por stream_key en `accounts` y pasa el canal.
+ *
+ * Las creds Helix (CLIENT_ID + CLIENT_SECRET) son del PROYECTO Addie,
+ * NO per-creator. Una sola app de dev.twitch.tv autentica las consultas Helix
+ * de todos los creators que tengamos onboardeados.
  */
-export async function startTwitchPoll(streamKey: string): Promise<TwitchHandle | null> {
+export async function startTwitchPoll(streamKey: string, twitchChannel: string): Promise<TwitchHandle | null> {
   const clientId = process.env.TWITCH_CLIENT_ID;
   const clientSecret = process.env.TWITCH_CLIENT_SECRET;
-  // El TWITCH_CHANNEL puede ser distinto al stream_key del nginx-rtmp local.
-  // Si el creator dice "coscu-test" en OBS pero su canal Twitch real es "coscu",
-  // configurás TWITCH_CHANNEL=coscu en .env. Default = stream_key como fallback.
-  const channel = process.env.TWITCH_CHANNEL ?? streamKey;
+  const channel = twitchChannel;
 
   if (!clientId || !clientSecret) {
     log.warn(`[twitch ${streamKey}] TWITCH_CLIENT_ID/SECRET missing → twitch poll disabled`);
+    return null;
+  }
+  if (!channel) {
+    log.warn(`[twitch ${streamKey}] twitchChannel vacío → twitch poll disabled`);
     return null;
   }
 

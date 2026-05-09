@@ -120,16 +120,25 @@ function topKeywords(messages: ChatMessage[], k: number): string[] {
 }
 
 /**
- * Conecta a Twitch IRC vía tmi.js (anonymous read-only) al canal configurado y
+ * Conecta a Twitch IRC vía tmi.js (anonymous read-only) al canal indicado y
  * mantiene buffer rolling de mensajes. Calcula velocity, sentiment heurístico
- * y top keywords on-demand cuando el orchestrator/chunkWriter consultan.
+ * y top keywords on-demand.
  *
- * Si TWITCH_CHANNEL no está seteado, el módulo se desactiva graciosamente.
+ * IMPORTANTE: el `twitchChannel` es **per-stream**, NO global. Para multi-stream
+ * (varios creators streameando a la vez), cada sesión recibe SU propio canal.
+ * En producción el handler del on_publish lookups por stream_key en `accounts`
+ * y pasa el `twitch_channel` del metadata.
+ *
+ * Para POC standalone con un solo streamer, el orchestrator pasa por default el
+ * stream_key del nginx-rtmp como twitch_channel (asumiendo que el creator usa
+ * su username de Twitch como stream key). Si querés override (ej testear contra
+ * un canal popular para ver chat real), podés setear TWITCH_CHANNEL_OVERRIDE
+ * en .env y el orchestrator lo prioriza.
  */
-export async function startChat(streamKey: string): Promise<ChatHandle | null> {
-  const channel = process.env.TWITCH_CHANNEL ?? streamKey;
+export async function startChat(streamKey: string, twitchChannel: string): Promise<ChatHandle | null> {
+  const channel = twitchChannel;
   if (!channel) {
-    log.warn(`[chat ${streamKey}] TWITCH_CHANNEL missing → chat pipe disabled`);
+    log.warn(`[chat ${streamKey}] twitchChannel vacío → chat pipe disabled`);
     return null;
   }
 

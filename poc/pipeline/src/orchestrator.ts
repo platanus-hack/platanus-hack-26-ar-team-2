@@ -97,13 +97,30 @@ function flattenTick(
   };
 }
 
-export function startSession(session: StreamSession): void {
+export interface StartSessionOptions {
+  // Canal Twitch a monitorear para esta sesión (chat tmi.js + Helix viewers).
+  // Default = stream_key (asume que el creator usa su username de Twitch como
+  // stream_key). En producción, el handler del on_publish lookups por
+  // stream_key en `accounts.metadata.twitch_channel` y pasa el valor explícito.
+  twitchChannel?: string;
+}
+
+function resolveTwitchChannel(streamKey: string, opts?: StartSessionOptions): string {
+  // Prioridad: override (testing standalone) → opts.twitchChannel (lookup
+  // de DB en producción) → stream_key del nginx-rtmp como default.
+  return process.env.TWITCH_CHANNEL_OVERRIDE || opts?.twitchChannel || streamKey;
+}
+
+export function startSession(session: StreamSession, opts?: StartSessionOptions): void {
   const key = session.name;
   if (sessions.has(key)) {
     log.warn(`session ${key} already active, ignoring duplicate on_publish`);
     return;
   }
-  log.success(`▶ session started · stream_key=${key} · ts=${new Date(session.started_at).toISOString()}`);
+  const twitchChannel = resolveTwitchChannel(key, opts);
+  log.success(
+    `▶ session started · stream_key=${key} · twitch_channel=${twitchChannel} · ts=${new Date(session.started_at).toISOString()}`,
+  );
   log.info(`polling nginx-rtmp /stat every ${POLL_INTERVAL_MS}ms for real stream metrics`);
 
   const state: ActiveSession = {
@@ -174,14 +191,14 @@ export function startSession(session: StreamSession): void {
     })
     .catch((e) => log.warn(`[frame ${key}] start failed: ${e instanceof Error ? e.message : e}`));
 
-  startTwitchPoll(key)
+  startTwitchPoll(key, twitchChannel)
     .then((handle) => {
       const active = sessions.get(key);
       if (active && handle) active.twitch = handle;
     })
     .catch((e) => log.warn(`[twitch ${key}] start failed: ${e instanceof Error ? e.message : e}`));
 
-  startChat(key)
+  startChat(key, twitchChannel)
     .then((handle) => {
       const active = sessions.get(key);
       if (active && handle) active.chat = handle;
