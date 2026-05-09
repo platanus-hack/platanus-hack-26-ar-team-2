@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+
 import SignupForm from "@/components/auth/SignupForm";
 
 export default function SignupPage() {
@@ -11,7 +13,9 @@ export default function SignupPage() {
         </a>
         .
       </p>
-      <SignupForm />
+      <Suspense fallback={<p className="text-sm opacity-60">Cargando…</p>}>
+        <SignupForm />
+      </Suspense>
     </main>
   );
 }

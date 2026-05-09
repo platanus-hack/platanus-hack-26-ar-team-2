@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+
 import LoginForm from "@/components/auth/LoginForm";
 
 export default function LoginPage() {
@@ -11,7 +13,11 @@ export default function LoginPage() {
         </a>
         .
       </p>
-      <LoginForm />
+      {/* Suspense required because LoginForm uses useSearchParams() — Next 15+
+          requires CSR-bailout pages to be wrapped explicitly. */}
+      <Suspense fallback={<p className="text-sm opacity-60">Cargando…</p>}>
+        <LoginForm />
+      </Suspense>
     </main>
   );
 }

@@ -24,7 +24,6 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 |---|---|---|---|
 | Lucas | POC-PIPE | Pipeline POC standalone bajo `poc/pipeline/` (foundation para B-01..B-07: docker-compose nginx-rtmp + webhooks on_publish/on_publish_done + ffmpeg audio/frames + tmi.js chat + context tick en terminal) | 2026-05-09 |
 | Jere | C-02 | 8 mandate templates YAML (brands/*.yaml) + loader TypeScript | 2026-05-09 |
-| Andy | DEPLOY-PROD | Deploy `apps/web` a Vercel prod (`web-arvenz0210s-projects.vercel.app`): `vercel.json` con installCommand fix, BETTER_AUTH_SECRET en env (production+preview+development), BETTER_AUTH_URL en prod+preview, SSO Protection desactivada vía Vercel API, Suspense wrap en /login + /signup pages (Next 15+ requirement). Auth flow verificado live en prod. | 2026-05-09 |
 
 ---
 
