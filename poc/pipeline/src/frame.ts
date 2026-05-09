@@ -31,6 +31,7 @@ export type FrameAnalysisResult = z.infer<typeof FrameAnalysis>;
 
 export interface FrameHandle {
   getLatest(): { result: FrameAnalysisResult; ageMs: number } | null;
+  getAnalysisCount(): number;
   stop(): Promise<void>;
 }
 
@@ -68,6 +69,7 @@ export async function startFrameAnalysis(streamKey: string): Promise<FrameHandle
   let pending: Buffer | null = null;
   let analyzing = false;
   let buffer = Buffer.alloc(0);
+  let analysisCount = 0;
 
   // Cola tamaño 1: guardamos solo el frame más reciente. Si el modelo tarda más
   // que 1s, descartamos los intermedios y arrancamos análisis con el último.
@@ -82,6 +84,7 @@ export async function startFrameAnalysis(streamKey: string): Promise<FrameHandle
         const result = await analyzeFrame(jpeg);
         if (active) {
           latest = { result, ts: Date.now() };
+          analysisCount += 1;
           log.info(`[frame ${streamKey}] ✓ ${result.energy_level} · ${result.scene_type}`);
         }
       } catch (e) {
@@ -152,6 +155,7 @@ export async function startFrameAnalysis(streamKey: string): Promise<FrameHandle
       if (!latest) return null;
       return { result: latest.result, ageMs: Date.now() - latest.ts };
     },
+    getAnalysisCount: () => analysisCount,
     stop: async () => {
       active = false;
       try {
