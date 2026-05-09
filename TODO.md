@@ -99,18 +99,20 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 
 ### Track B · Pipeline (sugerido: Lucas)
 
-- ⬜ **B-01** `infra/docker-compose.yml` con nginx-rtmp + puertos + volume para `record` — deps: P0-17
-- ⬜ **B-02** `infra/nginx-rtmp.conf` con `application live` + webhooks `on_publish` / `on_publish_done` apuntando a `apps/web/src/app/api/stream/*` (usar `host.docker.internal:3000` desde Docker en Mac) — deps: B-01
-- ⬜ **B-03** Endpoint `POST /api/stream/on-publish` que crea fila en `streams` y arranca el orchestrator del pipeline — deps: B-02, P0-04
-- ⬜ **B-04** Audio pipe: `ffmpeg` child_process → 16kHz PCM mono → ElevenLabs **Scribe v2 realtime** WS (VAD auto-commit, lang `es`), transcript rolling 30s + partial actual en buffer. **POC funcionando en [`poc/pipeline/src/transcribe.ts`](./poc/pipeline/src/transcribe.ts)** ([commit 992e5a1](../../commit/992e5a1)) — falta portear a `apps/web/src/lib/pipeline/audio.ts`. — deps: B-03, P0-10
+> **POC funcionando en `poc/pipeline/`** ([branch `track/b-pipeline`](../../tree/track/b-pipeline/poc/pipeline)). B-01..B-04 + B-12 verificados end-to-end con OBS + voz humana real. Falta portear a `apps/web/` cuando arranque esa fase: la lógica de cada módulo se reusa tal cual, solo cambia el host (Express POC → Next.js route handlers; orchestrator standalone → broadcast a Supabase Realtime).
+
+- ✅ **B-01** docker-compose con nginx-rtmp + puertos. POC en [`poc/pipeline/docker-compose.yml`](./poc/pipeline/docker-compose.yml). Record desactivado en POC — lo re-habilita B-08 con permisos de volume mount correctos.
+- ✅ **B-02** `nginx-rtmp.conf` con `application live` + webhooks `on_publish`/`on_publish_done` + **`worker_processes=1`** (con auto-workers `/stat` devuelve datos inconsistentes entre workers). POC en [`poc/pipeline/nginx-rtmp.conf`](./poc/pipeline/nginx-rtmp.conf). En `apps/web/` los webhooks van a apuntar a `apps/web/src/app/api/stream/*` con `host.docker.internal:3000`.
+- ✅ **B-03** Endpoint `POST /api/stream/on-publish` (Express en POC) que crea sesión y arranca orchestrator (polling `/stat` cada 1s + audio pipe en paralelo). POC en [`poc/pipeline/src/server.ts`](./poc/pipeline/src/server.ts) + [`orchestrator.ts`](./poc/pipeline/src/orchestrator.ts). Falta swap a route handler de Next.js + crear fila en `streams` (Supabase). — deps: B-02, P0-04
+- ✅ **B-04** Audio pipe: `ffmpeg` child_process → 16kHz PCM mono → ElevenLabs **Scribe v2 realtime** WS (VAD auto-commit, lang `es`, soporte de keyterms para slang argentino), transcript rolling 30s + partial actual. Verificado end-to-end con OBS + voz humana: capturó `"¿Dónde va a ir? ¿Va, va a parar?"` con tildes y signos invertidos correctos. POC en [`poc/pipeline/src/transcribe.ts`](./poc/pipeline/src/transcribe.ts). — deps: B-03, P0-10
 - ⬜ **B-05** Vision pipe: `ffmpeg` frames @1fps → Gemini Flash multimodal (frame summary + tags) cada 1s — deps: B-03, P0-08
 - ⬜ **B-06** Twitch chat: tmi.js client conectado al canal de demo, calcula `chat_velocity`, `sentiment`, `recent_keywords` — deps: P0-15
 - ⬜ **B-07** Context buffer combinador (`apps/web/src/lib/pipeline/context.ts`): merge `audio_30s + frame + chat_vel + viewers + sentiment` y broadcast cada 1s a Supabase Realtime channel — deps: B-04, B-05, B-06, P0-12
-- ⬜ **B-08** Audit clip · etapa 1: nginx-rtmp `record` con segmentos de 1s en buffer circular ~60s — deps: B-02
+- ⬜ **B-08** Audit clip · etapa 1: nginx-rtmp `record` con segmentos de 1s en buffer circular ~60s (re-habilitar el `record on` que el POC tiene desactivado, con volume mount + permisos verificados) — deps: B-02
 - ⬜ **B-09** Audit clip · etapa 2: ffmpeg `cliprange` T-10s..T+20s del stream crudo cuando llega evento de placement — deps: B-08
 - ⬜ **B-10** Audit clip · etapa 3: segundo ffmpeg con overlay del ad video + QR en zona/timestamp del placement → mp4 final — deps: B-09, C-13
 - ⬜ **B-11** Audit clip · etapa 4: upload mp4 a Vercel Blob → escribir `placements.clip_url` y `context_snapshot` — deps: B-10, P0-14, C-15
-- ⬜ **B-12** `POST /api/stream/on-publish-done` que cierra la fila de `streams` y limpia recursos — deps: B-03
+- ✅ **B-12** `POST /api/stream/on-publish-done` cierra polling, mata ffmpeg, cierra WS de ElevenLabs, loggea resumen (duración + total_bytes_in). POC en [`poc/pipeline/src/server.ts`](./poc/pipeline/src/server.ts) + [`orchestrator.ts`](./poc/pipeline/src/orchestrator.ts). Falta swap a route handler de Next.js + cerrar fila en `streams`. — deps: B-03
 
 ### Track C · Agents (sugerido: Andy)
 
