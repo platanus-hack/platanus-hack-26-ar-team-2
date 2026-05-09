@@ -21,6 +21,7 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 | Dev | Task ID | Scope | Started |
 |---|---|---|---|
 | Andy | POC-NEG | Multi-agent negotiation POC bajo `poc/negotiation/` (foundation para C-08..C-13: valuation CPM-based, concession curves Faratin, AC_combi gate, BATNA, multi-issue exclusivity) | 2026-05-09 |
+| Franco | P0-03 | Foundry init en `contracts/` (forge init, foundry.toml, remappings, CI hint) | 2026-05-09 09:18 |
 
 ---
 
@@ -32,7 +33,7 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 
 - ⬜ **P0-01** Next.js 16 App Router scaffold dentro de `apps/web/` (TS, ESLint, Tailwind 4, src/ dir, App Router, RSC default)
 - ⬜ **P0-02** Tailwind theme + design tokens base (`apps/web/src/lib/theme.ts`, `globals.css`) — deps: P0-01
-- ⬜ **P0-03** Foundry init en `contracts/` (`forge init`, `foundry.toml`, remappings, basic CI hint)
+- 🟡 **P0-03** Foundry init en `contracts/` (`forge init`, `foundry.toml`, remappings, basic CI hint)
 - ⬜ **P0-04** Migración inicial `supabase/migrations/0001_init.sql` con tablas `accounts`, `streams`, `mandates`
 - ⬜ **P0-05** Llenar `platanus-hack-project.json` con `project-name`, oneliner, descripción
 - ⬜ **P0-06** Reescribir `README.md` con stack + quick-start + link a `DESIGN.md` y `TODO.md`
