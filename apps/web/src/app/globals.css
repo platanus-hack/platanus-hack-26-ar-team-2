@@ -46,29 +46,6 @@
   --text-5:   #b0b0cc;
 }
 
-/* ── Tailwind theme registration ────────────────────────────────────── */
-
-@theme inline {
-  --color-page:    var(--page);
-  --color-page2:   var(--page-2);
-  --color-card:    var(--card);
-  --color-card2:   var(--card-2);
-  --color-card3:   var(--card-3);
-  --color-line:    var(--line);
-  --color-line2:   var(--line-2);
-  --color-text:    var(--text);
-  --color-text2:   var(--text-2);
-  --color-text3:   var(--text-3);
-  --color-text4:   var(--text-4);
-  --color-text5:   var(--text-5);
-  --color-primary: var(--p);
-  --color-accent:  var(--a);
-  --color-ok:      var(--ok);
-  --color-warn:    var(--warn);
-  --color-err:     var(--err);
-  --color-usdc:    var(--usdc);
-}
-
 /* ── Base styles ────────────────────────────────────────────────────── */
 
 body {
