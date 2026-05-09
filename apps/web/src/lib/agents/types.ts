@@ -15,7 +15,6 @@
  * BrandAgentDecision.
  *
  * Cross-reference: DESIGN.md §4 (negotiation), §5 (audit per placement).
- * See also poc/negotiation/src/types.ts for the prototype this distils.
  */
 
 // ─── Identity ────────────────────────────────────────────────────────
