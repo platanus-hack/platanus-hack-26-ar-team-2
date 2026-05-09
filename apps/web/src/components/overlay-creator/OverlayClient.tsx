@@ -2,17 +2,26 @@
 
 import { useEffect, useRef, useState } from "react";
 import PlacementOverlay from "@/components/overlay/PlacementOverlay";
+import { isZoneId, type ZoneId, type ZonePosition } from "@/lib/types/zones";
 
 type RenderEvent = {
   id: string;
   creator_id: string;
   message: string;
   created_at: string;
-  zone?: "lower_third" | "corner" | "fullscreen";
+  /** Zone id (snake_case, ver lib/types/zones.ts). */
+  zone?: string;
   asset_url?: string;
   asset_type?: "video" | "image";
   duration_ms?: number;
   qr_url?: string;
+  /** Posición pixel-canvas (0..1920 × 0..1080) desde inventory_zones. */
+  position?: ZonePosition;
+  /** Override del max_duration_s del zone (en ms). */
+  max_duration_ms?: number;
+  /** Audio default según ZONE_AUDIO_DEFAULT, override per-placement. */
+  audio?: boolean;
+  brand_id?: string;
 };
 
 type Status = "connecting" | "open" | "error" | "closed";
@@ -71,7 +80,7 @@ export default function OverlayClient({ creator_id }: { creator_id: string }) {
     };
   }, [creator_id]);
 
-  // Auto-clear text-only messages after SHOW_DURATION_MS.
+  // Auto-clear text-only messages después de SHOW_DURATION_MS.
   useEffect(() => {
     if (!current || current.asset_url) return;
     const t = setTimeout(() => setCurrent(null), SHOW_DURATION_MS);
@@ -82,8 +91,8 @@ export default function OverlayClient({ creator_id }: { creator_id: string }) {
 
   return (
     <div className="relative flex h-screen w-screen items-center justify-center p-8">
-      {/* Diagnostic chip */}
-      <div className="absolute top-3 right-3 flex items-center gap-2 font-mono text-xs opacity-60 z-50">
+      {/* Diagnostic chip — top-right, low opacity, no captura clicks */}
+      <div className="absolute top-3 right-3 flex items-center gap-2 font-mono text-xs opacity-60 z-50 pointer-events-none">
         <span
           className={
             "inline-block h-2 w-2 rounded-full " +
@@ -109,7 +118,11 @@ export default function OverlayClient({ creator_id }: { creator_id: string }) {
             ad_url: current!.asset_url!,
             qr_url: current!.qr_url ?? "",
             duration_ms: current!.duration_ms ?? 8000,
-            zone: mapZone(current!.zone),
+            zone_id: resolveZoneId(current!.zone),
+            position: current!.position,
+            max_duration_ms: current!.max_duration_ms,
+            audio: current!.audio,
+            brand_id: current!.brand_id,
           }}
           onExpire={() => setCurrent(null)}
         />
@@ -127,8 +140,15 @@ export default function OverlayClient({ creator_id }: { creator_id: string }) {
   );
 }
 
-function mapZone(zone?: string): "lower-third" | "fullscreen" | "corner" {
-  if (zone === "lower_third") return "lower-third";
-  if (zone === "fullscreen") return "fullscreen";
-  return "corner";
+/**
+ * Defaultea a `bottom_right_corner` si el server manda algo desconocido,
+ * pero loggea el caso para que el bug salga en consola en lugar de fallar
+ * silently. Antes el `mapZone` viejo caía a "corner" sin avisar.
+ */
+function resolveZoneId(raw?: string): ZoneId {
+  if (isZoneId(raw)) return raw;
+  if (raw) {
+    console.warn(`[overlay] zone desconocida "${raw}" → fallback bottom_right_corner`);
+  }
+  return "bottom_right_corner";
 }

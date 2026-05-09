@@ -1,15 +1,33 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, type Variants } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getBrand } from "@/lib/brands";
+import {
+  ZONE_AUDIO_DEFAULT,
+  ZONE_DEFAULTS,
+  ZONE_MAX_DURATION_MS,
+  zoneToCss,
+  type ZoneId,
+  type ZonePosition,
+} from "@/lib/types/zones";
 
 export interface Placement {
   placement_id: string;
   ad_url: string;
   qr_url: string;
   duration_ms: number;
-  zone: "lower-third" | "fullscreen" | "corner";
+  /** Zone enum (snake_case, source of truth — ver lib/types/zones.ts). */
+  zone_id: ZoneId;
+  /**
+   * Posición pixel-canvas (0..1920 × 0..1080) desde inventory_zones del
+   * creator. Si no viene, usamos ZONE_DEFAULTS[zone_id].
+   */
+  position?: ZonePosition;
+  /** Override del max_duration_s del inventory zone (en ms). */
+  max_duration_ms?: number;
+  /** Default según ZONE_AUDIO_DEFAULT[zone_id], placement puede overrider. */
+  audio?: boolean;
   brand_id?: string;
 }
 
@@ -19,13 +37,44 @@ interface Props {
   onPlacement?: (handler: (p: Placement) => void) => () => void;
   /** Pull-based (D-13 SSE mode): start showing this placement immediately. */
   initialPlacement?: Placement;
-  /** Called when the initialPlacement timer elapses or media errors. */
+  /** Called when the placement timer elapses, video ends, or media errors. */
   onExpire?: () => void;
 }
 
 export const FADE_MS = 300;
 
-export default function PlacementOverlay({ streamId, onPlacement, initialPlacement, onExpire }: Props) {
+// ─── Animation variants per zone ──────────────────────────────────────
+//
+// fullscreen → fade + leve scale (sentís que entra)
+// lower_third → slide-up desde abajo (clásico TV)
+// bottom_right_corner → slide diagonal desde el corner correspondiente
+
+const ANIM_VARIANTS: Record<ZoneId, Variants> = {
+  fullscreen_takeover: {
+    initial: { opacity: 0, scale: 1.03 },
+    animate: { opacity: 1, scale: 1 },
+    exit: { opacity: 0, scale: 1.03 },
+  },
+  lower_third: {
+    initial: { opacity: 0, y: "60%" },
+    animate: { opacity: 1, y: 0 },
+    exit: { opacity: 0, y: "60%" },
+  },
+  bottom_right_corner: {
+    initial: { opacity: 0, x: "60%", y: "60%" },
+    animate: { opacity: 1, x: 0, y: 0 },
+    exit: { opacity: 0, x: "60%", y: "60%" },
+  },
+};
+
+const ANIM_TRANSITION = { duration: FADE_MS / 1000, ease: "easeOut" as const };
+
+export default function PlacementOverlay({
+  streamId,
+  onPlacement,
+  initialPlacement,
+  onExpire,
+}: Props) {
   const [current, setCurrent] = useState<Placement | null>(initialPlacement ?? null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -37,11 +86,29 @@ export default function PlacementOverlay({ streamId, onPlacement, initialPlaceme
     }
   };
 
-  const show = useCallback((p: Placement) => {
-    clearTimer();
-    setCurrent(p);
-    timerRef.current = setTimeout(() => setCurrent(null), p.duration_ms);
-  }, []);
+  const expire = useCallback(() => {
+    setCurrent(null);
+    onExpire?.();
+  }, [onExpire]);
+
+  /**
+   * Calcula la duración efectiva: `min(placement.duration_ms,
+   * max_duration_ms || ZONE_MAX_DURATION_MS[zone])`. Protege al creator de
+   * placements que pidan tiempos absurdos.
+   */
+  const effectiveDuration = (p: Placement): number => {
+    const zoneCap = p.max_duration_ms ?? ZONE_MAX_DURATION_MS[p.zone_id];
+    return Math.min(p.duration_ms, zoneCap);
+  };
+
+  const show = useCallback(
+    (p: Placement) => {
+      clearTimer();
+      setCurrent(p);
+      timerRef.current = setTimeout(expire, effectiveDuration(p));
+    },
+    [expire],
+  );
 
   // Push-based mode.
   useEffect(() => {
@@ -53,17 +120,14 @@ export default function PlacementOverlay({ streamId, onPlacement, initialPlaceme
     };
   }, [onPlacement, show]);
 
-  // Pull-based mode: start timer when initialPlacement changes.
+  // Pull-based mode: arrancamos timer cuando cambia initialPlacement.
   useEffect(() => {
     if (!initialPlacement) return;
     setCurrent(initialPlacement);
     clearTimer();
-    timerRef.current = setTimeout(() => {
-      setCurrent(null);
-      onExpire?.();
-    }, initialPlacement.duration_ms);
+    timerRef.current = setTimeout(expire, effectiveDuration(initialPlacement));
     return clearTimer;
-  }, [initialPlacement, onExpire]);
+  }, [initialPlacement, expire]);
 
   useEffect(() => {
     if (current && videoRef.current) {
@@ -73,45 +137,105 @@ export default function PlacementOverlay({ streamId, onPlacement, initialPlaceme
   }, [current]);
 
   return (
-    <div className="fixed inset-0 pointer-events-none overflow-hidden" data-stream-id={streamId}>
-      <AnimatePresence>
+    // z-[9999]: nunca quede tapado por modals/toasts/lo-que-sea. Combinado
+    // con que la Browser Source de Addie en OBS está arriba en la lista de
+    // sources del creator, el placement queda SIEMPRE encima del video del
+    // stream (gameplay/cámara). pointer-events-none → no captura clicks.
+    <div
+      className="fixed inset-0 z-[9999] pointer-events-none overflow-hidden"
+      data-stream-id={streamId}
+    >
+      <AnimatePresence mode="wait">
         {current && (
-          <motion.div
+          <PlacementSlot
             key={current.placement_id}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: FADE_MS / 1000 }}
-            className="absolute inset-0"
-          >
-            {current.zone === "fullscreen" ? (
-              <FullscreenAd placement={current} videoRef={videoRef} onExpire={onExpire} />
-            ) : current.zone === "lower-third" ? (
-              <LowerThirdAd placement={current} videoRef={videoRef} onExpire={onExpire} />
-            ) : (
-              <CornerAd placement={current} videoRef={videoRef} onExpire={onExpire} />
-            )}
-          </motion.div>
+            placement={current}
+            videoRef={videoRef}
+            onExpire={expire}
+          />
         )}
       </AnimatePresence>
     </div>
   );
 }
 
-function FullscreenAd({
+// ─── Slot único que renderiza la zona según zone_id + position ────────
+
+function PlacementSlot({
   placement,
   videoRef,
   onExpire,
 }: {
   placement: Placement;
   videoRef: React.RefObject<HTMLVideoElement | null>;
-  onExpire?: () => void;
+  onExpire: () => void;
+}) {
+  const position = placement.position ?? ZONE_DEFAULTS[placement.zone_id];
+  const cssPos = zoneToCss(position);
+
+  // Fullscreen tiene un wrapper distinto para el "frame border" (deja un
+  // padding transparente alrededor que en OBS deja ver el stream debajo).
+  if (placement.zone_id === "fullscreen_takeover") {
+    return (
+      <motion.div
+        variants={ANIM_VARIANTS.fullscreen_takeover}
+        initial="initial"
+        animate="animate"
+        exit="exit"
+        transition={ANIM_TRANSITION}
+        className="absolute inset-0 flex items-center justify-center"
+        // 4% padding alrededor → el stream del creator queda visible como
+        // un "frame" alrededor del ad. Premium spot pero no aburrido.
+        style={{ padding: "4vh 4vw" }}
+      >
+        <FullscreenInner placement={placement} videoRef={videoRef} onExpire={onExpire} />
+      </motion.div>
+    );
+  }
+
+  // Lower_third / bottom_right_corner: posición desde inventory_zones,
+  // tamaño respeta el layout que el creator definió, NO hardcoded.
+  return (
+    <motion.div
+      variants={ANIM_VARIANTS[placement.zone_id]}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      transition={ANIM_TRANSITION}
+      className="absolute"
+      style={cssPos}
+    >
+      <ZonedAd placement={placement} videoRef={videoRef} onExpire={onExpire} />
+    </motion.div>
+  );
+}
+
+// ─── Fullscreen interior con frame border + brand color accent ────────
+
+function FullscreenInner({
+  placement,
+  videoRef,
+  onExpire,
+}: {
+  placement: Placement;
+  videoRef: React.RefObject<HTMLVideoElement | null>;
+  onExpire: () => void;
 }) {
   const [errored, setErrored] = useState(false);
   const noUrl = !placement.ad_url;
+  const brand = placement.brand_id ? getBrand(placement.brand_id) : undefined;
+  const accent = brand?.brand_color ?? "#6366f1";
+  const audioEnabled = placement.audio ?? ZONE_AUDIO_DEFAULT.fullscreen_takeover;
 
   return (
-    <div className="relative w-full h-full bg-black">
+    <div
+      className="relative w-full h-full max-w-[1700px] max-h-[940px] rounded-2xl overflow-hidden shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)]"
+      style={{
+        // Border 4px del color del brand → "presentado por X" visual.
+        boxShadow: `0 0 0 4px ${accent}`,
+        background: "#000",
+      }}
+    >
       {noUrl || errored ? (
         <FallbackAd placement={placement} className="w-full h-full" />
       ) : (
@@ -119,77 +243,69 @@ function FullscreenAd({
           ref={videoRef}
           src={placement.ad_url}
           className="w-full h-full object-cover"
-          muted
+          muted={!audioEnabled}
           playsInline
           onError={() => setErrored(true)}
+          onEnded={onExpire}
         />
       )}
       {placement.qr_url && <QrCorner qrUrl={placement.qr_url} />}
+      <BrandRibbon brandId={placement.brand_id} accent={accent} />
     </div>
   );
 }
 
-function LowerThirdAd({
+// ─── Lower-third / corner: respeta exactamente la posición del inventory ─
+
+function ZonedAd({
   placement,
   videoRef,
   onExpire,
 }: {
   placement: Placement;
   videoRef: React.RefObject<HTMLVideoElement | null>;
-  onExpire?: () => void;
+  onExpire: () => void;
 }) {
   const [errored, setErrored] = useState(false);
   const noUrl = !placement.ad_url;
+  const brand = placement.brand_id ? getBrand(placement.brand_id) : undefined;
+  const bg = brand?.brand_color ?? "#111118";
+  const audioEnabled = placement.audio ?? ZONE_AUDIO_DEFAULT[placement.zone_id];
+  const isCorner = placement.zone_id === "bottom_right_corner";
+  const qrSize = isCorner ? 48 : 80;
 
   return (
-    <div className="absolute bottom-0 left-0 right-0 h-[28%]">
+    <div
+      className={`relative w-full h-full overflow-hidden ${
+        isCorner ? "rounded-lg shadow-2xl" : ""
+      }`}
+      style={{
+        // brand-color background visible cuando el video es object-contain
+        // y no rellena los bordes (mejor que black bars feos)
+        background: bg,
+      }}
+    >
       {noUrl || errored ? (
         <FallbackAd placement={placement} className="w-full h-full" />
       ) : (
         <video
           ref={videoRef}
           src={placement.ad_url}
-          className="w-full h-full object-cover"
-          muted
+          // object-contain en lower-third / corner → el ad se ve completo,
+          // sin crop. El brand color rellena los bordes.
+          className="w-full h-full object-contain"
+          muted={!audioEnabled}
           playsInline
           onError={() => setErrored(true)}
+          onEnded={onExpire}
         />
       )}
-      {placement.qr_url && <QrCorner qrUrl={placement.qr_url} position="bottom-right" />}
+      {placement.qr_url && <QrCorner qrUrl={placement.qr_url} position="bottom-right" size={qrSize} />}
     </div>
   );
 }
 
-function CornerAd({
-  placement,
-  videoRef,
-  onExpire,
-}: {
-  placement: Placement;
-  videoRef: React.RefObject<HTMLVideoElement | null>;
-  onExpire?: () => void;
-}) {
-  const [errored, setErrored] = useState(false);
-  const noUrl = !placement.ad_url;
-
-  return (
-    <div className="absolute bottom-4 right-4 w-64 rounded-lg overflow-hidden shadow-2xl">
-      {noUrl || errored ? (
-        <FallbackAd placement={placement} className="w-full aspect-video" />
-      ) : (
-        <video
-          ref={videoRef}
-          src={placement.ad_url}
-          className="w-full h-full object-cover"
-          muted
-          playsInline
-          onError={() => setErrored(true)}
-        />
-      )}
-      {placement.qr_url && <QrCorner qrUrl={placement.qr_url} position="bottom-right" size={48} />}
-    </div>
-  );
-}
+// ─── Fallback visual cuando ad_url falta o el video crashea ────────────
 
 function FallbackAd({ placement, className = "" }: { placement: Placement; className?: string }) {
   const brand = placement.brand_id ? getBrand(placement.brand_id) : undefined;
@@ -202,12 +318,27 @@ function FallbackAd({ placement, className = "" }: { placement: Placement; class
       <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center">
         <span className="text-white text-2xl font-bold">{brand?.display_name?.[0] ?? "A"}</span>
       </div>
-      {brand && (
-        <p className="text-white font-semibold text-lg">{brand.display_name}</p>
-      )}
+      {brand && <p className="text-white font-semibold text-lg">{brand.display_name}</p>}
     </div>
   );
 }
+
+// ─── Ribbon "presentado por <brand>" en fullscreen ────────────────────
+
+function BrandRibbon({ brandId, accent }: { brandId?: string; accent: string }) {
+  const brand = brandId ? getBrand(brandId) : undefined;
+  if (!brand) return null;
+  return (
+    <div
+      className="absolute top-3 left-3 px-3 py-1 rounded-md text-xs font-medium font-mono shadow"
+      style={{ background: accent, color: "#fff" }}
+    >
+      {brand.display_name}
+    </div>
+  );
+}
+
+// ─── QR ────────────────────────────────────────────────────────────────
 
 function QrCorner({
   qrUrl,
