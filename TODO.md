@@ -24,6 +24,7 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 |---|---|---|---|
 | Lucas | POC-PIPE | Pipeline POC standalone bajo `poc/pipeline/` (foundation para B-01..B-07: docker-compose nginx-rtmp + webhooks on_publish/on_publish_done + ffmpeg audio/frames + tmi.js chat + context tick en terminal) | 2026-05-09 |
 | Franco | P0-13 + P0-21 | `[INFRA]` App Alchemy en Base mainnet (`ALCHEMY_RPC_URL`) + ~$1 ETH a treasury para gas de las 9 wallets | 2026-05-09 |
+| Andy | P0-12 | `[INFRA]` Supabase via Vercel Storage Marketplace → `apps/web/src/lib/supabase.ts` (URL+anon hardcoded) + `apps/web/scripts/db-migrate.mjs` (0001_init.sql aplicado al live DB) + `apps/web/.env.example` | 2026-05-09 |
 
 ---
 
@@ -47,7 +48,7 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 - ❌ **P0-09** ~~Deepgram + key streaming Nova~~ — **deprecado** ([commit 992e5a1](../../commit/992e5a1)). El POC usa ElevenLabs Scribe v2 realtime, que va con la misma key del P0-10.
 - ⬜ **P0-10** `[INFRA]` ElevenLabs + key → `ELEVENLABS_API_KEY` (cubre **Scribe v2 realtime para STT** §3 + Creative para pre-gen ads §6 + TTS §6 — una sola cuenta)
 - ⬜ **P0-11** `[INFRA]` App Privy con embedded smart wallets en Base → `PRIVY_APP_ID`, `PRIVY_APP_SECRET`
-- ⬜ **P0-12** `[INFRA]` Proyecto Supabase + URL + service-role + anon key
+- 🟡 **P0-12** `[INFRA]` Proyecto Supabase + URL + service-role + anon key
 - 🟡 **P0-13** `[INFRA]` App Alchemy en Base mainnet → `ALCHEMY_RPC_URL`
 - ⬜ **P0-14** `[INFRA]` Vercel Blob token (CDN para assets de ads + clips de auditoría) → `BLOB_READ_WRITE_TOKEN`
 - ⬜ **P0-15** `[INFRA]` Cuenta Twitch para Coscu-test (stream key + channel name para tmi.js)
