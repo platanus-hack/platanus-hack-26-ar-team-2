@@ -1,9 +1,11 @@
 # 🌭 Pancho Rex — niche time-of-day (almuerzo + late-night)
-# Rol en el demo: SKIPea ambos triggers del Bloque 3.
-#   - Trigger 1 (ÉPICO 12:00 ART): SKIP gate1 daypart (active 13:00 onwards).
-#   - Trigger 2 (TRANQUI casual_chat): SKIP gate1 daypart o missing_required_tag.
-# El SKIP es didáctico — muestra al jurado por qué una marca no calza un momento.
-# Fictional brand — ver docs/PITCH.md, docs/GATES.md §4.3.
+# Rol en el demo: SKIPea las menciones del Bloque 3.
+#   - Mención de café (12:00 ART, audio_mentions=[café]): SKIP gate1 daypart
+#     (active a partir de 13:00).
+#   - Mención de mate/equipo en intent=discussion (casual_chat semántico):
+#     SKIP gate1 daypart o brand_match bajo.
+# El SKIP es didáctico — el log muestra al jurado por qué una marca no calza
+# un momento. Fictional brand — ver docs/PITCH.md, docs/GATES.md §4.3.
 
 brand_id: pancho-rex
 display_name: "🌭 Pancho Rex"
@@ -79,10 +81,10 @@ dayparts:
     - "20:00-02:00 ART"     # cena tarde + late-night gaming hambre
 
 ideal_contexts:
-  - "Streamer charla relajado con el chat entre partidas"
-  - "Pausa larga, chat propone delivery, bajón de energía post-partida"
-  - "Late night, viewer count bajando, ambiente íntimo"
-  - "Streamer dice tener hambre o pregunta qué cenar"
+  - "Speaker menciona pancho/choripán/hambre explícitamente (audio_mentions match)"
+  - "Pausa larga post-deploy, audio_intent=discussion, bajón de energía"
+  - "Late night, viewer count bajando, ambiente íntimo, charla casual"
+  - "Speaker dice tener hambre o pregunta qué cenar (audio_intent=question + topic 'comida')"
 
 # ─── Catálogo de creatives (D-10) ────────────────────────────────────
 ad_variants:

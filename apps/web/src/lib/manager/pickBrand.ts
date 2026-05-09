@@ -14,16 +14,20 @@ import { BRANDS, type Brand } from "@/lib/brands";
 
 import type { BrandPick, ContextChunk } from "./types";
 
-const SYSTEM_PROMPT = `Sos el manager de placements de Addie. Recibís el texto transcripto del audio de un stream en vivo (últimos ~15-30 segundos) y la lista de brands disponibles con sus keywords de referencia.
+const SYSTEM_PROMPT = `Sos el manager de placements de Addie. Recibís un resumen semántico del audio de un stream en vivo (ventana rolling de ~30s) y la lista de brands disponibles con sus keywords + personas.
 
-Tu ÚNICO trabajo: decidir si el streamer mencionó algo relacionado con alguna de las brands. No tiene que ser una mención literal — si el contexto es claramente sobre el tema de una brand (ej: hablan de tomar algo y una brand es de bebidas), eso cuenta.
+Tu ÚNICO trabajo: decidir si el momento actual matchea alguna brand del registry. Tres signals semánticos del chunk, en orden de confianza:
+1. **audio_mentions[]** — entidades concretas que el speaker nombró (ej: "café", "mate"). Match directo con match_keywords de una brand → señal fuerte.
+2. **audio_intent** (enum: discussion|recommendation|complaint|question|reaction|silence) — qué está haciendo el speaker. \`reaction\` y \`recommendation\` son los más auctionables; \`silence\` o \`complaint\` casi nunca.
+3. **audio_summary + audio_topics[]** — contexto temático para inferir match cuando no hay mention literal (ej: "habla de cerrar una tx en pocos segundos" → analogía deportiva → CafetITO calza por persona).
 
 Reglas:
-- Si el audio menciona o habla sobre algo relacionado con UNA de las brands → should_emit=true, brand_id=<el id>, message=<display_name de la brand>.
-- Si el audio NO tiene nada que ver con ninguna brand → should_emit=false, brand_id=null, message="...".
-- moment_quality y brand_match: poné valores razonables (0.8+ si es mención directa, 0.5-0.7 si es indirecta).
-- reason: explicá brevemente por qué matcheó o no (español, 1 oración).
-- El campo "message" SIEMPRE debe ser exactamente el display_name de la brand elegida (ej: "Yerba Mate", "Ropa Adidas", "Fernet Branca") o "..." si no hay match.`;
+- Si el chunk tiene una mention que matchea match_keywords de UNA brand → should_emit=true, brand_id=<el id>, brand_match≥0.8.
+- Si no hay mention pero el contexto/intent calza la persona de UNA brand → should_emit=true, brand_match 0.5-0.75.
+- Si no hay match razonable → should_emit=false, brand_id=null, message="...".
+- moment_quality refleja qué tan auctionable es el momento por sí solo (energía, intent, viewer engagement). Independiente de qué brand calce.
+- reason: español, 1 oración, audit-friendly.
+- message: SIEMPRE exactamente el display_name de la brand elegida (ej: "☕ CafetITO", "🧉 MateBros") o "..." si no hay match.`;
 
 const TOOL_NAME = "emit_decision";
 const TOOL: Anthropic.Tool = {
@@ -36,14 +40,14 @@ const TOOL: Anthropic.Tool = {
       should_emit: { type: "boolean", description: "true si el audio se relaciona con alguna brand, false si no." },
       brand_id: {
         type: ["string", "null"],
-        description: "El brand_id exacto del registry (yerba_mate/adidas/fernet_branca), o null si no hay match.",
+        description: "El brand_id exacto del registry (cafetito/termoflex/pancho-rex/matebros), o null si no hay match.",
       },
       moment_quality: { type: "number", description: "0..1 — qué tan auctionable es el momento por sí solo." },
       brand_match: { type: "number", description: "0..1 — qué tan bien la brand elegida calza con este momento." },
       reason: { type: "string", description: "Español, ≤2 oraciones. Explica el call (audit)." },
       message: {
         type: ["string", "null"],
-        description: "Exactamente el display_name de la brand (ej: 'Yerba Mate') o '...' si no hay match.",
+        description: "Exactamente el display_name de la brand (ej: '☕ CafetITO', '🧉 MateBros') o '...' si no hay match.",
       },
     },
     required: ["should_emit", "brand_id", "moment_quality", "brand_match", "reason", "message"],
@@ -128,20 +132,25 @@ export function makeStubPicker(): Picker {
 
 function renderPrompt(chunk: ContextChunk, brands: readonly Brand[]): string {
   return [
-    `## AUDIO TRANSCRIPTO (ventana ${chunk.duration_s}s, stream "${chunk.stream_key}")`,
+    `## CHUNK SEMÁNTICO (ventana ${chunk.duration_s}s, stream "${chunk.stream_key}")`,
     "",
-    `Texto del audio: ${truncate(chunk.audio_text, 600) || "(sin audio)"}`,
+    `- audio_summary: ${truncate(chunk.audio_summary, 400) || "(sin resumen)"}`,
+    `- audio_intent: ${chunk.audio_intent ?? "(null)"}`,
+    `- audio_mentions: ${fmtArray(chunk.audio_mentions)}`,
+    `- audio_topics: ${fmtArray(chunk.audio_topics)}`,
+    `- viewers_delta_30s: ${chunk.viewers_delta_30s ?? 0}`,
+    `- transcript bruto (referencia): ${truncate(chunk.audio_text, 400) || "(sin audio)"}`,
     "",
     `## BRANDS DISPONIBLES (${brands.length})`,
     "",
     ...brands.map(
       (b) =>
         `### ${b.id} — ${b.display_name}\n` +
-        `- keywords de referencia: ${fmtArray(b.match_keywords)}\n` +
+        `- match_keywords: ${fmtArray(b.match_keywords)}\n` +
         `- persona: ${truncate(b.default_persona, 240)}`,
     ),
     "",
-    "Decidí ahora. Llamá la tool `emit_decision` con tu output. Recordá: message = display_name exacto de la brand si matchea, o \"...\" si no.",
+    "Decidí ahora. Priorizá audio_mentions (señal fuerte) sobre audio_summary (señal contextual). Llamá la tool `emit_decision` con tu output. Recordá: message = display_name exacto si matchea, o \"...\" si no.",
   ].join("\n");
 }
 

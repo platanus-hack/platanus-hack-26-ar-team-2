@@ -10,7 +10,7 @@
 
 ## TL;DR
 
-Dos agents AI negocian en tiempo real durante un stream en vivo. El brand-agent caza momentos épicos. El streamer-agent defiende los intereses del creator. **Las marcas suben sus ads pre-producidos a Addie**; el brand-agent decide cuándo y cuál mostrar. Cuando cierran deal, escrow lock + render con video del brand + QR dinámico de tracking, escrow release a USDC en la wallet del creator. Todo on-chain en Base, todo verificable en basescan.
+Dos agents AI negocian momento-a-momento (~8-13s end-to-end) durante un stream en vivo. El brand-agent caza momentos por contenido semántico, no por trigger words. El streamer-agent defiende los intereses del creator. **Las marcas suben sus ads pre-producidos a Addie**; el brand-agent decide cuándo y cuál mostrar. Cuando cierran deal, escrow lock + render con video del brand + QR dinámico de tracking, escrow release a USDC en la wallet del creator. Todo on-chain en Base, todo verificable en basescan.
 
 ---
 
@@ -120,54 +120,50 @@ Dos agents AI negocian en tiempo real durante un stream en vivo. El brand-agent 
 > **Nota — ejemplo ilustrativo.** El timeline de abajo usa nombres de marca reales (adidas/nike/mp) porque corresponde al spec técnico pre-pivote. El **demo final** usa marcas inventadas (☕ CafetITO, 🧊 TermoFlex, 🌭 Pancho Rex, 🧉 MateBros) y la narrativa externa es de **matching win-win-win** en vez de subasta competitiva — ver `docs/PITCH.md` y `docs/DEMO_RUNBOOK.md`. El mecanismo interno (auction con deadline + standing offers + soft holds) **no cambia**: es el plumbing que implementa el matching. Solo cambia cómo se cuenta hacia afuera.
 
 ```
-T+0.0s    Speaker dice trigger word ("ÉPICO") en el pitch
+T+0s      Speaker termina la frase con la mención (ej. "yo voy por el cuarto CafetITO")
 ─────────────────────────────────────────────────────────────────────
-T+0.5s    OBS encode → RTMP llega a nginx-rtmp
-T+1.2s    ElevenLabs Scribe v2 realtime transcribe "ÉPICO"
-T+1.3s    Gemini Flash describe frame: "speakers gesticulando + dashboard"
-T+1.5s    tmi.js detecta chat velocity 12→180 msg/s
-T+1.5s    Context broadcast a brand-agents
+Pipeline (always-on, fuera del path crítico — corre todo el tiempo):
+  ElevenLabs Scribe v2 realtime transcribe en <500ms.
+  Gemini Flash describe frame.
+  tmi.js detecta chat velocity.
+  B-07b chunk writer consolida ventana 30s → INSERT context_chunks.
+  B-07c audio summary IA agrega audio_summary + audio_topics + audio_mentions + audio_intent.
 ─────────────────────────────────────────────────────────────────────
-T+2.0s    LLM call paralela en los brand-agents (2 en MVP: adidas + mp; N en prod):
-          → adidas: HUNT con "epic_goal_lower" (epic mood + audience match)
-          → nike: HUNT con "win_moment_lower"
-          → quilmes: HUNT con "social_celebration"
-          → rappi: SKIP (no es food context)
-          → mp: HUNT weak con "persistent_logo"
-          → steam, globant, cocacola: SKIP
+T+0..5s   Próximo Vercel-Cron tick (gapMs=5s, ver §2 latencia)
+          → manager Stage1 (semantic filter):
+            audio_intent IN ('reaction','recommendation')
+            OR audio_mentions.length > 0
+            OR viewers_delta_30s > 100
 ─────────────────────────────────────────────────────────────────────
-T+2.5s    4 brand-agents inician negociación con streamer-agent
-T+5.5s    Negociaciones cierran 3 turnos:
-          adidas: $1.80 / lower_third / 6s ✅ con "epic_goal_lower"
-          nike: $1.50 / lower_third / 5s ✅ con "win_moment_lower"
-          quilmes: no deal
-          mp: $0.30 / corner / 30s ✅ con "persistent_logo"
+T+5..9s   manager Stage2 — Claude Haiku pickBrand sobre el chunk:
+          INPUT: audio_summary + audio_intent + audio_mentions[] + audio_topics[]
+                 + 4 brands del registry (cafetito/termoflex/pancho-rex/matebros)
+          OUTPUT: { should_emit, brand_id, moment_quality, brand_match, reason, message }
+          Ejemplo de match: brand_id="cafetito", brand_match=0.85, reason="mention directa de café + intent=discussion"
 ─────────────────────────────────────────────────────────────────────
-T+5.7s    Streamer-agent compara: ADIDAS gana
-          (mejor USD/seg en zona premium + brand fit alto)
+T+9..10s  Si should_emit && both scores ≥ thresholds:
+          ⚡ AddieEscrow.lock(amount, payee=streamer, brand=cafetito)
+            firmado desde Privy smart wallet de la brand [tx 0xAAA]
 ─────────────────────────────────────────────────────────────────────
-T+6.0s    Orchestrator firma desde la wallet de adidas (session signer Privy):
-          ⚡ AddieEscrow.lock(1.80 USDC)  [tx 0xAAA]
+T+10..11s lock confirma (~1-2s en Base) → evento Locked
+          → INSERT render_events (kind='brand', creator_id, message=display_name)
+          → pg_notify('render_events') → SSE push al iframe del creator
+          → framer-motion fade-in del banner
 ─────────────────────────────────────────────────────────────────────
-T+6.2s    Plataforma arma placement assembly:
-          { ad_url: "https://addie-cdn/.../adidas/epic_goal_lower.mp4",
-            qr_url: "addie.app/q/abc123?placement=...",
-            duration_ms: 6000, zone: "lower_third" }
+T+11..17s Banner visible en pantalla (~6s default duración text-only).
 ─────────────────────────────────────────────────────────────────────
-T+6.5s    Push directo al Browser Source overlay (MVP: sin approve)
-T+6.55s   Overlay renderiza:
-          <video autoplay src={ad_url}>     ← ad de adidas (con voz baked-in)
-          <img class="qr-corner" src={qr_dynamic}>
-          framer-motion fade-in
-          Brand-safety listener activo en paralelo
+T+17..19s ⚡ AddieEscrow.release(placementId)  [tx 0xBBB]
+          → amount al wallet del streamer-team
+          → Counter del dashboard sube
 ─────────────────────────────────────────────────────────────────────
-T+12.55s  Placement termina (duración 6s)
-T+12.6s   ⚡ AddieEscrow.release(placementId)  [tx 0xBBB]
-          → 1.80 USDC al wallet del streamer-team
-─────────────────────────────────────────────────────────────────────
-T+15s     [Async] Clip de auditoría guardado:
-          nginx-rtmp segmenta T-10s..T+20s → mp4 → Vercel Blob
+T+19s+    [Async] Clip de auditoría: nginx-rtmp segmenta → mp4 → Vercel Blob
           → placements.clip_url disponible en la brand console
+
+Total visible: ~8-13s entre la frase del speaker y el banner. Worst case 13s
+si la mención cae al final del minuto del cron (gap ciego ~6s entre invocaciones).
+
+2 transacciones on-chain por placement (lock + release).
+Demo de 5 min con cooldown 30s + 8-13s pre-roll → ~6-8 placements = ~12-16 txs.
 
 2 transacciones on-chain por placement (lock + release).
 Demo de 5 min con ~6 placements = ~12 txs visibles en basescan.
@@ -185,7 +181,7 @@ Tres roles agénticos, todos LLM-powered, cada uno con su propio prompt + toolin
 
 | Agent | Cuántos | Modelo | Trigger | Job |
 |---|---|---|---|---|
-| **Manager** | 1 por stream | Claude Haiku 4.5 | tick filtrado por cheap intensity (B-07a) | Decide si el momento amerita pautar (auctionable). Pre-flag de brand-safety. Sugiere zonas + duración. |
+| **Manager** | 1 por stream | Claude Haiku 4.5 | chunk filtrado por audio_intent + audio_mentions (semantic filter, B-07c) | Decide si el momento amerita pautar (auctionable). Pre-flag de brand-safety. Sugiere zonas + duración. |
 | **Brand-agent** | **2 en MVP** (adidas + mp), escalable a N | Claude Haiku 4.5 | inicio de auction | Hunt + bid + counter-response con curva de concesión. Walk-away discipline. |
 | **Streamer-agent** | 1 por creator | Claude Sonnet 4.6 | inicio de auction (parallel batched) | Counter-batched a todas las ofertas, picks single winner. Defiende inventario. |
 
@@ -207,16 +203,20 @@ LAPTOP / VPS BACKEND (un solo host físico para el demo)
 ├── pipeline orchestrator
 │   (Node, port de poc/pipeline → apps/web/src/lib/pipeline/)
 │   ↳ ffmpeg → ElevenLabs Scribe v2 (audio) + Gemini Flash (frame) + tmi.js (chat)
-│   ↳ ContextTick cada 1s
-│   ↳ cheap_intensity = score(chat_spike, sentiment, audio_caps, audience)  // B-07a, sin LLM
-│   ↳ supabase.realtime.broadcast('context:<stream_id>', tick)
+│   ↳ ContextTick cada 1s (broadcast Realtime para consumidores futuros)
+│   ↳ B-07b chunk writer: cada 30s consolida y persiste en context_chunks
+│   ↳ B-07c audio summary IA: pre-INSERT enriquece chunks con
+│      audio_summary + audio_topics[] + audio_mentions[] + audio_intent
 │
-├── manager-worker (proceso Node, ~50 LoC, apps/manager-worker/)  // C-08m
-│   ↳ supabase.channel('context:<stream_id>').on('broadcast', { event: 'tick' }, …)
-│   ↳ filtra cheap_intensity > 0.5 + cooldown_ok (30s post-auction)
-│   ↳ await managerDecide(tick)  → Claude Haiku
-│   ↳ if decision.should_auction:
-│       POST /api/auctions/run  { tick, manager_decision }
+├── manager (Vercel Cron route, apps/web/src/lib/manager/)  // C-08m-cron
+│   ↳ Vercel Cron `* * * * *` invoca GET /api/internal/manager-tick
+│   ↳ Internamente itera con gapMs=5000ms × ~10-11 ticks (deadline 54s)
+│   ↳ select * from context_chunks order by ts_start desc limit 1
+│   ↳ Stage 1 (semantic): audio_intent IN ('reaction','recommendation')
+│      OR audio_mentions.length > 0 OR viewers_delta_30s > 100
+│   ↳ Stage 2: managerTick → makeClaudePicker (Haiku) o makeStubPicker (DRY_RUN)
+│   ↳ if pick.should_emit:
+│       INSERT render_events (kind='brand') + pg_notify('render_events')
 │
 └── Next.js (apps/web, deployable a Vercel)
     /api/stream/{on-publish,on-publish-done}      ← arrancan/limpian el orchestrator (B-03)
@@ -233,7 +233,7 @@ LAPTOP STREAMER (laptop del team que streamea el pitch — meta-streaming)
 └── OBS Browser Dock (loads /dock)
 ```
 
-**Por qué Manager-as-worker en vez de inline en el pipeline:** mantiene la separación 1-rol-1-proceso (el pitch dice "tres agentes"; los hacemos visibles), usa Supabase Realtime de verdad como transporte, y deja el pipeline puro (solo ingest + emit). Trade-off: un proceso más para lanzar en el demo. Para producción multi-stream, manager-worker se replica fácil.
+**Por qué Manager separado del pipeline:** mantiene la separación 1-rol-1-proceso (el pitch dice "tres agentes"; los hacemos visibles), y deja el pipeline puro (solo ingest + persist context_chunks). Post-pivote 2026-05-09 el manager corre como **Vercel Cron route** (`/api/internal/manager-tick`) con auto-iter de 5s — más simple de operar que el worker push always-on, mismo Stage1+Stage2 logic. Trade-off: 8-13s end-to-end vs <1s del push variant. Para producción multi-stream, el cron route se replica por stream_key.
 
 ### Event flow — Supabase Realtime topics + payloads
 
@@ -243,21 +243,33 @@ Cinco eventos distintos viajan por el sistema. Tres por Supabase Realtime broadc
 1. ContextTick           — every 1s                               ◀ pipeline → Realtime
    topic     'context:<stream_id>'
    producer  pipeline orchestrator (B-07)
-   consumers manager-worker  (C-08m)
-             /demo-display    (live debug feed, D-09)
+   consumers /demo-display    (live debug feed, D-09)
+             [legacy] consumer push manager (deprecado post-cron pivot)
    payload {
      stream_id, ts_ms,
      audio_30s, audio_partial,
      frame_summary, scene_type, energy_level, mood_tags, on_screen_text,
      bw_effective_kbps, video_meta, audio_meta,
      chat_velocity_now, chat_velocity_baseline, recent_keywords,
-     viewer_count, sentiment,
-     cheap_intensity         // [0..1] computed inline by B-07a
+     viewer_count, sentiment
+     // B-07a `cheap_intensity` deprecado 2026-05-09 — el manager filtra
+     // sobre context_chunks (B-07c) con audio_intent + audio_mentions.
    }
 
-2. ManagerDecision       — rare (~6 / 5min)                       ◀ manager-worker → HTTP
+1b. context_chunks rows  — every 30s (B-07b)                      ◀ pipeline → Postgres
+   producer  pipeline orchestrator (B-07b chunk writer + B-07c summary)
+   consumer  manager Vercel Cron route (C-08m-cron, polling cada 5s)
+   payload (DB row) {
+     stream_key, ts_start, duration_s,
+     audio_text, audio_summary, audio_topics[], audio_mentions[], audio_intent,
+     scene_type, energy_level, mood_tags,
+     chat_velocity_avg, chat_velocity_peak, sentiment_avg,
+     viewers, viewers_delta_30s, game_category, stream_title
+   }
+
+2. ManagerDecision       — rare (~6 / 5min)                       ◀ manager (Vercel Cron) → HTTP
    transport HTTP POST (sin Realtime topic — request/response sync)
-   producer  manager-worker
+   producer  manager (Vercel Cron route via /api/internal/manager-tick)
    consumer  /api/auctions/run
    payload {
      stream_id,
@@ -340,22 +352,24 @@ Cinco eventos distintos viajan por el sistema. Tres por Supabase Realtime broadc
 
 ### Salience gate — anti-spam + cost ceiling
 
-Pipeline calcula `cheap_intensity` cada tick (heurística sin LLM, B-07a): chat velocity spike + sentiment + audio salience + audience size. **Solo ticks con `cheap_intensity > 0.5` despiertan al manager-agent**. El manager filtra más con su propia decisión LLM.
+El manager (Vercel Cron) pollea `context_chunks` cada 5s (auto-iter dentro de la invocación cron de 1/min). **Stage 1 filtra semánticamente** (sin LLM): `audio_intent ∈ {reaction, recommendation}` ∨ `audio_mentions ≠ ∅` ∨ `viewers_delta_30s > 100`. Solo chunks que pasen Stage 1 gastan tokens en Stage 2 (Claude Haiku pickBrand).
 
-Cifras esperadas (escenario fifa_goal en demo):
+`cheap_intensity` (B-07a) está **deprecado** post-2026-05-09 — el audio summary semántico (B-07c) reemplazó la heurística numérica con señal interpretable + sin pesos para tunear.
+
+Cifras esperadas (demo de 5 min, modelo nuevo):
 
 | Etapa | Volumen / 5min | Costo |
 |---|---|---|
-| Ticks emitidos por pipeline | 300 (1/s) | $0 — heurística sin LLM |
-| Pasan cheap_intensity > 0.5 | ~30-50 | $0 |
-| Pasan también el cooldown (30s post-auction) | ~6-10 | — |
-| Manager LLM calls (Haiku) | ~6-10 | ~$0.01 total |
-| Auctions disparadas (~50% de manager YES) | ~6 | ~$0.60 total (~$0.10 c/u) |
-| **Total demo** | — | **~$0.61 USD** |
+| Cron ticks (gapMs=5s × 60 = 12/min × 5 = 60) | ~60 | $0 — sin LLM |
+| Pasan Stage 1 semantic filter | ~10-15 | $0 |
+| Pasan también el cooldown (30s post-emit) | ~6-8 | — |
+| Manager LLM calls (Haiku, Stage 2) | ~6-8 | ~$0.01 total |
+| Emits con should_emit=true (~70% de YES) | ~5-6 | (auctions completas post-MVP) |
+| **Total demo (manager-only, sin auction layer)** | — | **~$0.01 USD** |
 
 ### Cooldowns y fail-modes
 
-- Después de un `AuctionSettled`, el manager-worker setea `cooldown = now + 30s`. Cualquier tick recibido en ese período se ignora (anti-spam visual + ahorro LLM).
+- Después de un emit (`render_events.kind='brand'`), el siguiente cron tick computa `sinceEmit = now - created_at`; si `< MANAGER_COOLDOWN_S * 1000` (default 30s), skip. Anti-spam visual + ahorro LLM.
 - Si `managerDecide()` falla (LLM error, timeout): **fail-closed** → `should_auction = false`. Mejor perder un placement que disparar uno sin verificar brand-safety pre-flag.
 - Si `/api/auctions/run` está mid-flight cuando llega un nuevo trigger del manager: **drop el nuevo** (el cooldown del manager lo absorbe igual al settlement).
 - Si `escrow.lock()` falla on-chain post-settlement: fallback al runner-up (ver C-12). Si runner-up también falla: skip placement (el momento se pierde, no se rompe el demo).
@@ -371,7 +385,7 @@ Decidido NO usar Supabase Realtime broadcast directo: queremos una capa de logic
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│  CUALQUIER PRODUCTOR (auctions/run, manager-worker, curl test) │
+│  CUALQUIER PRODUCTOR (auctions/run, manager Vercel Cron, curl)│
 │  curl -X POST https://addie/api/creators/<id>/render           │
 │       -H "Content-Type: application/json"                      │
 │       -d '{"message":"Hola"}'                                  │
@@ -1032,7 +1046,7 @@ T+30h  12:00   DEMO LIVE 🎤
 
 ## 12. Demo choreography
 
-> **El demo es meta-streaming.** El equipo se streamea a sí mismo durante el pitch — no hay videojuego, los speakers + dashboard son el contenido. Las trigger words ensayadas (ÉPICO/CLUTCH/TRANQUI/FOGÓN) disparan matches de las 4 brands fictional (CafetITO/TermoFlex/Pancho Rex/MateBros) durante los 90s del Bloque 3.
+> **El demo es meta-streaming.** El equipo se streamea a sí mismo durante el pitch — no hay videojuego, los speakers + dashboard son el contenido. Las menciones físicas de productos + analogías deportivas sobre tech ("clutch técnico", "comeback del build") disparan matches semánticos de las 4 brands fictional (CafetITO/TermoFlex/Pancho Rex/MateBros) durante los 90s del Bloque 3. Latencia coreografiada ~8-13s entre la mención y el banner.
 >
 > - **Flow del pitch** (180s, 5 bloques, qué se dice y qué se muestra) → [`docs/PITCH.md`](./docs/PITCH.md).
 > - **Setup físico, hardware, OBS scenes, viewer-bot, fallback plan, Q&A** → [`docs/DEMO_RUNBOOK.md`](./docs/DEMO_RUNBOOK.md).
@@ -1096,7 +1110,7 @@ Lo que **sí está en MVP**: audit completo (clip + reasoning + transcript) y so
 
 ## 16. Pitch line
 
-> **Las marcas suben sus ads pre-producidos a Addie. El brand-agent decide cuándo aparecer, contra qué streamer, con qué variante de su biblioteca. Negocia con el agent del creator en lenguaje natural. Cierran en USDC vía smart contract en Base. El long tail de creators monetiza atención sin contratos, sin equipos de ventas, sin esperas. Agents hablando, agents pagando, on-chain, en tiempo real.**
+> **Las marcas suben sus ads pre-producidos a Addie. El brand-agent decide cuándo aparecer, contra qué streamer, con qué variante de su biblioteca. Negocia con el agent del creator en lenguaje natural. Cierran en USDC vía smart contract en Base. El long tail de creators monetiza atención sin contratos, sin equipos de ventas, sin esperas. Agents hablando, agents pagando, on-chain, momento-a-momento.**
 
 ---
 

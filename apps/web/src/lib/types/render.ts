@@ -56,7 +56,7 @@ export interface RenderEventPayload {
 
 /**
  * Body que el endpoint POST acepta. Server llena id+creator_id+created_at,
- * el publisher (apps/web /api/auctions/run o el manager-worker cron) manda
+ * el publisher (apps/web /api/auctions/run o el manager Vercel Cron) manda
  * el resto.
  */
 export type RenderPostBody = Omit<RenderEventPayload, "id" | "creator_id" | "created_at">;

@@ -29,7 +29,7 @@ Beneficio adicional clave para el demo: cada SKIP es **didáctico** — el `BidL
 ## 2. Escalera — 4 gates en cascada
 
 ```
-ContextTick (de manager-worker, vía /api/auctions/run)
+ContextTick (del manager Vercel Cron, vía /api/auctions/run)
         │
         │  para cada brand registrado:
         ▼
@@ -452,7 +452,7 @@ El jurado ve por qué cada brand bidea o no en plain Spanish, sin tener que leer
 
 ## 7. Cost / latency budget
 
-Asumiendo 4 brands totales en el sistema, demo de 5 minutos, ~6 auctions disparadas (manager-worker filtra el resto).
+Asumiendo 4 brands totales en el sistema, demo de 5 minutos, ~6 auctions disparadas (manager Vercel Cron filtra el resto vía Stage1 semantic + cooldown 30s).
 
 ### 7.1 Sin escalera (baseline ingenuo, todo Sonnet directo)
 
@@ -483,12 +483,13 @@ Asumimos distribución típica: en un tick épico, 1 brand bypassa (TermoFlex), 
 
 ### 7.3 Manager-agent ya hace upstream filter
 
-Recordar (DESIGN.md §4): el manager-worker ya filtra **ticks** antes de disparar auction. La escalera de gates filtra **brands** dentro de auctions disparadas. Las dos capas son ortogonales y se multiplican:
+Recordar (DESIGN.md §4): el manager (Vercel Cron) ya filtra **chunks** antes de disparar auction. La escalera de gates filtra **brands** dentro de auctions disparadas. Las dos capas son ortogonales y se multiplican:
 
 ```
-300 ticks/5min  →  manager-worker  →  ~6 auctions  →  gate ladder  →  ~2-3 Sonnet calls/auction
-                   (cheap_intensity                    (filtra brands
-                    + Haiku)                            que no aplican)
+~60 cron ticks/5min  →  manager Stage1 + Stage2  →  ~6 auctions  →  gate ladder  →  ~2-3 Sonnet calls/auction
+                        (audio_intent + mentions                     (filtra brands
+                         + viewers_delta + cooldown                   que no aplican)
+                         + Haiku pickBrand)
 ```
 
 Total Sonnet calls en demo: ~12-18 (vs ~24 sin escalera, vs ~600 sin manager + sin escalera).
@@ -636,7 +637,7 @@ Cada `emitSkip` llama `supabase.channel('auction:<id>:gate-skip').send({ event: 
 
 1. **¿pgvector vale para 24h?** Setup de pgvector en Supabase requiere extensión + migration. Alternativa para MVP: in-memory cosine con embeddings precomputados al boot (4 brands × 4 ideal_contexts = 16 vectors, ridículo). Recomendación: in-memory para demo, pgvector post-MVP.
 
-2. **¿Caché de embedding del `context_snapshot`?** Si manager-worker dispara auction cada ~30s, el snapshot cambia poco entre ticks. Cache LRU 30s del cosine result puede bajar gate 2 a ~0ms en hits.
+2. **¿Caché de embedding del `context_snapshot`?** El manager dispara auctions ≥30s entre sí (cooldown 30s). El snapshot cambia poco entre chunks consecutivos del mismo speaker. Cache LRU 30s del cosine result puede bajar gate 2 a ~0ms en hits.
 
 3. **¿Gate 3 vale la pena con N=4 brands?** Si N pequeño y gate 1 ya filtra mucho, gate 3 puede ser ruido. Métrica para decidir: % de brands que llegan a gate 3 y son rechazados ahí. Si <20% → matar gate 3 y mandar directo a gate 4.
 

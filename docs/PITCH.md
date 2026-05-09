@@ -31,7 +31,7 @@ Speakers TBD.
 | **"Esto que están viendo es un stream en vivo. Nosotros somos el streamer. Y desde que prendimos la cámara, este sistema está escuchando."** | Cámara con los speakers. Overlay Addie activo (logo TermoFlex en corner). Dashboard abajo: 4 brand-agents online. |
 | **"Hoy un streamer chico tiene dos opciones malas."** *(beat)* "Twitch te paga **12 centavos** por mostrar un pre-roll que el viewer skipea a los 5s — la marca paga por un view que ni existió." | Caption en la esquina: `Twitch pre-roll · $0.12 · skip 5s`. |
 | **"O te conseguís un sponsored stream — $250 dólares por placement, pero negociás dos semanas, mandás 40 mails, firmás contrato y aprobás creative. Para 100 viewers en LATAM eso pasa una vez al mes si tenés suerte."** | Caption se actualiza: `Sponsored deal · $250 · 2 semanas de fricción`. |
-| **"Mientras tanto, cada minuto que estamos hablando, hay momentos donde una marca podría aparecer en este stream. A 1, 2, 3 dólares cada uno. Sin mails. Y nadie los está vendiendo."** | Timeline mini abajo del dashboard arrancando en 0, los puntitos van a aparecer a medida que el sistema detecte momentos durante el pitch. Caption final: `Addie · $1-3 / placement · 8 segundos`. |
+| **"Mientras tanto, cada minuto que estamos hablando, hay momentos donde una marca podría aparecer en este stream. A 1, 2, 3 dólares cada uno. Sin mails. Y nadie los está vendiendo."** | Timeline mini abajo del dashboard arrancando en 0, los puntitos van a aparecer a medida que el sistema detecte momentos durante el pitch. Caption final: `Addie · $1-3 / placement · segundos (no semanas)`. |
 
 ---
 

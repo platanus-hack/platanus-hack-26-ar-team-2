@@ -1,6 +1,9 @@
 # 🧊 TermoFlex — default bidder al floor
-# Rol en el demo: matchea SIEMPRE (always_bid_floor) en ambos triggers del Bloque 3.
-# Critical para la narrativa — sin TermoFlex el dashboard puede quedar en cero.
+# Rol en el demo: matchea SIEMPRE vía always_bid_floor (bypassea Stage1 semantic
+# filter + bypassea gate ladder cuando exista). Critical para narrativa — sin
+# TermoFlex el dashboard puede quedar en cero entre menciones explícitas. Calza
+# además semánticamente cuando audio_intent ∈ {discussion, silence} y el chunk
+# es brand-safe (charla de fondo, pausa larga).
 # Fictional brand — ver docs/PITCH.md, docs/GATES.md §4.2.
 
 brand_id: termoflex

@@ -13,7 +13,7 @@ type RenderEvent = RenderEventPayload & {
 
 type Status = "connecting" | "open" | "error" | "closed";
 
-const SHOW_DURATION_MS = 5000;
+const DEFAULT_TEXT_DURATION_MS = 8000;
 
 export default function OverlayClient({ creator_id }: { creator_id: string }) {
   const [status, setStatus] = useState<Status>("connecting");
@@ -67,10 +67,15 @@ export default function OverlayClient({ creator_id }: { creator_id: string }) {
     };
   }, [creator_id]);
 
-  // Auto-clear text-only messages después de SHOW_DURATION_MS.
+  // Auto-clear text-only messages: respeta duration_ms del payload, fallback 8s.
+  // El cron manager hoy no setea duration_ms (sólo (creator_id, message, kind))
+  // → cae al fallback. Cuando un publisher futuro lo populé, este overlay lo
+  // respeta sin cambios. Subido de 5s → 8s para alinear con la latencia 8-13s
+  // del modelo nuevo: el operador necesita tiempo de zoom-in al banner.
   useEffect(() => {
     if (!current || current.asset_url) return;
-    const t = setTimeout(() => setCurrent(null), SHOW_DURATION_MS);
+    const ms = current.duration_ms ?? DEFAULT_TEXT_DURATION_MS;
+    const t = setTimeout(() => setCurrent(null), ms);
     return () => clearTimeout(t);
   }, [current]);
 

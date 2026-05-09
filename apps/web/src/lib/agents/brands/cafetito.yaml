@@ -1,5 +1,8 @@
 # ☕ CafetITO — premium episodic
-# Rol en el demo: matchea en trigger word "ÉPICO/CLUTCH" durante Bloque 3 del PITCH.
+# Rol en el demo: matchea cuando el speaker MENCIONA café/cafetito (audio_mentions[]),
+# o cuando audio_intent=reaction durante analogías deportivas sobre tech (clutch
+# técnico, comeback de un build/deploy, breakthrough en vivo). Ver PITCH Bloque 3
+# Notas de calibración → "Detección semántica, no acústica".
 # Fictional brand — ver docs/PITCH.md, docs/GATES.md §4.1.
 
 brand_id: cafetito
@@ -40,7 +43,11 @@ avoid_moods:
   - boring
   - idle
 
-# ─── Gate ladder (C-02b → MandateExtensions, opcional/backwards-compat) ─
+# ─── Gate ladder (C-02b → MandateExtensions) ────────────────────────
+# NOTA post-pivote: el cron variant del manager (C-08m-cron) usa Stage1
+# semantic filter (audio_intent + audio_mentions) + Stage2 Claude. NO evalúa
+# required_any_tag. Estos tags quedan para cuando C-08a..d (gate ladder) se
+# implemente — por ahora son referencia de targeting.
 event_filters:
   required_any_tag:
     - high_energy
@@ -52,6 +59,7 @@ event_filters:
   preferred_categories:
     - gaming
     - just_chatting
+    - tech-pitch
   min_viewers: 50
 
 brand_safety:
@@ -78,10 +86,10 @@ dayparts:
     - "11:00-23:59 ART"
 
 ideal_contexts:
-  - "El streamer mete un clutch imposible y el chat explota"
-  - "Comeback épico: venía perdiendo y da vuelta la partida"
-  - "Celebra una victoria con grito largo, energía alta sostenida"
-  - "Momento tenso pre-jugada decisiva, el chat en silencio expectante"
+  - "Speaker menciona café/cafetito explícitamente (audio_mentions match)"
+  - "Speaker hace analogía deportiva sobre tech: 'clutch técnico de cerrar una tx en segundos', 'comeback del build', 'breakthrough en vivo'"
+  - "audio_intent=reaction sostenido durante explicación de breakthrough — energía alta, foco intacto"
+  - "Speaker explica un avance técnico con voz épica/segunda persona (calza la persona de CafetITO)"
 
 # ─── Catálogo de creatives (D-10 lo lee para pregen con ElevenLabs) ──
 ad_variants:

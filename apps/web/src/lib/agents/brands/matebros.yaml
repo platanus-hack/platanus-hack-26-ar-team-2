@@ -1,9 +1,12 @@
 # 🧉 MateBros — community/casual_chat
 # Rol en el demo:
-#   - Trigger 1 (ÉPICO high_energy): SKIP gate1 — missing_required_tag (no incluye high_energy/clutch)
-#     o viewers_above_max si el canal tiene >max_viewers.
-#     El speaker dice "audiencia muy grande para su mandate" → max_viewers da el SKIP literal.
-#   - Trigger 2 (TRANQUI casual_chat): MATCH (fit 1.6x, casual_chat).
+#   - Mención de café (audio_mentions=[café], intent=reaction): SKIP — la persona
+#     de MateBros es ronda comunitaria, no clutch individual. Brand_match bajo.
+#   - Mención de mate/equipo/fogón con intent ∈ {discussion, recommendation}:
+#     MATCH directo. El speaker armando arquitectura "los cuatro tomando mate,
+#     fogón de hackathon" cae acá.
+#   - Si la audiencia (viewers) supera max_viewers, SKIP por viewers_above_max
+#     — el speaker puede narrar "audiencia muy grande para su mandate" (didáctico).
 # Fictional brand — ver docs/PITCH.md, docs/GATES.md §4.4.
 
 brand_id: matebros
@@ -90,10 +93,10 @@ dayparts:
     - "11:00-23:59 ART"   # cubre demo time + tarde-noche fogón
 
 ideal_contexts:
-  - "Festejo grupal post-victoria, chat coreando juntos"
-  - "Streamer brindea con el chat al cerrar la partida"
-  - "Comunidad celebra logro común (raid, drop, milestone)"
-  - "Charla relajada de fogón, chat cálido, viewers conocidos"
+  - "Speaker menciona mate/yerba/ronda/fogón explícitamente (audio_mentions match)"
+  - "Speaker arma arquitectura/diseña/explica un sistema con el equipo: 'los cuatro tomando mate', 'fogón de hackathon'"
+  - "audio_intent=discussion sostenido en charla relajada de equipo, chat conocido, sin spike de energía individual"
+  - "Festejo grupal post-deploy/post-merge — comunidad celebrando logro común"
 
 # ─── Catálogo de creatives (D-10) ────────────────────────────────────
 ad_variants:

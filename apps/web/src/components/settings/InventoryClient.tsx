@@ -20,7 +20,7 @@ export interface InventoryData { zones: Zone[] }
 const ZONE_META: Record<ZoneId, Pick<Zone, "label" | "description" | "dimensions" | "manual_only">> = {
   lower_third: {
     label: "Lower Third",
-    description: "Banner across the bottom — used in automatic epic-moment auctions.",
+    description: "Banner across the bottom — used in automatic context-match auctions.",
     dimensions: "1920 × 180 px · 5–8 s",
     manual_only: false,
   },

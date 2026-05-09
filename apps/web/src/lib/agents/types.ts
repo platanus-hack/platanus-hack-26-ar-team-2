@@ -51,7 +51,7 @@ export type ZoneId = "lower_third" | "bottom_right_corner" | "fullscreen_takeove
  */
 export type StreamContext = {
   stream_id: StreamId;
-  /** Rolling 30s of speech-to-text from Deepgram. */
+  /** Rolling 30s of speech-to-text from ElevenLabs Scribe v2 realtime. */
   audio_30s: string;
   /** Frame summary + tags from Gemini Flash multimodal. */
   frame_description: string;
@@ -277,7 +277,10 @@ export type StreamMetadata = {
   expected_dayparts?: string[];
   /** Topics the streamer plans to cover — used as gate-2 baseline if available. */
   expected_topics?: string[];
-  /** Pre-rehearsed trigger words for demo (Bloque 3). Operator can use these to validate the pipeline. */
+  /** Legacy del modelo acústico (pre-pivote 2026-05-09) — el cron manager
+   *  hoy filtra semánticamente vía audio_intent + audio_mentions (B-07c),
+   *  no por trigger words. Campo se mantiene por backwards-compat con
+   *  fixtures viejas; no consumido por la pipeline activa. */
   rehearsed_triggers?: { word: string; expected_mood: string }[];
   audience?: {
     expected_viewers_min?: number;
