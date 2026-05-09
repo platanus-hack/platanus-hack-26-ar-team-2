@@ -1,96 +1,86 @@
 # PITCH — Addie
 
-5 min · Platanus Hack BSAS · Track 🤑 Agentic Money · 2026-05-10 12:00
+**3 min** · Platanus Hack BSAS · Track 🤑 Agentic Money · 2026-05-10 12:00
 
 > **Narrativa win-win-win.** Addie no es una subasta. Es un matcher: orquesta colocaciones momento-a-momento para que el streamer facture más, las marcas paguen por encajar mejor, y el viewer no se coma un anuncio inicial que se salta.
 
-Speakers TBD. Placeholders: `<TALENTO>` (streamer del demo), `<JUEGO>` (juego visible en pantalla).
+> **Formato del pitch.** El equipo está **streameando el pitch en sí mismo**. Cuando empieza el demo, ya hay cámara + micro + dashboard al aire. No jugamos un videojuego: hablamos a cámara mostrando dashboard y consola, y Addie reacciona a **lo que estamos diciendo en este mismo momento** — el speech-to-text, el frame de la cámara y el chat de la audiencia disparan los matches en vivo. Es un demo meta: el sistema se prueba a sí mismo durante el pitch.
+
+Speakers TBD.
 
 ---
 
-## Estructura (300 s)
+## Estructura (180 s)
 
 | # | Bloque | Tiempo | Quién |
 |---|---|---|---|
-| 1 | Hook — el problema | 0:00 – 0:30 | TBD |
-| 2 | Antítesis — por qué la subasta tampoco resuelve | 0:30 – 1:15 | TBD |
-| 3 | Idea — Addie como matcher | 1:15 – 1:45 | TBD |
-| 4 | Demo en vivo | 1:45 – 3:30 | TBD |
-| 5 | Las 3 patas agentic | 3:30 – 4:30 | TBD |
-| 6 | Cierre + pedido | 4:30 – 5:00 | TBD |
+| 1 | Cold open + hook | 0:00 – 0:25 | TBD |
+| 2 | Idea + mandates al aire | 0:25 – 1:00 | TBD |
+| 3 | Live matching — el sistema reacciona al pitch | 1:00 – 2:25 | TBD |
+| 4 | Las 3 patas agentic | 2:25 – 2:50 | TBD |
+| 5 | Cierre | 2:50 – 3:00 | TBD |
 
 ---
 
-## Bloque 1 · Hook (0:00 – 0:30)
+## Bloque 1 · Cold open + hook (0:00 – 0:25)
+
+> Cuando arranca el pitch el stream YA está al aire desde antes. Cámara apuntando a los speakers, micro abierto, overlay Addie con TermoFlex como default visible en bottom-right. Dashboard abajo en split.
 
 | Lo que se dice | Lo que se muestra |
 |---|---|
-| **"Twitch te muestra un anuncio antes del stream que saltás a los 5 segundos."** | Captura: anuncio inicial genérico de Twitch. Botón "Skip ad" parpadeando. |
-| "Para el streamer son 12 centavos. Para la marca, un view que ni vio. Para vos, una interrupción." | Tres íconos: 🎮 streamer, 🏢 marca, 👀 viewer — los tres con cara triste. |
-| "Y mientras tanto, durante el live de 4 horas, hay 20 momentos perfectos para que una marca aparezca. Y nadie los está vendiendo." | Timeline de 4 hs del stream con 20 puntitos rojos marcando momentos (goles, clutch, charla, comeback). Ninguno tiene marca. |
+| **"Esto que están viendo es un stream en vivo. Nosotros somos el streamer. Y desde que prendimos la cámara, este sistema está escuchando."** | Cámara con los speakers. Overlay Addie activo (logo TermoFlex en corner). Dashboard abajo: 4 brand-agents online. |
+| "Twitch te daría 12 centavos por mostrar un anuncio inicial que se salta a los 5 segundos. Para la marca, un view que ni vio. Para el viewer, una interrupción." | Caption pequeña en la esquina: "Twitch pre-roll · $0.12 · skip 5s". |
+| **"Mientras tanto, cada minuto que estamos hablando, hay momentos donde una marca podría aparecer. Y nadie los está vendiendo."** | Timeline mini abajo del dashboard arrancando en 0, los puntitos van a aparecer a medida que el sistema detecte momentos durante el pitch. |
 
 ---
 
-## Bloque 2 · Antítesis (0:30 – 1:15)
+## Bloque 2 · Idea + mandates al aire (0:25 – 1:00)
 
 | Lo que se dice | Lo que se muestra |
 |---|---|
-| "La respuesta obvia es subastar esos momentos. Que las marcas pujen y la más cara gana." | Animación: 4 logos peleando por un único slot. Flechas chocando. |
-| "Pero la subasta es zero-sum. Una marca gana, tres pierden, el streamer factura una vez, y el viewer ve el ad de la marca que tenía MÁS plata, no la que mejor encajaba." | El logo ganador queda en pantalla. Los otros 3 desaparecen. El streamer ve "+1 ad". |
-| "Y peor: si nadie puja fuerte, el momento se pierde. Slot vacío, plata vacía." | Slot vacío parpadeando. "$0". |
-| **"El problema no es elegir al que paga más. Es matchear muchos momentos con muchas marcas, y que cada uno encaje donde le hace sentido."** | El timeline se rellena: cada uno de los 20 puntitos ahora tiene un logo distinto encima. Diferentes marcas, diferentes momentos. |
+| **"Addie es un matcher agentic para streams en vivo."** | Pantalla brevemente: logo + tagline "the matchmaker for live attention". Vuelve al stream + dashboard. |
+| "Cuatro marcas firmaron mandate. Cuándo les interesa aparecer, cuánto pagan, qué keywords las queman." | Switch del dashboard a la **brand console**: 4 cards en fila — ☕ CafetITO · 🧊 TermoFlex · 🌭 Pancho Rex · 🧉 MateBros. |
+| *(operador hace hover sobre las 4 cards mientras el speaker resume en una línea cada una)* "CafetITO quiere momentos épicos a la noche. TermoFlex es el default — siempre disponible. Pancho Rex solo a la hora del lunch. MateBros prefiere charlas de fogón." | Cada card se expande 3s mostrando highlights del mandate. |
+| **"Y este stream también firmó el suyo."** *(speakers se señalan)* | Card del streamer-team: piso mínimo USDC, keywords bloqueadas, marcas preferidas. |
 
 ---
 
-## Bloque 3 · Idea (1:15 – 1:45)
+## Bloque 3 · Live matching — el sistema reacciona al pitch (1:00 – 2:25)
+
+> **Este es el corazón del demo.** Mientras el speaker explica cómo funciona el sistema, **el sistema le está respondiendo en vivo**. Los pipes de audio + frame + chat ya están corriendo desde el cold open. Cada línea que dice el speaker dispara un context tick. El operador del dashboard mantiene el panel central a la vista para que el jurado vea el log.
 
 | Lo que se dice | Lo que se muestra |
 |---|---|
-| **"Addie es un matcher agentic para streams en vivo."** | Pantalla title: logo Addie + tagline "the matchmaker for live attention". |
-| "Cada marca firma un mandate: cuándo le interesa aparecer, cuándo no, cuánto está dispuesta a pagar, qué tono usa, qué keywords la queman." | Brand console: cards de las 4 marcas (☕ CafetITO, 🧊 TermoFlex, 🌭 Pancho Rex, 🧉 MateBros) con sus mandates expandidos. |
-| "El streamer firma el suyo: piso mínimo, marcas que prefiere, palabras que no quiere oír cerca de su contenido." | Card del streamer `<TALENTO>` con su mandate. |
-| "Addie escucha el stream, detecta cada momento, y en menos de 5 segundos encuentra cuál marca encaja mejor para ESE momento — sin pelear con las otras, porque las otras tienen sus propios momentos." | Visualización: stream a la izquierda, 4 marcas a la derecha, líneas de match dinámicas conectando momentos con marcas en tiempo real. |
+| **"Lo que están viendo en este dashboard es lo que ve el sistema."** *(operador centra el dashboard)* | Panel central full-width: 4 brand-agents · ContextTick log · GateSkip feed · Counter de revenue del streamer-team. |
+| "Cada segundo, el pipeline lee el audio que estoy diciendo, lo que la cámara está viendo, y el chat de la audiencia. Construye un contexto." | ContextTick rolling con `audio_30s`, `frame_summary`, `chat_velocity` actualizándose en vivo. |
+| **"Mirá lo que pasa cuando digo una palabra como ÉPICO."** *(énfasis en la palabra)* | Spike de energía en el dashboard. Pipeline detecta `mood: high_energy`. Dispara auction. |
+| *(speaker se queda en silencio 2s a propósito mientras el dashboard responde)* | Log explota: <br>`☕ CafetITO → MATCH (fit 1.6x, mood high_energy)` <br>`🧊 TermoFlex → MATCH (always available)` <br>`🌭 Pancho Rex → SKIP gate1: daypart no activo` <br>`🧉 MateBros → SKIP gate1: viewer count no íntimo` |
+| "Las 4 marcas escucharon. Dos calzan, dos dijeron que no. Pancho Rex porque no es lunch. MateBros porque la audiencia es muy grande para su mandate." | Animación: hold → lock → render. Banner ☕ CafetITO sale en lower-third sobre la cámara. Counter de revenue: $0.00 → $2.40. |
+| **"Y todo eso ya está on-chain."** | Tx hash del lock visible en el log con link a BaseScan. |
+| *(speaker baja el tono, charla casual)* "Y ahora bajo la energía un toque, hablo más tranqui sobre la arquitectura. Otro momento. Otra marca." | Energy bar baja. Mood pasa a `casual_chat`. Auction nueva dispara. |
+| | Log: <br>`🧉 MateBros → MATCH (fit 1.6x, casual_chat)` <br>`🧊 TermoFlex → MATCH` <br>`☕ CafetITO → SKIP cooldown 5min` <br>`🌭 Pancho Rex → SKIP daypart` |
+| "MateBros calza ahora — community moments. CafetITO se autoexcluyó porque ya pautó hace poco. Cero pelea. Estaban en momentos distintos." | Banner 🧉 MateBros aparece. Counter: $2.40 → $4.10. |
+| **"En menos de 90 segundos de pitch, este stream ya facturó 2 ads de 2 marcas distintas. Y va por más."** *(operador deja el dashboard al aire — más placements pueden disparar mientras siguen los bloques 4 y 5)* | Counter prominente: 2 placements · $4.10 USDC · 2 brands. Tx feed visible con los 2 lock-tx-hash. |
 
 ---
 
-## Bloque 4 · Demo en vivo (1:45 – 3:30)
-
-> Demo coreografiada — referenciar `docs/DEMO_RUNBOOK.md` para minuto-a-minuto. Acá solo los beats narrativos.
+## Bloque 4 · Las 3 patas agentic (2:25 – 2:50)
 
 | Lo que se dice | Lo que se muestra |
 |---|---|
-| **"Esto es `<TALENTO>` jugando `<JUEGO>` en vivo, ahora mismo."** | Stream real corriendo. Overlay Addie activo en bottom-right (logo TermoFlex como default). |
-| "Acá abajo, el panel de Addie: 4 marcas con sus mandates activos, balance USDC en escrow, y el log de eventos." | Split: stream arriba, dashboard abajo. Dashboard muestra 4 brand-agents corriendo. |
-| "Mirá lo que pasa cuando hay un gol." *(esperar al gol o triggear con clip pre-grabado)* | Spike de chat (msgs/s pasa de 30 → 200). Pipeline detecta `mood: celebration`. |
-| "Las 4 marcas reciben el evento. CafetITO calza — su mandate dice 'momentos épicos, alta energía, evening'. TermoFlex también está disponible. Las otras dos hacen skip — Pancho Rex no le interesa el deporte, MateBros prefiere charlas calmas." | Log en vivo: <br>`☕ CafetITO → MATCH (fit 1.8x)` <br>`🧊 TermoFlex → MATCH (default)` <br>`🌭 Pancho Rex → SKIP (gate1: no calza mood)` <br>`🧉 MateBros → SKIP (gate1: viewer count alto, no íntimo)` |
-| "Addie elige a CafetITO porque su fit es más alto. CafetITO paga 2.40 USDC, el streamer factura, el ad se renderiza durante 6 segundos sobre el lower-third." | Animación de hold → lock → render. Banner "☕ CafetITO" aparece en lower-third del stream. Contador de revenue del streamer sube: $X → $X+2.40. |
-| "Y acá viene el truco: a los 30 segundos, `<TALENTO>` deja de jugar y empieza a charlar. La energía cae. Otro momento. Otra marca." | Energy bar baja. Mood pasa a `casual_chat`. |
-| "MateBros calza ahora — su mandate prefiere community moments. CafetITO hace skip porque ya pagó hace 30s y respeta el cooldown. Pancho Rex también pasa, no es lunch time." | Log: <br>`🧉 MateBros → MATCH (fit 1.6x)` <br>`☕ CafetITO → SKIP (cooldown 5min)` <br>`🌭 Pancho Rex → SKIP (gate1: daypart)` <br>`🧊 TermoFlex → MATCH (always available)` |
-| **"En los últimos 4 minutos, este stream facturó 6 ads de 4 marcas distintas. Cero peleas. Cada marca apareció donde le hacía sentido."** | Counter final: 6 placements · $14.80 USDC · 4 brands · 0 conflictos. |
+| **"Tres patas hacen que esto sea agentic-money."** | Slide overlay con 3 columnas mientras el dashboard sigue corriendo abajo. |
+| **"Una: mandate firmado.** Cada marca pone los límites. El agent decide adentro." | Columna 1: 🪪 mandate.yaml + signature. Highlight `daily_cap_usdc`, `max_bid_usdc`. |
+| **"Dos: escrow on-chain en USDC sobre Base.** Lock cuando se decide, release cuando se renderiza, refund automático si algo se rompe." | Columna 2: 📜 contract address en BaseScan. Lock → render → release. |
+| **"Tres: cada decisión queda auditada.** Por qué matcheó CafetITO, por qué Pancho Rex skippeó. La marca puede revisar a su agent." | Columna 3: 🔍 audit log per placement. Skip reasons en es-AR. |
 
 ---
 
-## Bloque 5 · Las 3 patas agentic (3:30 – 4:30)
+## Bloque 5 · Cierre (2:50 – 3:00)
 
 | Lo que se dice | Lo que se muestra |
 |---|---|
-| **"Tres patas hacen que esto sea agentic-money de verdad, no un dashboard con IA."** | Slide con 3 columnas. |
-| **"Uno: autonomía con boundary firmado.** Cada marca tiene un agent corriendo en su nombre con un mandate firmado. El agent decide en runtime, pero solo dentro de los límites que la marca firmó. Si el agent quisiera gastar el doble, el código lo bloquea." | Columna 1: 🪪 mandate.yaml + signature. Highlight de `daily_cap_usdc: 50`, `max_bid_usdc: 5.00`, `blocked_keywords`. |
-| **"Dos: settlement on-chain con USDC nativo en Base.** El match no es una promesa, es un escrow. Lock cuando se decide, release cuando se renderiza. Si algo se rompe, refund automático. La marca nunca paga por un ad que no salió." | Columna 2: 📜 AddieEscrow.sol address en BaseScan. Diagrama lock → render → release. |
-| **"Y tres: matching transparente y auditable.** Cada decisión queda persistida — qué brands matchearon, qué brands hicieron skip, por qué, cuál fue el fit. La marca puede auditar a su agent. El streamer puede auditar a la plataforma." | Columna 3: 🔍 audit log per placement. Tabla de skip reasons humanas en español. |
-| "No estás confiando en un algoritmo opaco que decide por vos. Estás firmando los límites, los agents juegan dentro, y todo lo que hicieron queda registrado." | Frase grande: **"signed autonomy + on-chain settlement + auditable match"**. |
-
----
-
-## Bloque 6 · Cierre (4:30 – 5:00)
-
-| Lo que se dice | Lo que se muestra |
-|---|---|
-| "Twitch te paga 12 centavos por un anuncio inicial que el viewer salta." | Logo Twitch + "$0.12". |
-| "Addie le paga al streamer 6 colocaciones de 4 marcas distintas en 4 minutos, cada una en el momento donde encajaba." | Logo Addie + "6 × $2.47 prom = $14.80". |
-| **"El streamer factura 100x. Las marcas pagan por encajar, no por ganar. Y el viewer no se come un ad — ve uno que tiene sentido."** | Tres íconos sonrientes: 🎮 + 🏢 + 👀. |
-| "Está corriendo en Base mainnet con el escrow desplegado, 4 brand-agents activos, y un streamer real conectado en este momento." | Links: contract address, demo URL, repo. |
-| **"Addie. The matchmaker for live attention."** | Logo + handles del team. |
+| **"El streamer factura más, las marcas pagan por encajar, el viewer no se come un ad — ve uno que tiene sentido."** | Tres íconos: 🎮 + 🏢 + 👀. Counter final del demo (lo que sea que cerró durante el pitch). |
+| **"Addie. The matchmaker for live attention."** | Logo + repo URL + contract address + handles. |
 
 ---
 
@@ -105,25 +95,29 @@ Speakers TBD. Placeholders: `<TALENTO>` (streamer del demo), `<JUEGO>` (juego vi
 
 ## Cosas a NO decir (anti-patterns del pitch)
 
-- ❌ "Subasta", "puja", "guerra de brands", "mejor postor". El pivote del pitch es justamente que NO es subasta.
+- ❌ "Subasta", "puja", "guerra de brands", "mejor postor". El pivote es justamente que NO es subasta.
 - ❌ "Reemplazar a Twitch ads". No reemplazamos los anuncios iniciales — los complementamos. Mensaje: capa adicional, no sustituto.
-- ❌ Mencionar marcas reales (Adidas, Coca, etc.). Las 4 del demo son inventadas a propósito (CafetITO, TermoFlex, Pancho Rex, MateBros). Si alguien pregunta: "ficticias para el demo, el sistema acepta cualquier marca que firme un mandate".
-- ❌ Hablar de Akua / Anthropic / Claude internals. Track judges saben qué LLM usamos; no es el punto.
-- ❌ Prometer escalabilidad infinita. 4 brand-agents corriendo localmente — el techo de "cuántas marcas en paralelo" es post-MVP.
+- ❌ Mencionar marcas reales (Adidas, Coca, etc.). Las 4 del demo son inventadas (CafetITO, TermoFlex, Pancho Rex, MateBros). Si alguien pregunta: "ficticias para el demo, el sistema acepta cualquier marca que firme un mandate".
+- ❌ Hablar de Akua / Anthropic / Claude internals. El jurado del track sabe qué LLM usamos.
+- ❌ Prometer escalabilidad infinita. 4 brand-agents corriendo localmente — el techo es post-MVP.
+- ❌ "Estamos jugando" / "miren el gameplay". No hay videojuego — el speaker es el streamer y el dashboard es el protagonista visual.
 
 ---
 
-## Notas de calibración (post-PITCH, pre-demo)
+## Notas de calibración (pre-demo)
 
-- Confirmar `<TALENTO>` y `<JUEGO>` apenas Lucas tenga el ingest configurado (task `C-02d` calibration).
-- Si el stream del talento elegido no tiene un gol/clutch en los primeros 2 min del demo, usar clip pre-grabado y decirlo: "este es un highlight de hace 5 minutos".
-- TermoFlex como default es CRÍTICO para que el dashboard nunca esté en cero. Asegurar `always_bid_floor: true` en su YAML antes de salir a demo.
+- **Trigger words ensayadas.** Las palabras "épico", "clutch", "celebration", "comeback", "tranqui", "casual", "fogón" disparan moods conocidos por el pipeline. El speaker debe usarlas conscientemente para que el demo produzca matches en el momento justo. Ensayar 2 veces antes del demo.
+- **Brand console tour del Bloque 2.** El operador ensaya los 4 hovers en 30s exactos. Nada de leer texto pequeño en pantalla.
+- **TermoFlex como default es CRÍTICO.** Asegura `always_bid_floor: true` en su YAML antes del demo. Sin TermoFlex el dashboard puede quedar en cero y matar la narrativa.
+- **Plan B si nada matchea durante los 85s del Bloque 3.** El operador del dashboard tiene un botón debug "Trigger context tick" — lo usa SIN avisar al speaker, para forzar al menos 1 auction. Speakers no deben mencionar fallback.
+- **Velocity de chat.** Si la audiencia del pitch no genera chat, pre-conectar un viewer-bot que postee 2-3 msgs/s en el canal Twitch durante el pitch. Sin esto la `chat_velocity` queda muerta.
+- **Camera frame.** La cámara apunta a speakers + dashboard de fondo. Gemini Flash describe `frame_summary` como "personas hablando + dashboard con métricas" — eso es contexto válido, no rompe nada.
 
 ---
 
 ## Cross-references
 
 - `docs/GATES.md` — escalera de 4 gates pre-LLM (cómo se decide MATCH/SKIP).
-- `docs/DEMO_RUNBOOK.md` — minuto-a-minuto del demo en vivo.
+- `docs/DEMO_RUNBOOK.md` — runbook con setup físico, hardware, fallback plan, Q&A esperado.
 - `DESIGN.md §4` — agent topology y event flow.
 - `DESIGN.md §16` — pitch line de una sola frase (puede que necesite update post-pivote).
