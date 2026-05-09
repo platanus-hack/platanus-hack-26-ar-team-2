@@ -19,7 +19,7 @@ Standalone proof of concept de la capa de pipeline desde [DESIGN.md §3](../../D
 | Variable | Para qué sirve | Estado | Cómo conseguirla |
 |---|---|---|---|
 | `ELEVENLABS_API_KEY` | Audio: transcripción en streaming con Scribe v2 realtime (B-04). **Misma key cubre Creative para pre-gen de ads + TTS** — una sola cuenta para los 3 servicios. | **Requerida para audio_30s.** Sin ella el POC corre igual pero los campos `audio_30s` y `audio_partial` van vacíos. | [elevenlabs.io](https://elevenlabs.io) → Sign up → Settings → API Keys → Create. Free tier alcanza para el demo. |
-| `GEMINI_API_KEY` | Frame analysis multimodal (B-05, próximo commit). | Aún no usada. | [aistudio.google.com](https://aistudio.google.com) → Get API key. Free tier 1M tokens/día. |
+| `AI_GATEWAY_API_KEY` | Frame analysis (B-05) con Gemini 2.5 Flash multimodal vía **Vercel AI Gateway**. Una sola key del gateway rutea a Gemini/Claude/GPT/etc — ideal porque el equipo ya tiene cuenta Vercel para deploy. | **Requerida para frame_summary / scene_type / mood_tags / on_screen_text.** Sin ella el POC corre con esos campos como `(unknown)`. | [vercel.com/dashboard](https://vercel.com/dashboard) → AI Gateway → Create Key. Créditos compartidos del proyecto Vercel. |
 | `TWITCH_*` | Chat real desde Twitch IRC (B-06, después). | Aún no usada. | tmi.js usa OAuth anónimo; configuración en commit B-06. |
 
 **La `.env` está gitignored** — nunca pushees tu key al repo. Verificalo siempre con `git status` antes de commitear.
