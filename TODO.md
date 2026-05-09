@@ -24,7 +24,6 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 |---|---|---|---|
 | Lucas | POC-PIPE | Pipeline POC standalone bajo `poc/pipeline/` (foundation para B-01..B-07: docker-compose nginx-rtmp + webhooks on_publish/on_publish_done + ffmpeg audio/frames + tmi.js chat + context tick en terminal) | 2026-05-09 |
 | Jere | C-02 | 8 mandate templates YAML (brands/*.yaml) + loader TypeScript | 2026-05-09 |
-| Andy | AUTH-MVP | Better Auth (TS lib, no SaaS) en `apps/web/`: migration `0006_auth.sql` (auth_user/session/account/verification + accounts.owner_user_id FK) + `lib/auth.ts` server config + `lib/auth-client.ts` + `/api/auth/[...all]` route + `/login` + `/signup` pages. Email+password only en MVP, sin email-verify, sin OAuth. Apply al live DB. | 2026-05-09 |
 
 ---
 
