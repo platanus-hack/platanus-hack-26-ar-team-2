@@ -4,111 +4,16 @@ import Link from "next/link";
 import { useReducer, useState, useRef, useCallback } from "react";
 import ThemeToggle from "@/components/ThemeToggle";
 import type { BrandMandateData, BrandStats, AdRow } from "@/lib/db";
+import { getBrand, type Brand } from "@/lib/brands";
 
 export type BrandInitial = {
   mandate: BrandMandateData | null;
   stats: BrandStats;
   ads: AdRow[];
+  wallet_address?: string | null;
 };
 
-export interface BrandMeta {
-  id: string;
-  label: string;
-  color: string;
-  daily_cap_usdc: number;
-  min_bid_usdc: number;
-  max_bid_usdc: number;
-  always_bid_floor: boolean;
-  persona_slug: string;
-  tracking_url: string;
-  allowed_zones: string[];
-  preferred_zones: string[];
-  target_moods: string[];
-  safety_keywords: string[];
-}
-
-const BRAND_REGISTRY: Record<string, BrandMeta> = {
-  adidas: {
-    id: "adidas", label: "Adidas Argentina", color: "#e8e8e8",
-    daily_cap_usdc: 50, min_bid_usdc: 0.50, max_bid_usdc: 5.00, always_bid_floor: false,
-    persona_slug: "Directo, deportivo y apasionado. Solo momentos épicos.",
-    tracking_url: "https://adidas.com.ar/addie",
-    allowed_zones: ["lower_third", "bottom_right_corner"],
-    preferred_zones: ["lower_third"],
-    target_moods: ["high_energy", "celebration", "victory", "clutch", "comeback", "goal"],
-    safety_keywords: ["muerte", "violencia", "drogas", "insulto_grave"],
-  },
-  nike: {
-    id: "nike", label: "Nike Argentina", color: "#ff6600",
-    daily_cap_usdc: 55, min_bid_usdc: 0.50, max_bid_usdc: 6.00, always_bid_floor: false,
-    persona_slug: "Inspiracional y directo. Momentos de superación personal.",
-    tracking_url: "https://nike.com.ar/addie",
-    allowed_zones: ["lower_third", "fullscreen_takeover"],
-    preferred_zones: ["fullscreen_takeover"],
-    target_moods: ["high_energy", "comeback", "victory", "clutch"],
-    safety_keywords: ["muerte", "violencia", "drogas"],
-  },
-  quilmes: {
-    id: "quilmes", label: "Quilmes", color: "#f5c400",
-    daily_cap_usdc: 40, min_bid_usdc: 0.30, max_bid_usdc: 3.50, always_bid_floor: false,
-    persona_slug: "Relajado y social. Momentos de compartir y celebrar.",
-    tracking_url: "https://quilmes.com.ar/addie",
-    allowed_zones: ["lower_third", "bottom_right_corner"],
-    preferred_zones: ["lower_third"],
-    target_moods: ["celebration", "casual", "chat_active", "social"],
-    safety_keywords: ["muerte", "violencia", "drogas", "menores"],
-  },
-  mp: {
-    id: "mp", label: "Mercado Pago", color: "#009ee3",
-    daily_cap_usdc: 100, min_bid_usdc: 0.20, max_bid_usdc: 2.00, always_bid_floor: true,
-    persona_slug: "Default bidder. Garantiza fill al floor. No negocia.",
-    tracking_url: "https://mercadopago.com.ar/addie",
-    allowed_zones: ["lower_third", "bottom_right_corner"],
-    preferred_zones: ["bottom_right_corner"],
-    target_moods: ["any"],
-    safety_keywords: ["estafa", "fraude", "hack", "robo", "muerte", "violencia", "drogas"],
-  },
-  steam: {
-    id: "steam", label: "Steam", color: "#66c0f4",
-    daily_cap_usdc: 45, min_bid_usdc: 0.40, max_bid_usdc: 4.00, always_bid_floor: false,
-    persona_slug: "Gamer-nativo y técnico. Contextos de gaming intenso.",
-    tracking_url: "https://store.steampowered.com/addie",
-    allowed_zones: ["lower_third", "bottom_right_corner"],
-    preferred_zones: ["lower_third"],
-    target_moods: ["high_energy", "clutch", "new_game", "rage", "victory"],
-    safety_keywords: ["muerte", "violencia_real", "drogas"],
-  },
-  rappi: {
-    id: "rappi", label: "Rappi Argentina", color: "#ff441f",
-    daily_cap_usdc: 35, min_bid_usdc: 0.25, max_bid_usdc: 2.50, always_bid_floor: false,
-    persona_slug: "Urgente y conveniente. Momentos de pausa y snack.",
-    tracking_url: "https://rappi.com.ar/addie",
-    allowed_zones: ["lower_third", "bottom_right_corner"],
-    preferred_zones: ["bottom_right_corner"],
-    target_moods: ["idle", "calm", "chat_active", "casual"],
-    safety_keywords: ["muerte", "violencia", "drogas"],
-  },
-  globant: {
-    id: "globant", label: "Globant", color: "#b8d430",
-    daily_cap_usdc: 30, min_bid_usdc: 0.30, max_bid_usdc: 3.00, always_bid_floor: false,
-    persona_slug: "Tech-forward y aspiracional. Audiencias gamer-profesionales.",
-    tracking_url: "https://globant.com/addie",
-    allowed_zones: ["lower_third", "bottom_right_corner"],
-    preferred_zones: ["lower_third"],
-    target_moods: ["high_energy", "clutch", "victory", "technical"],
-    safety_keywords: ["muerte", "violencia", "drogas", "discriminacion"],
-  },
-  cocacola: {
-    id: "cocacola", label: "Coca-Cola Argentina", color: "#f40009",
-    daily_cap_usdc: 80, min_bid_usdc: 1.00, max_bid_usdc: 8.00, always_bid_floor: false,
-    persona_slug: "Clásico y celebratorio. Los momentos más épicos del stream.",
-    tracking_url: "https://coca-cola.com.ar/addie",
-    allowed_zones: ["lower_third", "fullscreen_takeover"],
-    preferred_zones: ["fullscreen_takeover"],
-    target_moods: ["celebration", "victory", "high_energy", "goal"],
-    safety_keywords: ["muerte", "violencia", "drogas", "menores", "insulto_grave"],
-  },
-};
+export type BrandMeta = Brand;
 
 const AD_VARIANTS = [
   { name: "epic_goal_lower",  zone: "lower_third",         duration_ms: 6000,  mood_tags: ["high_energy", "celebration", "victory"] },
@@ -176,7 +81,7 @@ function mandateReducer(state: MandateState, action: MandateAction): MandateStat
 type Tab = "overview" | "library" | "mandate";
 
 export default function BrandConsoleClient({ brandId, initial }: { brandId: string; initial?: BrandInitial }) {
-  const brand = BRAND_REGISTRY[brandId];
+  const brand = getBrand(brandId);
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const mandate = initial?.mandate ?? null;
 
@@ -203,15 +108,15 @@ export default function BrandConsoleClient({ brandId, initial }: { brandId: stri
             <ThemeToggle />
           </div>
           <div className="flex items-center gap-3 mt-3">
-            <span className="w-4 h-4 rounded-full shrink-0" style={{ background: brand.color }} />
-            <h1 className="text-xl font-bold text-[var(--text)]">{brand.label}</h1>
+            <span className="w-4 h-4 rounded-full shrink-0" style={{ background: brand.brand_color }} />
+            <h1 className="text-xl font-bold text-[var(--text)]">{brand.display_name}</h1>
             {brand.always_bid_floor && (
               <span className="text-[10px] bg-[#22d3ee]/15 text-[#22d3ee] border border-[#22d3ee]/30 rounded px-1.5 py-0.5 font-medium">
                 DEFAULT BIDDER
               </span>
             )}
           </div>
-          <p className="text-xs text-[var(--text-3)] mt-1 ml-7">{brand.persona_slug}</p>
+          <p className="text-xs text-[var(--text-3)] mt-1 ml-7">{brand.default_persona}</p>
 
           <div className="ml-7 mt-3 flex items-center gap-6">
             <BalanceItem label="Balance" value="$5.00" sub="USDC" valueClass="text-[#22c55e]" />
@@ -378,8 +283,8 @@ function LibraryTab({ brand, ads }: { brand: BrandMeta; ads?: AdRow[] }) {
                   <div
                     className="w-16 h-10 rounded-lg shrink-0 flex items-center justify-center text-[10px] font-mono text-[var(--text-4)] border"
                     style={{
-                      background: zoneOk ? `${brand.color}18` : "var(--card-2)",
-                      borderColor: zoneOk ? `${brand.color}30` : "var(--line-2)",
+                      background: zoneOk ? `${brand.brand_color}18` : "var(--card-2)",
+                      borderColor: zoneOk ? `${brand.brand_color}30` : "var(--line-2)",
                     }}
                   >
                     {zoneOk ? "PLACEHOLDER" : "N/A"}
@@ -430,7 +335,7 @@ function LibraryTab({ brand, ads }: { brand: BrandMeta; ads?: AdRow[] }) {
               <div className="flex items-center gap-4 px-5 py-4">
                 <div
                   className="w-16 h-10 rounded-lg shrink-0 flex items-center justify-center text-[10px] font-mono text-[var(--text-4)] border"
-                  style={{ background: `${brand.color}18`, borderColor: `${brand.color}30` }}
+                  style={{ background: `${brand.brand_color}18`, borderColor: `${brand.brand_color}30` }}
                 >
                   {ad.asset_type.toUpperCase()}
                 </div>

@@ -3,15 +3,14 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import type { Address, Hex } from "viem";
-import { formatUnits } from "viem";
 
 import {
-  USDC_DECIMALS,
   watchEscrowEvents,
   type LockedEvent,
   type ReleasedEvent,
   type RefundedEvent,
 } from "@/lib/chain/escrow";
+import { formatUsdc, truncateAddress, truncateTxHash, basescanUrl } from "@/lib/format";
 
 export type TxFeedEntryType = "lock" | "release" | "refund";
 
@@ -68,25 +67,6 @@ const TYPE_STYLES: Record<
   },
 };
 
-function shortAddress(addr: string): string {
-  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
-}
-
-function shortHash(hash: string): string {
-  return `${hash.slice(0, 10)}…${hash.slice(-6)}`;
-}
-
-function basescanTxUrl(hash: string): string {
-  return `https://basescan.org/tx/${hash}`;
-}
-
-function formatUsdc(amount: bigint): string {
-  const human = Number(formatUnits(amount, USDC_DECIMALS));
-  return human.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
 
 function entryKey(txHash: Hex, logIndex: number | null | undefined): string {
   return `${txHash}-${logIndex ?? 0}`;
@@ -200,7 +180,7 @@ function TxRow({
   const counterpartyLabel =
     addressLabels?.[entry.counterparty.toLowerCase()] ??
     addressLabels?.[entry.counterparty] ??
-    shortAddress(entry.counterparty);
+    truncateAddress(entry.counterparty);
 
   return (
     <motion.li
@@ -222,19 +202,19 @@ function TxRow({
           </span>
         </div>
         <span className="shrink-0 text-sm font-bold text-[#22d3ee] tabular-nums">
-          ${formatUsdc(entry.amount)}
+          {formatUsdc(entry.amount)}
         </span>
       </div>
 
       <div className="mt-1 flex items-center justify-between gap-3 text-[10px] text-[var(--text-3)]">
         <a
-          href={basescanTxUrl(entry.txHash)}
+          href={basescanUrl(entry.txHash, "tx")}
           target="_blank"
           rel="noopener noreferrer"
           className="font-mono hover:text-[var(--text)] hover:underline"
           title={entry.txHash}
         >
-          {shortHash(entry.txHash)} ↗
+          {truncateTxHash(entry.txHash)} ↗
         </a>
         <span className="font-mono">
           {entry.blockNumber !== null ? `#${entry.blockNumber.toString()}` : ""}

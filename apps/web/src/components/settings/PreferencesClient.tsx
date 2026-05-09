@@ -1,19 +1,9 @@
 "use client";
 
 import { useCallback, useReducer, useRef, useState } from "react";
+import { BRANDS } from "@/lib/brands";
 
-const ALL_BRANDS = [
-  { id: "adidas",   label: "Adidas",        color: "#e8e8e8" },
-  { id: "nike",     label: "Nike",           color: "#ff6600" },
-  { id: "quilmes",  label: "Quilmes",        color: "#f5c400" },
-  { id: "mp",       label: "Mercado Pago",   color: "#009ee3" },
-  { id: "steam",    label: "Steam",          color: "#66c0f4" },
-  { id: "rappi",    label: "Rappi",          color: "#ff441f" },
-  { id: "globant",  label: "Globant",        color: "#b8d430" },
-  { id: "cocacola", label: "Coca-Cola",      color: "#f40009" },
-] as const;
-
-type BrandId = (typeof ALL_BRANDS)[number]["id"];
+type BrandId = string;
 
 export interface Preferences {
   approvedBrands: BrandId[];
@@ -63,7 +53,7 @@ function reducer(state: State, action: Action): State {
 
 export default function PreferencesClient({ initial }: { initial?: Partial<Preferences> }) {
   const [state, dispatch] = useReducer(reducer, {
-    approvedBrands: new Set((initial?.approvedBrands ?? ALL_BRANDS.map((b) => b.id)) as BrandId[]),
+    approvedBrands: new Set((initial?.approvedBrands ?? BRANDS.map((b) => b.id)) as BrandId[]),
     keywords: initial?.safetyKeywords ?? [],
     saved: true,
     saving: false,
@@ -108,17 +98,17 @@ export default function PreferencesClient({ initial }: { initial?: Partial<Prefe
             <p className="text-xs text-[var(--text-3)] mt-0.5">Only approved brands can bid on your stream.</p>
           </div>
           <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-            approvedCount === ALL_BRANDS.length
+            approvedCount === BRANDS.length
               ? "bg-[#22c55e]/15 text-[#22c55e]"
               : approvedCount === 0
               ? "bg-[#ef4444]/15 text-[#ef4444]"
               : "bg-[#f59e0b]/15 text-[#f59e0b]"
           }`}>
-            {approvedCount}/{ALL_BRANDS.length} approved
+            {approvedCount}/{BRANDS.length} approved
           </span>
         </div>
         <div className="p-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {ALL_BRANDS.map((brand) => {
+          {BRANDS.map((brand) => {
             const on = state.approvedBrands.has(brand.id);
             return (
               <button
@@ -132,9 +122,9 @@ export default function PreferencesClient({ initial }: { initial?: Partial<Prefe
               >
                 <span
                   className="w-2 h-2 rounded-full shrink-0 transition-colors"
-                  style={{ background: on ? brand.color : "var(--line)" }}
+                  style={{ background: on ? brand.brand_color : "var(--line)" }}
                 />
-                <span className="truncate">{brand.label}</span>
+                <span className="truncate">{brand.display_name}</span>
                 {on && (
                   <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[#6366f1] text-xs">✓</span>
                 )}
@@ -145,7 +135,7 @@ export default function PreferencesClient({ initial }: { initial?: Partial<Prefe
         <div className="px-5 pb-3 flex gap-2">
           <button
             onClick={() =>
-              ALL_BRANDS.forEach((b) => {
+              BRANDS.forEach((b) => {
                 if (!state.approvedBrands.has(b.id)) {
                   dispatch({ type: "TOGGLE_BRAND", id: b.id });
                 }
@@ -158,7 +148,7 @@ export default function PreferencesClient({ initial }: { initial?: Partial<Prefe
           <span className="text-[var(--line)]">·</span>
           <button
             onClick={() =>
-              ALL_BRANDS.forEach((b) => {
+              BRANDS.forEach((b) => {
                 if (state.approvedBrands.has(b.id)) {
                   dispatch({ type: "TOGGLE_BRAND", id: b.id });
                 }

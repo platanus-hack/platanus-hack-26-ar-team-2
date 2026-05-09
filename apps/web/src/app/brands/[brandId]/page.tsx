@@ -20,7 +20,7 @@ export default async function BrandConsolePage({ params }: Props) {
       initial = { mandate, stats, ads };
     }
   } catch {
-    // DB unavailable — BrandConsoleClient falls back to BRAND_REGISTRY defaults
+    // DB unavailable — BrandConsoleClient falls back to lib/brands.ts defaults
   }
 
   return <BrandConsoleClient brandId={brandId} initial={initial} />;

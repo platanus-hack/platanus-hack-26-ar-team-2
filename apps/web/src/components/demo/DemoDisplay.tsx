@@ -2,6 +2,8 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useReducer, useRef } from "react";
+import { truncateTxHash } from "@/lib/format";
+import { getBrand } from "@/lib/brands";
 
 export type AuctionStatus = "idle" | "running" | "settled";
 
@@ -72,16 +74,6 @@ function reducer(state: State, action: Action): State {
   }
 }
 
-const BRAND_COLORS: Record<string, string> = {
-  adidas: "#f0f0f5",
-  nike: "#ff6600",
-  quilmes: "#f5c400",
-  mp: "#009ee3",
-  steam: "#66c0f4",
-  rappi: "#ff441f",
-  globant: "#b8d430",
-  cocacola: "#f40009",
-};
 
 export default function DemoDisplay({ hooks }: { hooks?: DemoDisplayHooks }) {
   const [state, dispatch] = useReducer(reducer, { status: "idle", bids: [], messages: [], txs: [] });
@@ -192,7 +184,7 @@ function AuctionBadge({ status }: { status: AuctionStatus }) {
 }
 
 function BidRow({ bid, rank }: { bid: BidEntry; rank: number }) {
-  const color = BRAND_COLORS[bid.brand_id] ?? "#9090a8";
+  const color = getBrand(bid.brand_id)?.brand_color ?? "#9090a8";
   const statusStyle = {
     won:      "border-[#22c55e]/40 bg-[#22c55e]/5",
     lost:     "border-[var(--line)] opacity-50",
@@ -232,7 +224,7 @@ function BidRow({ bid, rank }: { bid: BidEntry; rank: number }) {
 
 function ChatBubble({ msg }: { msg: NegotiationMessage }) {
   const isBrand = msg.role === "brand";
-  const color = msg.brand_id ? (BRAND_COLORS[msg.brand_id] ?? "#9090a8") : "#22d3ee";
+  const color = msg.brand_id ? (getBrand(msg.brand_id)?.brand_color ?? "#9090a8") : "#22d3ee";
 
   return (
     <motion.div
@@ -275,7 +267,7 @@ function TxChip({ tx }: { tx: TxEntry }) {
       <span>{styles.icon}</span>
       <span className={`font-medium ${styles.color}`}>{tx.brand}</span>
       <span className="text-[var(--text)]">${tx.amount_usdc.toFixed(2)}</span>
-      <span className="text-[var(--text-3)] font-mono">{`${tx.tx_hash.slice(0, 6)}…${tx.tx_hash.slice(-4)}`}</span>
+      <span className="text-[var(--text-3)] font-mono">{truncateTxHash(tx.tx_hash)}</span>
     </motion.div>
   );
 }
