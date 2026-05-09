@@ -24,6 +24,7 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 |---|---|---|---|
 | Lucas | POC-PIPE | Pipeline POC standalone bajo `poc/pipeline/` (foundation para B-01..B-07: docker-compose nginx-rtmp + webhooks on_publish/on_publish_done + ffmpeg audio/frames + tmi.js chat + context tick en terminal) | 2026-05-09 |
 | Franco | A-02b | `/security-review` gate sobre `AddieEscrow.sol` (track/a-onchain) + FF cierre A-01..A-02b a `main` si clean | 2026-05-09 |
+| Franco | P0-13 + P0-21 | `[INFRA]` App Alchemy en Base mainnet (`ALCHEMY_RPC_URL`) + ~$1 ETH a treasury para gas de las 9 wallets | 2026-05-09 |
 
 ---
 
@@ -48,7 +49,7 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 - ⬜ **P0-10** `[INFRA]` ElevenLabs + key Creative → `ELEVENLABS_API_KEY` (necesario para pre-gen ads §6)
 - ⬜ **P0-11** `[INFRA]` App Privy con embedded smart wallets en Base → `PRIVY_APP_ID`, `PRIVY_APP_SECRET`
 - ⬜ **P0-12** `[INFRA]` Proyecto Supabase + URL + service-role + anon key
-- ⬜ **P0-13** `[INFRA]` App Alchemy en Base mainnet → `ALCHEMY_RPC_URL`
+- 🟡 **P0-13** `[INFRA]` App Alchemy en Base mainnet → `ALCHEMY_RPC_URL`
 - ⬜ **P0-14** `[INFRA]` Vercel Blob token (CDN para assets de ads + clips de auditoría) → `BLOB_READ_WRITE_TOKEN`
 - ⬜ **P0-15** `[INFRA]` Cuenta Twitch para Coscu-test (stream key + channel name para tmi.js)
 - ⬜ **P0-16** `.env.example` con todas las vars + `.env.local` cargado (no commitear)
@@ -59,7 +60,7 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 - ⬜ **P0-18** `[INFRA]` OBS publica al RTMP local con un test stream (verificar con `ffprobe rtmp://localhost/live/test`)
 - ⬜ **P0-19** `[INFRA]` Plugin OBS *Multiple RTMP Outputs* instalado para multi-stream local + Twitch
 - ⬜ **P0-20** `[INFRA]` Conseguir 50–100 USDC en Base (treasury del equipo) para fondear escrow + 8 brand wallets a $5 c/u
-- ⬜ **P0-21** `[INFRA]` ~$1 ETH en Base para gas de las 9 wallets
+- 🟡 **P0-21** `[INFRA]` ~$1 ETH en Base para gas de las 9 wallets
 
 ### Diseño compartido
 
