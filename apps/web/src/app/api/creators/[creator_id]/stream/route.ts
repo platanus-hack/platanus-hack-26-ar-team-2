@@ -21,28 +21,42 @@
  */
 
 import { pool } from "@/lib/pg";
+import type { RenderEventPayload } from "@/lib/types/render";
 
 export const runtime = "nodejs"; // pg requires Node, not Edge
 export const maxDuration = 300; // 5min — max for streaming on Vercel Pro
 export const dynamic = "force-dynamic";
 
-type RenderEvent = {
+/**
+ * Row shape del SELECT de catch-up. Incluye `payload jsonb` (migration
+ * 0011) que contiene el body completo del POST /render — necesario para
+ * que el iframe recupere placements visuales (asset_url, qr_url, zone_id,
+ * position, etc) después de un reconnect, no solo el text del message.
+ */
+type RenderEventRow = {
   id: string;
   creator_id: string;
   message: string;
   created_at: string;
-  /**
-   * 'render' = generic message from POST /render (default).
-   * 'raw'    = full Supabase chunk JSON dump from manager-tick (firehose, every 5s).
-   * 'brand'  = brand placement winner from Stage1+Stage2 in manager-tick (gated).
-   */
   kind?: "render" | "raw" | "brand";
-  zone?: "lower_third" | "corner" | "fullscreen";
-  asset_url?: string;
-  asset_type?: "video" | "image";
-  duration_ms?: number;
-  qr_url?: string;
+  payload?: Omit<RenderEventPayload, "id" | "creator_id" | "created_at" | "kind" | "message"> | null;
 };
+
+/**
+ * Mergea row + payload jsonb en el shape final que el iframe consume.
+ * Retro-compat: si `payload` es null (rows pre-migration 0011) devolvemos
+ * solo los campos top-level.
+ */
+function rowToEvent(row: RenderEventRow): RenderEventPayload {
+  return {
+    id: row.id,
+    creator_id: row.creator_id,
+    created_at: row.created_at,
+    kind: row.kind,
+    message: row.message || undefined,
+    ...(row.payload ?? {}),
+  };
+}
 
 const HEARTBEAT_MS = 25_000;
 
@@ -74,7 +88,7 @@ export async function GET(
       };
 
       // Helper: push one event to the stream + mark delivered.
-      const pushEvent = async (event: RenderEvent) => {
+      const pushEvent = async (event: RenderEventPayload) => {
         safeEnqueue(`id: ${event.id}\n` + `event: render\n` + `data: ${JSON.stringify(event)}\n\n`);
         await client.query("update render_events set delivered_at = now() where id = $1", [event.id]).catch(() => {});
       };
@@ -83,22 +97,25 @@ export async function GET(
       safeEnqueue(`event: hello\ndata: ${JSON.stringify({ creator_id, ts: Date.now() })}\n\n`);
 
       // 2. Catch-up: replay anything created after `since` (or undelivered).
+      // Incluimos `payload` jsonb desde migration 0011 → reconnects recuperan
+      // placements visuales completos (asset_url, qr_url, zone_id, etc),
+      // no solo el text del message.
       try {
         const catchupQuery = since
-          ? `select id, creator_id, message, created_at, kind
+          ? `select id, creator_id, message, created_at, kind, payload
                from render_events
               where creator_id = $1 and created_at > (select created_at from render_events where id = $2)
               order by created_at asc
               limit 50`
-          : `select id, creator_id, message, created_at, kind
+          : `select id, creator_id, message, created_at, kind, payload
                from render_events
               where creator_id = $1 and delivered_at is null
               order by created_at asc
               limit 50`;
         const catchupArgs = since ? [creator_id, since] : [creator_id];
-        const recent = await client.query<RenderEvent>(catchupQuery, catchupArgs);
-        for (const ev of recent.rows) {
-          await pushEvent(ev);
+        const recent = await client.query<RenderEventRow>(catchupQuery, catchupArgs);
+        for (const row of recent.rows) {
+          await pushEvent(rowToEvent(row));
         }
       } catch {
         // Don't block live stream on catch-up failure.
@@ -116,7 +133,7 @@ export async function GET(
         const jsonStr = colonIdx2 > -1 ? n.payload.slice(colonIdx2 + 1) : null;
         if (jsonStr) {
           try {
-            const event = JSON.parse(jsonStr) as RenderEvent;
+            const event = JSON.parse(jsonStr) as RenderEventPayload;
             await pushEvent(event);
             return;
           } catch {
@@ -127,11 +144,11 @@ export async function GET(
         // Fallback: fetch from DB (catches old-format notifications)
         const eventId = n.payload.slice(colonIdx + 1, colonIdx2 > -1 ? colonIdx2 : undefined);
         try {
-          const r = await client.query<RenderEvent>(
-            "select id, creator_id, message, created_at, kind from render_events where id = $1",
+          const r = await client.query<RenderEventRow>(
+            "select id, creator_id, message, created_at, kind, payload from render_events where id = $1",
             [eventId],
           );
-          if (r.rows[0]) await pushEvent(r.rows[0]);
+          if (r.rows[0]) await pushEvent(rowToEvent(r.rows[0]));
         } catch {
           // ignore
         }
