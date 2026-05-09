@@ -32,7 +32,7 @@ Standalone proof of concept de la capa de pipeline desde [DESIGN.md §3](../../D
 - **AI Gateway** (Vercel): [vercel.com/dashboard](https://vercel.com/dashboard) → tu proyecto Addie → AI Gateway → Create Key. Créditos compartidos del proyecto.
 - **Twitch Helix** (gratis, requiere 2FA en la cuenta): [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps) → Register Your Application (name `addie-poc`, OAuth Redirect `http://localhost`, Category `Application Integration`, Client Type `Confidential`) → te da Client ID. Click **New Secret**. **Las creds son del proyecto, NO per-creator** — una sola app autentica las consultas Helix de todos los streams onboardeados.
 - **Supabase** (proyecto del equipo, P0-12 ✅ Andy): pediselo a Andy. Settings → API → URL + service_role key. **Service role bypassea RLS — server-side ONLY, NO frontend.**
-- **Migration 0005**: ya aplicada en producción ([`supabase/migrations/0005_context_chunks.sql`](../../supabase/migrations/0005_context_chunks.sql)). Si reseteás la DB, reaplicala con `psql $POSTGRES_URL_NON_POOLING -f supabase/migrations/0005_context_chunks.sql`.
+- **Migration 0007**: ya aplicada en producción ([`supabase/migrations/0007_context_chunks.sql`](../../supabase/migrations/0007_context_chunks.sql)). Si reseteás la DB, reaplicala con `psql $POSTGRES_URL_NON_POOLING -f supabase/migrations/0007_context_chunks.sql`.
 
 **La `.env` está gitignored** — nunca pushees tu key al repo. Verificalo siempre con `git status` antes de commitear.
 
@@ -267,7 +267,7 @@ Una row aparece cada **`CHUNK_INTERVAL_MS`** (default 30s). Los brand-agents pol
 | `ticks_aggregated` | int | Cuántos ContextTicks 1-seg entraron al chunk |
 | `frame_analyses_aggregated` | int | Cuántos frames pasaron por Gemini Flash exitosamente |
 
-Schema completo: [`supabase/migrations/0005_context_chunks.sql`](../../supabase/migrations/0005_context_chunks.sql).
+Schema completo: [`supabase/migrations/0007_context_chunks.sql`](../../supabase/migrations/0007_context_chunks.sql).
 
 ### Si Track C necesita eventos en tiempo real (no esperar 30s)
 

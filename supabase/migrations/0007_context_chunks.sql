@@ -1,4 +1,7 @@
--- 0005_context_chunks.sql — chunks de contexto agregados (B-07)
+-- 0007_context_chunks.sql — chunks de contexto agregados (B-07)
+-- Renombrada de 0005 → 0007 porque main ya tenía 0005_mandates_prompt.sql y
+-- 0006_auth.sql cuando se mergeó. La tabla `context_chunks` ya está aplicada
+-- en la DB de producción (psql -f, 2026-05-09).
 --
 -- Cada N segundos (default 30) el pipeline consolida los ContextTicks de la
 -- ventana + viewers/game/title de Twitch Helix + agregados de chat, y escribe
