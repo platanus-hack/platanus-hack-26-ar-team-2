@@ -359,6 +359,73 @@ Cifras esperadas (escenario fifa_goal en demo):
 - Si `escrow.lock()` falla on-chain post-settlement: fallback al runner-up (ver C-12). Si runner-up también falla: skip placement (el momento se pierde, no se rompe el demo).
 - Si la conexión Realtime del manager se cae: reconnect con backoff (Supabase JS lo hace solo); ticks perdidos durante reconnect = placements perdidos, aceptable.
 
+### Event broadcast pattern — base reusable (C-13a)
+
+Todos los eventos que llegan al overlay del creator (incluyendo `PlacementRendering` de §4) usan el mismo patrón base: **POST a un endpoint targeted por creator → row en Postgres + `NOTIFY` → SSE handler hace `LISTEN` y push al iframe del creator**.
+
+Decidido NO usar Supabase Realtime broadcast directo: queremos una capa de logic intermedia (filtrado, scheduling, retries, audit) sobre las que ya tenemos transparencia con queries normales sobre la tabla `render_events`.
+
+**Cómo funciona:**
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│  CUALQUIER PRODUCTOR (auctions/run, manager-worker, curl test) │
+│  curl -X POST https://addie/api/creators/<id>/render           │
+│       -H "Content-Type: application/json"                      │
+│       -d '{"message":"Hola"}'                                  │
+│       (más adelante: { asset_url, asset_type, duration_ms,     │
+│        zone, expires_at } cuando los assets vivan en S3)       │
+└────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌────────────────────────────────────────────────────────────────┐
+│  POST /api/creators/[creator_id]/render  (Next.js Route)       │
+│  - INSERT INTO render_events (creator_id, message, …)          │
+│  - NOTIFY render_events, '<creator_id>:<event_id>'             │
+│  - return 200 { event_id }                                     │
+└────────────────────────────────────────────────────────────────┘
+                              │  pg LISTEN/NOTIFY (in-process)
+                              ▼
+┌────────────────────────────────────────────────────────────────┐
+│  GET /api/creators/[creator_id]/stream  (SSE, Edge runtime)    │
+│  - On connect: dedicated pg client does `LISTEN render_events` │
+│  - On notify with matching creator_id: SELECT row + push        │
+│    `data: <json>\n\n` to the SSE stream                        │
+│  - Heartbeat `: ping\n\n` cada 25s para keep-alive              │
+│  - On reconnect: replay desde `?since=<event_id>`              │
+└────────────────────────────────────────────────────────────────┘
+                              │  text/event-stream
+                              ▼
+┌────────────────────────────────────────────────────────────────┐
+│  IFRAME en /o/[creator_id]  (Client Component)                 │
+│  const es = new EventSource('/api/creators/<id>/stream')       │
+│  es.onmessage = (e) => render(JSON.parse(e.data))              │
+│  EventSource auto-reconnects en disconnect (Vercel timeout)    │
+└────────────────────────────────────────────────────────────────┘
+```
+
+**Por qué SSE + pg LISTEN/NOTIFY:**
+- Pure Next.js Edge runtime, no extra infra (Redis/Pusher/etc.)
+- `render_events` table = source of truth para auditoría, scheduling, retries
+- pg `NOTIFY` push instantáneo (sub-segundo) → no polling
+- `EventSource` browser API auto-reconnects → Vercel timeouts son transparentes
+- Iframe-friendly (sin headers especiales)
+- Una capa de "logic" entre POST y push se agrega editando solo el handler — no cambiamos transport
+
+**Por qué NO Supabase Realtime broadcast:**
+- Queremos audit trail + capacidad de query (qué se mandó, cuándo, a quién, ¿se entregó?)
+- Queremos un punto explícito para insertar logic (rate limiting, brand-safety check, deduplicación) entre POST y push
+- Postgres ya está + ya manejamos el connection pool
+
+**Cómo C-14 lo reusa:**
+Mismo POST endpoint, mismo SSE stream. La auction llama `POST /api/creators/<creator_id>/render` con `{ asset_url, duration_ms, zone, placement_id, brand_id }` cuando elige al ganador. El iframe `/o/[creator_id]` ya está conectado y recibe el evento.
+
+**Sobre los assets (post-MVP):**
+- Assets de ads (videos / imágenes) van a S3 (o Vercel Blob como bridge mientras se setea S3 — P0-14).
+- `render_events.asset_url` = URL pública (CDN cache OK)
+- El iframe hace `<video src="…">` o `<img src="…">` — el browser hace fetch directo a S3
+- Esto significa: el SSE stream solo carga JSON metadata pequeño; los pixels viajan por separado en HTTPS optimizado.
+
 ### Mecánica
 
 ```
