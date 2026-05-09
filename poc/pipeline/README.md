@@ -168,20 +168,92 @@ poc/pipeline/
     └── index.ts                main: levanta express, espera webhooks
 ```
 
+## Contrato con Track C (Agents — Andy)
+
+Este pipeline produce **el contexto que los brand-agents necesitan para decidir bids**. La fuente única de verdad es la tabla **`context_chunks`** en Supabase. **El pipeline no conoce a las brands** — solo escribe contexto crudo. El routing/matching contra brands vive en Track C.
+
+### Cómo consumir desde un brand-agent
+
+```sql
+-- Última ventana de contexto del stream activo
+SELECT *
+FROM context_chunks
+WHERE stream_key = 'coscu'
+ORDER BY ts_start DESC
+LIMIT 1;
+
+-- History reciente (cold start, debug, replay)
+SELECT *
+FROM context_chunks
+WHERE stream_key = 'coscu'
+  AND ts_start > now() - interval '5 minutes'
+ORDER BY ts_start ASC;
+```
+
+Una row aparece cada **`CHUNK_INTERVAL_MS`** (default 30s). Los brand-agents pollean con su propia cadencia (recomendado: cada 30-60s) y deciden con un LLM si el contexto les calza vs su mandate.
+
+### Schema de `context_chunks` (relevante para Track C)
+
+| Columna | Tipo | Significado |
+|---|---|---|
+| `stream_key` | text | Identificador del stream (nginx-rtmp key, ej `coscu`) |
+| `ts_start` / `duration_s` | timestamptz / int | Ventana cubierta por el chunk |
+| `audio_text` | text | **Transcript completo** de los últimos 30s (Scribe v2 realtime, español) |
+| `audio_partial_at_end` | text | Lo que se está diciendo cuando se cerró el chunk (puede no estar comiteado todavía) |
+| `scene_type` | text | Descripción libre: "FIFA gameplay", "creator hablando", "cocina", etc. |
+| `energy_level` | text | `calm` / `medium` / `high` / `epic` |
+| `mood_tags` | text[] | Tags genéricos: `celebracion`, `tension`, `humor`, etc. |
+| `on_screen_text` | text | HUD/scoreboard/chyron leído por Gemini, NULL si no hay |
+| `viewers` | int | Viewer count actual del canal Twitch (Helix API) |
+| `viewers_delta_30s` | int | Cambio respecto al chunk anterior (signal de subida/bajada de audiencia) |
+| `game_category` | text | Categoría Twitch: "FIFA 26", "Just Chatting", etc. |
+| `stream_title` | text | Título del stream en Twitch |
+| `chat_velocity_avg` / `_peak` | real | Mensajes/seg promedio y pico (B-06, NULL hasta entonces) |
+| `chat_recent_keywords` | text[] | Top palabras del chat en la ventana (B-06, NULL hasta entonces) |
+| `sentiment_avg` | text | Sentimiento agregado del chat (B-06) |
+| `ticks_aggregated` | int | Cuántos ContextTicks 1-seg entraron al chunk |
+| `frame_analyses_aggregated` | int | Cuántos frames pasaron por Gemini Flash exitosamente |
+
+Schema completo: [`supabase/migrations/0005_context_chunks.sql`](../../supabase/migrations/0005_context_chunks.sql).
+
+### Si Track C necesita eventos en tiempo real (no esperar 30s)
+
+El pipeline puede emitir eventos al **Realtime channel** `stream:{stream_key}:context_events` cada vez que llega:
+- nuevo `committed_transcript` de Scribe (típicamente cada 5-15s, cuando el VAD cierra una pausa)
+- nuevo `frame_analyzed` de Gemini (cada 1s)
+- `chat_spike` (chat_velocity > N×baseline) cuando esté B-06
+- `viewer_threshold_cross` (subida/bajada brusca de audiencia)
+
+**No está implementado todavía** — lo agrego cuando Track C lo necesite y me confirmes el schema exacto del payload. Avisame.
+
+### Lo que NO hace el pipeline (es de Track C)
+
+- **Conocer las brands** — los mandates viven en Supabase + frontend, los gestiona Andy/Jere.
+- **Routing/matching** contra brands — si un chunk dice "tomo unos mates", el pipeline NO sabe que eso le interesa a una marca de mate. Eso lo decide el brand-agent (o un router multi-brand del Track C).
+- **Subastas / negociación / on-chain** — esto vive en Track A (on-chain) + Track C (agents).
+
+### Qué keys necesita Track C que YO no necesito
+
+- Mandates en `mandates` table — Andy las crea desde el frontend (P0-22 ✅ cargó 8 YAMLs base; el frontend permite editarlas/agregar más).
+- ANTHROPIC/GEMINI keys propias para los agentes (Andy ya las tiene en su track).
+
+---
+
 ## Roadmap (commits siguientes en `track/b-pipeline`)
 
-- ✅ **B-04**: `transcribe.ts` — ffmpeg → 16kHz PCM → ElevenLabs Scribe v2 realtime WS, transcript rolling 30s + partial.
-- ⬜ **B-05**: `frame.ts` — `ffmpeg -i rtmp://... -vf fps=1 -update 1` → Gemini 2.5 Flash multimodal con prompt agnóstico al contenido (`describí qué se ve, devolvé tags genéricos`).
-- ⬜ **B-06**: `chat.ts` — tmi.js conectado al canal de demo, calcula `chat_velocity_now`, sentiment, `recent_chat_keywords` extraídos dinámicamente.
-- ⬜ **B-07**: `context.ts` — combinador real que mergea las 3 fuentes en un `ContextTick` y broadcastea (en lugar del log directo).
+- ✅ **B-04**: `transcribe.ts` — ElevenLabs Scribe v2 realtime, transcript rolling 30s + partial.
+- ✅ **B-05**: `frame.ts` — Gemini 2.5 Flash multimodal vía Vercel AI Gateway, schema agnóstico al contenido.
+- ⬜ **B-06**: `chat.ts` — tmi.js read-only al canal de Twitch, calcula `chat_velocity_now`, sentiment, recent_keywords. **Cuando se implemente, los chunks tendrán esos campos poblados**.
+- ✅ **B-07**: `chunkWriter.ts` + Twitch Helix metrics + persistencia en `context_chunks`. Es el contrato concreto con Track C.
+- ⬜ **B-07.5** (opcional, on-demand de Track C): `eventBus.ts` con Realtime push al `stream:{key}:context_events`. Implementación bloqueada hasta que Track C confirme los eventos que necesita.
 - ⬜ **B-08..B-11**: audit clip compuesto (record on con permisos correctos → cliprange T-10..T+20s → overlay ad → upload Vercel Blob).
 
 ## Lo que está intencionalmente fuera de scope
 
-- Supabase Realtime broadcast — los ticks van solo a la terminal del POC.
-- Audit clip con overlay del ad — falta nginx-rtmp record + segundo ffmpeg con overlay.
-- Brand-agent / streamer-agent — ver [`poc/negotiation/`](../negotiation/).
-- Privy wallets / escrow — ver [DESIGN.md §4](../../DESIGN.md).
-- Auth real en `on_publish` (rechazar streams no autorizados con 403).
+- **Routing/matching contra brands** — vive en Track C (Andy).
+- **Brand-agent / streamer-agent** — ver [`poc/negotiation/`](../negotiation/) para el POC inicial.
+- **Privy wallets / escrow** — ver [DESIGN.md §4](../../DESIGN.md), Track A.
+- **Audit clip con overlay del ad** — falta nginx-rtmp record + segundo ffmpeg con overlay (B-08..B-11).
+- **Auth real en `on_publish`** (rechazar streams no autorizados con 403) — post-MVP.
 
-Cuando se haga el porting a `apps/web/`, el express server pasa a route handlers en `apps/web/src/app/api/stream/*` y el `ContextTick` se broadcastea a un canal de Supabase Realtime. El orchestrator y los módulos de pipe portean sin cambios.
+Cuando se haga el porting a `apps/web/`, el express server pasa a route handlers en `apps/web/src/app/api/stream/*` con la misma lógica. El chunkWriter ya escribe directo a Supabase, así que portea casi sin cambios — solo hay que agregar la creación de fila en `streams` al recibir `on_publish` y pasar el `stream_id` real al chunkWriter (hoy va NULL en POC standalone).
