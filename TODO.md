@@ -24,7 +24,6 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 |---|---|---|---|
 | Andy | P0-04 + C-01 | Initial DB migration (`supabase/migrations/0001_init.sql` accounts/streams/mandates) + agent types (`apps/web/src/lib/agents/types.ts` Mandate, BrandAgentDecision, NegotiationTurn, StandingOffer, SoftHold) | 2026-05-09 |
 | Lucas | POC-PIPE | Pipeline POC standalone bajo `poc/pipeline/` (foundation para B-01..B-07: docker-compose nginx-rtmp + webhooks on_publish/on_publish_done + ffmpeg audio/frames + tmi.js chat + context tick en terminal) | 2026-05-09 |
-| Jere | P0-22 | 8 brand mandate YAMLs en apps/web/src/lib/agents/brands/ | 2026-05-09 |
 
 ---
 
@@ -64,7 +63,7 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 
 ### Diseño compartido
 
-- 🟡 **P0-22** Definir 8 brand mandates en YAML (adidas, nike, quilmes, mp, steam, rappi, globant, cocacola) — drafts iniciales en `apps/web/src/lib/agents/brands/*.yaml`. **mp con `always_bid_floor: true`** (default bidder al floor §4)
+- ✅ **P0-22** Definir 8 brand mandates en YAML (adidas, nike, quilmes, mp, steam, rappi, globant, cocacola) — drafts iniciales en `apps/web/src/lib/agents/brands/*.yaml`. **mp con `always_bid_floor: true`** (default bidder al floor §4)
 
 ✅ **Checkpoint 1 — sáb 08:00:** Phase 0 cerrada, todos arrancan tracks paralelos.
 
