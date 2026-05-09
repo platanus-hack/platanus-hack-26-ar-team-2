@@ -522,7 +522,9 @@ En subastas automáticas los brand-agents pueden ofertar en `lower_third` o `bot
 
 Ver `docs/GATES.md` para la spec completa. Resumen:
 
-Cuando un `ContextTick` llega al brand-agent worker, no se llama directo al LLM. Pasa por una **escalera de 4 gates** que filtran progresivamente, ordenados por costo/latencia ascendente. La marca solo "habla" (gasta tokens de LLM) si su mandate y su contexto sugieren que el momento le calza.
+Cuando un `ContextTick` llega al brand-agent worker, no se llama directo al LLM. Pasa por una **escalera de gates** que filtran progresivamente, ordenados por costo/latencia ascendente. La marca solo "habla" (gasta tokens de LLM) si su mandate y su contexto sugieren que el momento le calza.
+
+> **MVP del hackatón: 3 gates (gate1 → gate3 → gate4).** Gate2 (embedding similarity) está **deferred a post-MVP §14** — el delta semántico que aporta sobre gate1+gate3 no justifica las 1.5h de scope durante las 24h. El gate ladder se diseñó como 4 niveles para que post-MVP se enchufe gate2 entre gate1 y gate3 sin tocar el resto.
 
 ```
 ContextTick + BrandMandate
@@ -537,11 +539,11 @@ ContextTick + BrandMandate
                  │ pasa
                  ▼
 ┌──────────────────────────────────────────────────────┐
-│ gate2 · EMBEDDING SIMILARITY     ~10ms / ~$0.0001    │
+│ gate2 · EMBEDDING SIMILARITY     [POST-MVP §14]      │
 │ cosine(embed(context), embed(ideal_contexts))        │
-│ → SKIP si fit semántico es muy bajo                  │
+│ Skipped en MVP — gate1 → gate3 directo               │
 └────────────────┬─────────────────────────────────────┘
-                 │ pasa
+                 │ pasa (passthrough en MVP)
                  ▼
 ┌──────────────────────────────────────────────────────┐
 │ gate3 · HAIKU TRIAGE             ~200ms / ~$0.0008   │
@@ -557,17 +559,17 @@ ContextTick + BrandMandate
 └──────────────────────────────────────────────────────┘
 ```
 
-**Bypass del default bidder.** Brands con `always_bid_floor: true` (ej. TermoFlex / mp) saltean gate2/3/4: si pasan gate1 (no es brand-unsafe), emiten directo un bid al floor con `opening_message` templateado, sin LLM. Cero costo, latencia <5ms, fill garantizado.
+**Bypass del default bidder.** Brands con `always_bid_floor: true` (ej. TermoFlex / mp) saltean gate3/4: si pasan gate1 (no es brand-unsafe), emiten directo un bid al floor con `opening_message` templateado, sin LLM. Cero costo, latencia <5ms, fill garantizado.
 
-**Cost/latency budget esperado** (8 brands, 1 auction):
+**Cost/latency budget esperado en MVP** (4 brands, 1 auction, sin gate2):
 - Sin escalera (todos directo a Sonnet): ~$0.04 + 1.5s p95.
-- Con escalera (3-4 brands llegan a Sonnet en promedio): ~$0.01 + 0.8s p95.
+- Con escalera 3-niveles (2-3 brands llegan a Sonnet en promedio): ~$0.012 + 0.9s p95.
 
 **Eventos de logging.** Cada SKIP en cualquier gate emite un `GateSkipReason` event al topic `auction:<auction_id>:gate-skip` con `human_message` en es-AR — esto es lo que la UI didáctica del demo muestra ("☕ CafetITO → SKIP gate1: este momento no es para mí, hoy no hay clutch"). Ver `docs/GATES.md §6`.
 
-**Schema del mandate extendido.** `BrandMandate` adopta nuevos campos opcionales: `event_filters` (required_any_tag, preferred_categories, min_viewers, required_chat_keyword_any), `brand_safety` (blocked_keywords, blocked_categories, blocked_competitor_brands), `dayparts.active`, `ideal_contexts` (free-text para embeddings). Backwards-compatible con los YAMLs actuales — si no están seteados, el gate se saltea.
+**Schema del mandate extendido.** `BrandMandate` adopta nuevos campos opcionales: `event_filters` (required_any_tag, preferred_categories, min_viewers, required_chat_keyword_any), `brand_safety` (blocked_keywords, blocked_categories, blocked_competitor_brands), `dayparts.active`, `ideal_contexts` (free-text para embeddings — solo cargado en YAMLs hoy, **no consumido en MVP** hasta que gate2 lande post-MVP). Backwards-compatible con los YAMLs actuales — si no están seteados, el gate se saltea.
 
-Tasks de implementación: `C-08a` (gate1 mandate filter) → `C-08b` (gate2 embeddings) → `C-08c` (gate3 Haiku) → `C-08d` (Sonnet integration con outputs de gates anteriores como context).
+Tasks de implementación MVP: `C-08a` (gate1 mandate filter) → `C-08c` (gate3 Haiku) → `C-08d` (Sonnet integration con outputs de gates anteriores como context). `C-08b` (gate2 embeddings) queda en post-MVP §14.
 
 ---
 
@@ -1083,6 +1085,7 @@ El MVP del demo prioriza claridad narrativa y demo robusto en 24h. Estos feature
 | **Coalición de bids (varios brands chip-in)** | Si ningún brand individual paga el floor del takeover premium, varios podrían pagarlo en conjunto y aparecer como split (logo izq + logo der). | Negociación N-a-1 con división proporcional del crédito en el ad asset (ad genérico + logos overlay). |
 | **Disputas / refunds disputables** | Brand reclama que el render no fue como se acordó (zona equivocada, duración corta, contexto inadecuado). Necesita recurso. | Smart contract con período de reclamo + admin/oracle para resolver. Para esto el clip de auditoría de §5 es la evidencia clave. |
 | **KYC / AML para off-ramp fiat** | Cuando agreguemos off-ramp directo a peso/dólar bancario, necesitamos compliance. | Integración con un proveedor (Bitso, Buenbit) por país. |
+| **Gate2 — embedding similarity** | Filtro semántico barato entre gate1 (booleans) y gate3 (Haiku LLM). En MVP el ladder corre a 3 niveles porque gate1+gate3 ya separan suficiente con 4 brands curadas; con N brands grande el gate2 evita gastar Haiku en momentos obviamente off-topic. | Cosine sim sobre `embed(audio_30s + frame_summary)` vs `embed(ideal_contexts[])` por brand. Embeddings via `text-embedding-3-small` o `text-embedding-004` free tier. Cache en memoria de `ideal_contexts` por mandate. Threshold por brand (`gate2_min_similarity`, default 0.65). Pgvector vs in-memory ANN: in-memory hasta ~1k vectores. Reactiva la task `C-08b` (TODO.md). |
 
 Lo que **sí está en MVP**: audit completo (clip + reasoning + transcript) y soft holds off-chain. Ambos necesarios para defender las decisiones del agent y para que las marcas confíen el delegate desde el día 1.
 
