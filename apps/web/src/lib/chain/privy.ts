@@ -25,6 +25,7 @@ import { createViemAccount } from "@privy-io/server-auth/viem";
 import type { Address, Hash, Hex } from "viem";
 
 import { supabaseAdmin } from "../supabase";
+import { assertChainLiveTxsEnabled } from "./env.ts";
 import { approveUsdcForEscrow, lockEscrow } from "./escrow.ts";
 import { getWalletClient, type AddieWalletClient } from "./viem.ts";
 
@@ -134,6 +135,7 @@ export async function signApproveUsdc(args: {
   brandSlug: string;
   amount: bigint;
 }): Promise<{ wallet: BrandWalletRecord; txHash: Hash }> {
+  assertChainLiveTxsEnabled();
   const { wallet, client } = await getBrandWalletClient(args.brandSlug);
   const txHash = await approveUsdcForEscrow(client, { amount: args.amount });
   return { wallet, txHash };
@@ -150,6 +152,7 @@ export async function signLockEscrow(args: {
   payee: Address;
   amount: bigint;
 }): Promise<{ wallet: BrandWalletRecord; txHash: Hash }> {
+  assertChainLiveTxsEnabled();
   const { wallet, client } = await getBrandWalletClient(args.brandSlug);
   const txHash = await lockEscrow(client, {
     placementId: args.placementId,
