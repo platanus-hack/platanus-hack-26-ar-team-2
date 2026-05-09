@@ -317,7 +317,11 @@ function check(
     }
   }
 
-  // TODO C-08d: assert pick.bid_usdc >= expect.bid_usdc_min when BrandPick gains it.
+  // C-08d: `bid_usdc_min` + `agent_reasoning_contains` se validan en
+  // `pnpm smoke:hunt` (scripts/smoke-hunt.ts) que ejecuta `huntForBrand()`
+  // per-brand y devuelve `BrandAgentDecision.bid_usdc`. sim:orch los ignora
+  // hasta que C-14 wire `POST /api/auctions/run` — ahí el TickResult va a
+  // exponer `winner.terms.bid_usdc` y la check cae en este punto.
 
   const actualSkips = extractGateSkips(last.payload);
   const skipSummary = actualSkips.length

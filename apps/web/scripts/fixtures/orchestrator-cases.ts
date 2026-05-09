@@ -76,8 +76,22 @@ export type OrchestratorCase = {
     brand_id_any_of?: (string | null)[];
     /** Substring del display_name esperado en render_events.message. */
     message_contains?: string;
-    /** TODO C-08d: bid mínimo cuando BrandPick exponga bid_usdc. */
+    /**
+     * Bid mínimo del ganador. Hoy el harness `sim:orch` corre por
+     * `managerTick()` que NO devuelve bid (eso es responsabilidad de la
+     * subasta — C-14). Este campo lo consume `pnpm smoke:hunt` (C-08 +
+     * C-08d) que ejecuta `huntForBrand()` per-brand y devuelve
+     * `BrandAgentDecision.bid_usdc`. Cuando C-14 wire `POST /api/auctions/run`
+     * el harness lo pasa a usar acá también.
+     */
     bid_usdc_min?: number;
+    /**
+     * Substrings que deben aparecer en el `agent_reasoning` del ganador
+     * (gate path resumido + fit_reasons del `BrandValuation`). Mismo status
+     * que `bid_usdc_min`: dormant en `sim:orch`, vivo en `smoke:hunt` y
+     * en el flow post-C-14.
+     */
+    agent_reasoning_contains?: string[];
     /**
      * Subset match contra `render_events.payload.gate_skips[]`. Cada expected
      * entry debe encontrar un actual entry con mismo `brand_id` + `gate` (y
@@ -116,6 +130,10 @@ export const CASES: OrchestratorCase[] = [
       decision: "emit",
       brand_id: "cafetito",
       message_contains: "CafetITO",
+      // C-08d: contracts cumplidos por `pnpm smoke:hunt` (huntForBrand).
+      // sim:orch los ignora hasta C-14.
+      bid_usdc_min: 0.5,
+      agent_reasoning_contains: ["gate1", "gate4"],
       gate_skips: [
         // matebros: viewers=5 > max_viewers=2 → time-invariant skip.
         { brand: "matebros", gate: 1, reason_substring: "viewers_above_max" },
@@ -290,7 +308,9 @@ export const CASES: OrchestratorCase[] = [
       decision: "emit",
       brand_id: "cafetito",
       message_contains: "CafetITO",
+      // C-08d: harness vive en `pnpm smoke:hunt` hasta que C-14 lande.
       bid_usdc_min: 0.5,
+      agent_reasoning_contains: ["gate1", "gate4", "fit"],
     },
   },
 ];
