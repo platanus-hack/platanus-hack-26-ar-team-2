@@ -28,6 +28,9 @@
     "react-dom": "19.2.4",
     "viem": "^2.48.11"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": ["bufferutil", "esbuild", "sharp", "unrs-resolver", "utf-8-validate"]
+  },
   "devDependencies": {
     "@supabase/supabase-js": "^2.105.4",
     "@tailwindcss/postcss": "^4",
