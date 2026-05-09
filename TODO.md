@@ -22,7 +22,6 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 
 | Dev | Task ID | Scope | Started |
 |---|---|---|---|
-| Andy | P0-04 + C-01 | Initial DB migration (`supabase/migrations/0001_init.sql` accounts/streams/mandates) + agent types (`apps/web/src/lib/agents/types.ts` Mandate, BrandAgentDecision, NegotiationTurn, StandingOffer, SoftHold) | 2026-05-09 |
 | Lucas | POC-PIPE | Pipeline POC standalone bajo `poc/pipeline/` (foundation para B-01..B-07: docker-compose nginx-rtmp + webhooks on_publish/on_publish_done + ffmpeg audio/frames + tmi.js chat + context tick en terminal) | 2026-05-09 |
 | Franco | A-02b | `/security-review` gate sobre `AddieEscrow.sol` (track/a-onchain) + FF cierre A-01..A-02b a `main` si clean | 2026-05-09 |
 
@@ -37,7 +36,7 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 - ✅ **P0-01** Next.js 16 App Router scaffold dentro de `apps/web/` (TS, ESLint, Tailwind 4, src/ dir, App Router, RSC default)
 - ✅ **P0-02** Tailwind theme + design tokens base (`apps/web/src/lib/theme.ts`, `globals.css`) — deps: P0-01
 - ✅ **P0-03** Foundry init en `contracts/` (`forge init`, `foundry.toml`, remappings, basic CI hint)
-- 🟡 **P0-04** Migración inicial `supabase/migrations/0001_init.sql` con tablas `accounts`, `streams`, `mandates`
+- ✅ **P0-04** Migración inicial `supabase/migrations/0001_init.sql` con tablas `accounts`, `streams`, `mandates`
 - ✅ **P0-05** Llenar `platanus-hack-project.json` con `project-name`, oneliner, descripción
 - ✅ **P0-06** Reescribir `README.md` con stack + quick-start + link a `DESIGN.md` y `TODO.md`
 
@@ -103,7 +102,7 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 
 ### Track C · Agents (sugerido: Andy)
 
-- 🟡 **C-01** Tipos comunes (`Mandate`, `BrandAgentDecision`, `NegotiationTurn`, `StandingOffer`, `SoftHold`) en `apps/web/src/lib/agents/types.ts`
+- ✅ **C-01** Tipos comunes (`Mandate`, `BrandAgentDecision`, `NegotiationTurn`, `StandingOffer`, `SoftHold`) en `apps/web/src/lib/agents/types.ts`
 - ⬜ **C-02** 8 mandate templates YAML en `apps/web/src/lib/agents/brands/*.yaml` + loader — deps: P0-22, C-01
 - ⬜ **C-03** Migración `0002_inventory.sql` (zonas, floors, max_duration por creator) — deps: P0-04
 - ⬜ **C-04** Migración `0003_ads.sql` (tabla `ads` ver §5 DESIGN.md) — deps: P0-04
