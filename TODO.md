@@ -46,11 +46,11 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 - ⬜ **P0-07** `[INFRA]` Cuenta Anthropic + key Claude 4.6 Sonnet → `ANTHROPIC_API_KEY`
 - ⬜ **P0-08** `[INFRA]` Google AI Studio + key Gemini 2.5 Flash → `GEMINI_API_KEY`
 - ❌ **P0-09** ~~Deepgram + key streaming Nova~~ — **deprecado** ([commit 992e5a1](../../commit/992e5a1)). El POC usa ElevenLabs Scribe v2 realtime, que va con la misma key del P0-10.
-- ⬜ **P0-10** `[INFRA]` ElevenLabs + key → `ELEVENLABS_API_KEY` (cubre **Scribe v2 realtime para STT** §3 + Creative para pre-gen ads §6 + TTS §6 — una sola cuenta)
+- ⬜ **P0-10** `[INFRA]` **(Lucas — el POC de pipeline ya está usando la key, solo confirmar valor en `.env.local` del repo y cerrar)** ElevenLabs + key → `ELEVENLABS_API_KEY` (cubre **Scribe v2 realtime para STT** §3 + Creative para pre-gen ads §6 + TTS §6 — una sola cuenta)
 - ✅ **P0-11** `[INFRA]` App Privy con embedded smart wallets en Base (Kernel implementation) → `PRIVY_APP_ID`, `NEXT_PUBLIC_PRIVY_APP_ID`, `PRIVY_APP_SECRET` cargados en `apps/web/.env.local`. Smoke test OK: `POST /v1/wallets` devolvió address válido (ver `tmp/test-privy.sh`, gitignored).
 - ✅ **P0-12** `[INFRA]` Proyecto Supabase + URL + service-role + anon key
 - ✅ **P0-13** `[INFRA]` App Alchemy en Base mainnet → `ALCHEMY_RPC_URL`
-- ⬜ **P0-14** `[INFRA]` Vercel Blob token (CDN para assets de ads + clips de auditoría) → `BLOB_READ_WRITE_TOKEN`
+- ⬜ **P0-14** `[INFRA]` **(Andy)** Vercel Blob token (CDN para assets de ads + clips de auditoría) → `BLOB_READ_WRITE_TOKEN`
 - ⬜ **P0-15** `[INFRA]` Cuenta Twitch para Coscu-test (stream key + channel name para tmi.js)
 - ✅ **P0-16** `.env.example` con todas las vars + `.env.local` cargado (no commitear)
 
