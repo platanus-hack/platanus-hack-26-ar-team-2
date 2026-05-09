@@ -26,6 +26,7 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 | Lucas | POC-PIPE | Pipeline POC standalone bajo `poc/pipeline/` (foundation para B-01..B-07: docker-compose nginx-rtmp + webhooks on_publish/on_publish_done + ffmpeg audio/frames + tmi.js chat + context tick en terminal) | 2026-05-09 |
 | Franco | A-01 | `contracts/src/AddieEscrow.sol` ~80 LoC — `lock(placementId, payee, amount)` / `release` / `refund` + eventos `Locked`/`Released`/`Refunded`, USDC en Base | 2026-05-09 09:33 |
 | Franco | A-02 | Tests Foundry happy path + reverts en `contracts/test/AddieEscrow.t.sol` (mock USDC, lock/release/refund + revert paths + event asserts) | 2026-05-09 09:48 |
+| Jere | P0-05 + P0-06 | platanus-hack-project.json + README.md rewrite | 2026-05-09 |
 
 ---
 
@@ -39,8 +40,8 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 - ✅ **P0-02** Tailwind theme + design tokens base (`apps/web/src/lib/theme.ts`, `globals.css`) — deps: P0-01
 - ✅ **P0-03** Foundry init en `contracts/` (`forge init`, `foundry.toml`, remappings, basic CI hint)
 - 🟡 **P0-04** Migración inicial `supabase/migrations/0001_init.sql` con tablas `accounts`, `streams`, `mandates`
-- ⬜ **P0-05** Llenar `platanus-hack-project.json` con `project-name`, oneliner, descripción
-- ⬜ **P0-06** Reescribir `README.md` con stack + quick-start + link a `DESIGN.md` y `TODO.md`
+- 🟡 **P0-05** Llenar `platanus-hack-project.json` con `project-name`, oneliner, descripción
+- 🟡 **P0-06** Reescribir `README.md` con stack + quick-start + link a `DESIGN.md` y `TODO.md`
 
 ### Infra de cuentas y API keys
 
