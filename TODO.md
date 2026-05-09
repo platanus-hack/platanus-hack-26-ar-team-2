@@ -23,6 +23,7 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 | Dev | Task ID | Scope | Started |
 |---|---|---|---|
 | Lucas | POC-PIPE | Pipeline POC standalone bajo `poc/pipeline/` (foundation para B-01..B-07: docker-compose nginx-rtmp + webhooks on_publish/on_publish_done + ffmpeg audio/frames + tmi.js chat + context tick en terminal) | 2026-05-09 |
+| Andy | DESIGN-AGENTS | DESIGN.md §4: tres agentes (Manager + Brand×8 + Streamer) + process topology + event flow Supabase Realtime + nuevos task IDs B-07a (salience) + C-08m (manager-worker) + reword C-14 | 2026-05-09 |
 
 ---
 
