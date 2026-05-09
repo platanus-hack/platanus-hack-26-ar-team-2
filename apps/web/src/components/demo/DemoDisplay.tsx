@@ -58,7 +58,11 @@ function reducer(state: State, action: Action): State {
     case "UPSERT_BID": {
       const idx = state.bids.findIndex((b) => b.brand_id === action.bid.brand_id);
       const next = [...state.bids];
-      idx >= 0 ? (next[idx] = action.bid) : next.push(action.bid);
+      if (idx >= 0) {
+        next[idx] = action.bid;
+      } else {
+        next.push(action.bid);
+      }
       return { ...state, bids: next.sort((a, b) => b.bid_usdc - a.bid_usdc) };
     }
     case "ADD_MESSAGE":

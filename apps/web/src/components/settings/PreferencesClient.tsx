@@ -40,7 +40,11 @@ function reducer(state: State, action: Action): State {
   switch (action.type) {
     case "TOGGLE_BRAND": {
       const next = new Set(state.approvedBrands);
-      next.has(action.id) ? next.delete(action.id) : next.add(action.id);
+      if (next.has(action.id)) {
+        next.delete(action.id);
+      } else {
+        next.add(action.id);
+      }
       return { ...state, approvedBrands: next, saved: false, saveError: false };
     }
     case "ADD_KEYWORD":
@@ -140,14 +144,26 @@ export default function PreferencesClient({ initial }: { initial?: Partial<Prefe
         </div>
         <div className="px-5 pb-3 flex gap-2">
           <button
-            onClick={() => ALL_BRANDS.forEach((b) => !state.approvedBrands.has(b.id) && dispatch({ type: "TOGGLE_BRAND", id: b.id }))}
+            onClick={() =>
+              ALL_BRANDS.forEach((b) => {
+                if (!state.approvedBrands.has(b.id)) {
+                  dispatch({ type: "TOGGLE_BRAND", id: b.id });
+                }
+              })
+            }
             className="text-xs text-[var(--text-3)] hover:text-[var(--text-2)] transition-colors"
           >
             Select all
           </button>
           <span className="text-[var(--line)]">·</span>
           <button
-            onClick={() => ALL_BRANDS.forEach((b) => state.approvedBrands.has(b.id) && dispatch({ type: "TOGGLE_BRAND", id: b.id }))}
+            onClick={() =>
+              ALL_BRANDS.forEach((b) => {
+                if (state.approvedBrands.has(b.id)) {
+                  dispatch({ type: "TOGGLE_BRAND", id: b.id });
+                }
+              })
+            }
             className="text-xs text-[var(--text-3)] hover:text-[var(--text-2)] transition-colors"
           >
             Clear all
@@ -170,7 +186,9 @@ export default function PreferencesClient({ initial }: { initial?: Partial<Prefe
               type="text"
               value={kwDraft}
               onChange={(e) => setKwDraft(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addKeyword()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") addKeyword();
+              }}
               placeholder="Add a keyword…"
               className="flex-1 rounded-lg bg-[var(--page-2)] border border-[var(--line)] px-3 py-2 text-sm text-[var(--text)] placeholder:text-[var(--text-4)] focus:outline-none focus:border-[#6366f1] transition-colors"
             />

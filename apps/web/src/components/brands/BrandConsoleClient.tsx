@@ -1,7 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { useReducer, useState, useRef, useCallback } from "react";
 import ThemeToggle from "@/components/ThemeToggle";
+import type { BrandMandateData, BrandStats, AdRow } from "@/lib/db";
+
+export type BrandInitial = {
+  mandate: BrandMandateData | null;
+  stats: BrandStats;
+  ads: AdRow[];
+};
 
 export interface BrandMeta {
   id: string;
@@ -121,16 +129,7 @@ const ZONE_COLORS: Record<string, string> = {
   fullscreen_takeover: "bg-[#f59e0b]/15 text-[#f59e0b] border-[#f59e0b]/30",
 };
 
-const MOCK_STATS: Record<string, { impressions: number; spend_usdc: number; win_rate: number; placements: number }> = {
-  adidas:   { impressions: 1240, spend_usdc: 18.50, win_rate: 0.62, placements: 7 },
-  nike:     { impressions: 980,  spend_usdc: 22.00, win_rate: 0.58, placements: 5 },
-  quilmes:  { impressions: 760,  spend_usdc: 9.80,  win_rate: 0.44, placements: 4 },
-  mp:       { impressions: 2100, spend_usdc: 8.40,  win_rate: 0.91, placements: 14 },
-  steam:    { impressions: 870,  spend_usdc: 14.20, win_rate: 0.55, placements: 6 },
-  rappi:    { impressions: 540,  spend_usdc: 6.50,  win_rate: 0.38, placements: 3 },
-  globant:  { impressions: 430,  spend_usdc: 5.10,  win_rate: 0.33, placements: 2 },
-  cocacola: { impressions: 1580, spend_usdc: 42.00, win_rate: 0.70, placements: 9 },
-};
+const EMPTY_STATS: BrandStats = { impressions: 0, spend_usdc: 0, win_rate: 0, placements: 0 };
 
 // ─── Mandate editor state ─────────────────────────────────────────────
 
@@ -176,22 +175,23 @@ function mandateReducer(state: MandateState, action: MandateAction): MandateStat
 
 type Tab = "overview" | "library" | "mandate";
 
-export default function BrandConsoleClient({ brandId }: { brandId: string }) {
+export default function BrandConsoleClient({ brandId, initial }: { brandId: string; initial?: BrandInitial }) {
   const brand = BRAND_REGISTRY[brandId];
   const [activeTab, setActiveTab] = useState<Tab>("overview");
+  const mandate = initial?.mandate ?? null;
 
   if (!brand) {
     return (
       <div className="min-h-screen bg-[var(--page)] text-[var(--text)] flex items-center justify-center p-8">
         <div className="text-center">
           <p className="text-[var(--text-3)] text-sm">Brand not found: <code className="text-[#ef4444]">{brandId}</code></p>
-          <a href="/" className="mt-4 inline-block text-xs text-[#6366f1] hover:underline">← Back to Addie</a>
+          <Link href="/" className="mt-4 inline-block text-xs text-[#6366f1] hover:underline">← Back to Addie</Link>
         </div>
       </div>
     );
   }
 
-  const stats = MOCK_STATS[brandId] ?? { impressions: 0, spend_usdc: 0, win_rate: 0, placements: 0 };
+  const stats = initial?.stats ?? EMPTY_STATS;
 
   return (
     <div className="min-h-screen bg-[var(--page)] text-[var(--text)]">
@@ -199,7 +199,7 @@ export default function BrandConsoleClient({ brandId }: { brandId: string }) {
       <div className="border-b border-[var(--line)] bg-[var(--page-2)]">
         <div className="max-w-3xl mx-auto px-6 py-5">
           <div className="flex items-center justify-between">
-            <a href="/" className="text-[var(--text-3)] hover:text-[var(--text-2)] text-xs transition-colors">← Addie</a>
+            <Link href="/" className="text-[var(--text-3)] hover:text-[var(--text-2)] text-xs transition-colors">← Addie</Link>
             <ThemeToggle />
           </div>
           <div className="flex items-center gap-3 mt-3">
@@ -216,7 +216,7 @@ export default function BrandConsoleClient({ brandId }: { brandId: string }) {
           <div className="ml-7 mt-3 flex items-center gap-6">
             <BalanceItem label="Balance" value="$5.00" sub="USDC" valueClass="text-[#22c55e]" />
             <BalanceItem label="Spent today" value={`$${stats.spend_usdc.toFixed(2)}`} sub="USDC" />
-            <BalanceItem label="Daily cap" value={`$${brand.daily_cap_usdc.toFixed(2)}`} sub="USDC" />
+            <BalanceItem label="Daily cap" value={`$${(mandate?.daily_cap_usdc ?? brand.daily_cap_usdc).toFixed(2)}`} sub="USDC" />
           </div>
         </div>
 
@@ -242,9 +242,9 @@ export default function BrandConsoleClient({ brandId }: { brandId: string }) {
 
       {/* ── Content ── */}
       <div className="max-w-3xl mx-auto px-6 py-6">
-        {activeTab === "overview" && <OverviewTab brand={brand} stats={stats} />}
-        {activeTab === "library" && <LibraryTab brand={brand} />}
-        {activeTab === "mandate" && <MandateTab brand={brand} />}
+        {activeTab === "overview" && <OverviewTab brand={brand} stats={stats} mandate={mandate} />}
+        {activeTab === "library" && <LibraryTab brand={brand} ads={initial?.ads} />}
+        {activeTab === "mandate" && <MandateTab brand={brand} mandate={mandate} />}
       </div>
     </div>
   );
@@ -267,17 +267,21 @@ function BalanceItem({ label, value, sub, valueClass = "text-[var(--text)]" }: {
 function OverviewTab({
   brand,
   stats,
+  mandate,
 }: {
   brand: BrandMeta;
-  stats: { impressions: number; spend_usdc: number; win_rate: number; placements: number };
+  stats: BrandStats;
+  mandate: BrandMandateData | null;
 }) {
+  const safetyKeywords = mandate?.safety_keywords ?? brand.safety_keywords;
+
   return (
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <StatCard label="Placements"  value={String(stats.placements)} />
-        <StatCard label="Impressions" value={stats.impressions.toLocaleString()} />
+        <StatCard label="QR scans"    value={stats.impressions.toLocaleString()} />
         <StatCard label="Total spend" value={`$${stats.spend_usdc.toFixed(2)}`} sub="USDC" />
-        <StatCard label="Win rate"    value={`${Math.round(stats.win_rate * 100)}%`} />
+        <StatCard label="Win rate"    value={stats.placements > 0 ? `${Math.round(stats.win_rate * 100)}%` : "—"} />
       </div>
 
       <section className="rounded-xl border border-[var(--line)] bg-[var(--card)] overflow-hidden">
@@ -325,14 +329,14 @@ function OverviewTab({
           <p className="text-xs text-[var(--text-3)] mt-0.5">Triggers automatic escrow refund mid-placement.</p>
         </div>
         <div className="px-5 py-4 flex flex-wrap gap-1.5">
-          {brand.safety_keywords.map((kw) => (
+          {safetyKeywords.map((kw) => (
             <span key={kw} className="text-[10px] bg-[#ef4444]/10 border border-[#ef4444]/25 text-[#ef4444] rounded px-2 py-0.5 font-mono">{kw}</span>
           ))}
         </div>
       </section>
 
       <p className="text-xs text-[var(--text-5)]">
-        Stats are mock data — live figures come once C-05 (placements table) + D-08 are wired.
+        Stats are aggregated from the placements table. Spend counts locked/rendered placements only.
       </p>
     </div>
   );
@@ -352,42 +356,95 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
 
 // ─── Ad Library tab ───────────────────────────────────────────────────
 
-function LibraryTab({ brand }: { brand: BrandMeta }) {
+function LibraryTab({ brand, ads }: { brand: BrandMeta; ads?: AdRow[] }) {
+  const hasRealAds = ads && ads.length > 0;
+
+  if (!hasRealAds) {
+    return (
+      <div className="flex flex-col gap-4">
+        <p className="text-xs text-[var(--text-3)]">
+          4 variants pre-generated per brand. Assets seeded by D-10 (ElevenLabs Creative + Vercel Blob).
+        </p>
+        <div className="flex flex-col gap-3">
+          {AD_VARIANTS.map((ad) => {
+            const zoneOk = brand.allowed_zones.includes(ad.zone);
+            const preferred = brand.preferred_zones.includes(ad.zone);
+            return (
+              <div
+                key={ad.name}
+                className={`rounded-xl border bg-[var(--card)] overflow-hidden ${zoneOk ? "border-[var(--line)]" : "border-[var(--line-2)] opacity-50"}`}
+              >
+                <div className="flex items-center gap-4 px-5 py-4">
+                  <div
+                    className="w-16 h-10 rounded-lg shrink-0 flex items-center justify-center text-[10px] font-mono text-[var(--text-4)] border"
+                    style={{
+                      background: zoneOk ? `${brand.color}18` : "var(--card-2)",
+                      borderColor: zoneOk ? `${brand.color}30` : "var(--line-2)",
+                    }}
+                  >
+                    {zoneOk ? "PLACEHOLDER" : "N/A"}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium text-[var(--text)] font-mono">{ad.name}</span>
+                      <span className={`text-[10px] border rounded px-1.5 py-0.5 font-medium ${ZONE_COLORS[ad.zone] ?? ""}`}>
+                        {ZONE_LABELS[ad.zone]}
+                      </span>
+                      {preferred && <span className="text-[10px] bg-[#22c55e]/10 text-[#22c55e] border border-[#22c55e]/25 rounded px-1.5 py-0.5">preferred</span>}
+                      {!zoneOk && <span className="text-[10px] bg-[#ef4444]/10 text-[#ef4444] border border-[#ef4444]/25 rounded px-1.5 py-0.5">zone excluded</span>}
+                    </div>
+                    <div className="flex items-center gap-3 mt-1">
+                      <span className="text-xs text-[var(--text-3)]">{(ad.duration_ms / 1000).toFixed(0)}s</span>
+                      <div className="flex gap-1">
+                        {ad.mood_tags.map((t) => (
+                          <span key={t} className="text-[10px] font-mono text-[var(--text-4)] bg-[var(--card-2)] rounded px-1.5 py-0.5">{t}</span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <span className="text-xs text-[var(--text-4)]">asset_url</span>
+                    <p className="text-[10px] text-[var(--text-3)]">pending D-10</p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-xs text-[var(--text-3)]">
-        4 variants pre-generated per brand. Assets seeded by D-10 (ElevenLabs Creative + Vercel Blob).
-      </p>
+      <p className="text-xs text-[var(--text-3)]">{ads.length} ad{ads.length !== 1 ? "s" : ""} in library.</p>
       <div className="flex flex-col gap-3">
-        {AD_VARIANTS.map((ad) => {
-          const zoneOk = brand.allowed_zones.includes(ad.zone);
-          const preferred = brand.preferred_zones.includes(ad.zone);
+        {ads.map((ad) => {
+          const zoneOk = brand.allowed_zones.includes(ad.format);
+          const preferred = brand.preferred_zones.includes(ad.format);
           return (
             <div
-              key={ad.name}
+              key={ad.id}
               className={`rounded-xl border bg-[var(--card)] overflow-hidden ${zoneOk ? "border-[var(--line)]" : "border-[var(--line-2)] opacity-50"}`}
             >
               <div className="flex items-center gap-4 px-5 py-4">
                 <div
                   className="w-16 h-10 rounded-lg shrink-0 flex items-center justify-center text-[10px] font-mono text-[var(--text-4)] border"
-                  style={{
-                    background: zoneOk ? `${brand.color}18` : "var(--card-2)",
-                    borderColor: zoneOk ? `${brand.color}30` : "var(--line-2)",
-                  }}
+                  style={{ background: `${brand.color}18`, borderColor: `${brand.color}30` }}
                 >
-                  {zoneOk ? "PRE-GEN" : "N/A"}
+                  {ad.asset_type.toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-[var(--text)] font-mono">{ad.name}</span>
-                    <span className={`text-[10px] border rounded px-1.5 py-0.5 font-medium ${ZONE_COLORS[ad.zone] ?? ""}`}>
-                      {ZONE_LABELS[ad.zone]}
+                    <span className="text-sm font-medium text-[var(--text)] font-mono">{ad.variant_name}</span>
+                    <span className={`text-[10px] border rounded px-1.5 py-0.5 font-medium ${ZONE_COLORS[ad.format] ?? "bg-[var(--card-2)] text-[var(--text-2)]"}`}>
+                      {ZONE_LABELS[ad.format] ?? ad.format}
                     </span>
                     {preferred && <span className="text-[10px] bg-[#22c55e]/10 text-[#22c55e] border border-[#22c55e]/25 rounded px-1.5 py-0.5">preferred</span>}
                     {!zoneOk && <span className="text-[10px] bg-[#ef4444]/10 text-[#ef4444] border border-[#ef4444]/25 rounded px-1.5 py-0.5">zone excluded</span>}
                   </div>
                   <div className="flex items-center gap-3 mt-1">
-                    <span className="text-xs text-[var(--text-3)]">{(ad.duration_ms / 1000).toFixed(0)}s</span>
+                    {ad.duration_ms && <span className="text-xs text-[var(--text-3)]">{(ad.duration_ms / 1000).toFixed(0)}s</span>}
                     <div className="flex gap-1">
                       {ad.mood_tags.map((t) => (
                         <span key={t} className="text-[10px] font-mono text-[var(--text-4)] bg-[var(--card-2)] rounded px-1.5 py-0.5">{t}</span>
@@ -396,8 +453,9 @@ function LibraryTab({ brand }: { brand: BrandMeta }) {
                   </div>
                 </div>
                 <div className="shrink-0 text-right">
-                  <span className="text-xs text-[var(--text-4)]">asset_url</span>
-                  <p className="text-[10px] text-[var(--text-3)]">pending D-10</p>
+                  <a href={ad.asset_url} target="_blank" rel="noopener noreferrer" className="text-xs text-[#6366f1] hover:underline">
+                    asset ↗
+                  </a>
                 </div>
               </div>
             </div>
@@ -410,12 +468,12 @@ function LibraryTab({ brand }: { brand: BrandMeta }) {
 
 // ─── Mandate tab ──────────────────────────────────────────────────────
 
-function MandateTab({ brand }: { brand: BrandMeta }) {
+function MandateTab({ brand, mandate }: { brand: BrandMeta; mandate?: BrandMandateData | null }) {
   const [state, dispatch] = useReducer(mandateReducer, {
-    daily_cap_usdc: brand.daily_cap_usdc,
-    min_bid_usdc: brand.min_bid_usdc,
-    max_bid_usdc: brand.max_bid_usdc,
-    safety_keywords: [...brand.safety_keywords],
+    daily_cap_usdc: mandate?.daily_cap_usdc ?? brand.daily_cap_usdc,
+    min_bid_usdc: mandate?.min_bid_usdc ?? brand.min_bid_usdc,
+    max_bid_usdc: mandate?.max_bid_usdc ?? brand.max_bid_usdc,
+    safety_keywords: mandate?.safety_keywords ?? [...brand.safety_keywords],
     dirty: false,
     saving: false,
     saved: true,
@@ -526,7 +584,7 @@ function MandateTab({ brand }: { brand: BrandMeta }) {
           {state.saving ? "Saving…" : "Save changes"}
         </button>
         {state.saved && !state.dirty && <span className="text-xs text-[#22c55e]">✓ Saved</span>}
-        {state.saveError && <span className="text-xs text-[#ef4444]">Save failed — stub endpoint not wired yet</span>}
+        {state.saveError && <span className="text-xs text-[#ef4444]">Save failed — check server</span>}
       </div>
     </div>
   );

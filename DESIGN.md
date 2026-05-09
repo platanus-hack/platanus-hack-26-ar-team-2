@@ -115,6 +115,8 @@ Dos agents AI negocian en tiempo real durante un stream en vivo. El brand-agent 
 
 ## 3. Diagrama de flujo — vida de un placement
 
+> **Nota — ejemplo ilustrativo.** El timeline de abajo usa nombres de marca reales (adidas/nike/mp) porque corresponde al spec técnico pre-pivote. El **demo final** usa marcas inventadas (☕ CafetITO, 🧊 TermoFlex, 🌭 Pancho Rex, 🧉 MateBros) y la narrativa externa es de **matching win-win-win** en vez de subasta competitiva — ver `docs/PITCH.md` y `docs/DEMO_RUNBOOK.md`. El mecanismo interno (auction con deadline + standing offers + soft holds) **no cambia**: es el plumbing que implementa el matching. Solo cambia cómo se cuenta hacia afuera.
+
 ```
 T+0.0s    Coscu mete gol en FIFA
 ─────────────────────────────────────────────────────────────────────
@@ -124,7 +126,7 @@ T+1.3s    Gemini Flash describe frame: "FIFA replay celebration"
 T+1.5s    tmi.js detecta chat velocity 12→180 msg/s
 T+1.5s    Context broadcast a brand-agents
 ─────────────────────────────────────────────────────────────────────
-T+2.0s    LLM call paralela en 8 brand-agents:
+T+2.0s    LLM call paralela en los brand-agents (2 en MVP: adidas + mp; N en prod):
           → adidas: HUNT con "epic_goal_lower" (FIFA + epic + audience match)
           → nike: HUNT con "win_moment_lower"
           → quilmes: HUNT con "social_celebration"
@@ -174,6 +176,188 @@ Demo de 5 min con ~6 placements = ~12 txs visibles en basescan.
 
 La negociación no funciona como un protocolo "sí/no" donde los agents tienen que llegar a un acuerdo explícito. Es una **subasta con deadline duro de 5s** sobre standing offers que se actualizan turno a turno.
 
+### Tres agentes
+
+Tres roles agénticos, todos LLM-powered, cada uno con su propio prompt + tooling:
+
+| Agent | Cuántos | Modelo | Trigger | Job |
+|---|---|---|---|---|
+| **Manager** | 1 por stream | Claude Haiku 4.5 | tick filtrado por cheap intensity (B-07a) | Decide si el momento amerita pautar (auctionable). Pre-flag de brand-safety. Sugiere zonas + duración. |
+| **Brand-agent** | **2 en MVP** (adidas + mp), escalable a N | Claude Haiku 4.5 | inicio de auction | Hunt + bid + counter-response con curva de concesión. Walk-away discipline. |
+| **Streamer-agent** | 1 por creator | Claude Sonnet 4.6 | inicio de auction (parallel batched) | Counter-batched a todas las ofertas, picks single winner. Defiende inventario. |
+
+**MVP scope — 2 brands:**
+- **adidas** (premium episodic) — apunta a momentos celebratorios deportivos. Bidea fuerte en zonas premium (`lower_third`) cuando el manager flaggea épico.
+- **mp / MercadoPago** (default bidder al floor, `always_bid_floor: true`) — siempre ofrece el reserve mínimo del streamer si el contexto no es brand-unsafe. Llena los momentos en los que adidas no bidea (calm chat, audiencia chica).
+
+Esto preserva los dos roles del diseño (premium vs floor) con la cantidad mínima de marcas. Producción agrega N brands sin cambios de arquitectura — solo más rows en `mandates`. El resto del diseño (manager + streamer-agent + orchestrator + settlement) es brand-count-agnóstico.
+
+El **Manager** es el filtro económico: protege costos LLM (8 brand-agents corriendo en cada tick sería ~$3-10/min) y la experiencia del viewer (no pautar cada 5 segundos). Los **Brand-agents** son cazadores con disciplina de mandate. El **Streamer-agent** es defensor de inventario con visión global.
+
+### Process topology — qué corre dónde
+
+```
+LAPTOP / VPS BACKEND (un solo host físico para el demo)
+├── nginx-rtmp (Docker container)
+│   recibe RTMP de OBS, dispara on_publish/on_publish_done webhooks
+│
+├── pipeline orchestrator
+│   (Node, port de poc/pipeline → apps/web/src/lib/pipeline/)
+│   ↳ ffmpeg → ElevenLabs Scribe v2 (audio) + Gemini Flash (frame) + tmi.js (chat)
+│   ↳ ContextTick cada 1s
+│   ↳ cheap_intensity = score(chat_spike, sentiment, audio_caps, audience)  // B-07a, sin LLM
+│   ↳ supabase.realtime.broadcast('context:<stream_id>', tick)
+│
+├── manager-worker (proceso Node, ~50 LoC, apps/manager-worker/)  // C-08m
+│   ↳ supabase.channel('context:<stream_id>').on('broadcast', { event: 'tick' }, …)
+│   ↳ filtra cheap_intensity > 0.5 + cooldown_ok (30s post-auction)
+│   ↳ await managerDecide(tick)  → Claude Haiku
+│   ↳ if decision.should_auction:
+│       POST /api/auctions/run  { tick, manager_decision }
+│
+└── Next.js (apps/web, deployable a Vercel)
+    /api/stream/{on-publish,on-publish-done}      ← arrancan/limpian el orchestrator (B-03)
+    /api/auctions/run                              ← runs full auction (sync, ~5-8s)  (C-14)
+    /api/q/[placement]                             ← QR redirect + tracking (C-17)
+    /overlay/[stream_id]                           ← Browser Source overlay (D-01)
+    /dock                                          ← OBS Browser Dock (D-03)
+    /demo-display                                  ← pantalla principal del demo (D-09)
+    /brands/[brandId]                              ← brand console (D-06)
+
+LAPTOP STREAMER (uno del equipo, Coscu-test)
+├── OBS (publica RTMP a backend)
+├── Browser Source overlay (loads /overlay/<stream_id>)
+└── OBS Browser Dock (loads /dock)
+```
+
+**Por qué Manager-as-worker en vez de inline en el pipeline:** mantiene la separación 1-rol-1-proceso (el pitch dice "tres agentes"; los hacemos visibles), usa Supabase Realtime de verdad como transporte, y deja el pipeline puro (solo ingest + emit). Trade-off: un proceso más para lanzar en el demo. Para producción multi-stream, manager-worker se replica fácil.
+
+### Event flow — Supabase Realtime topics + payloads
+
+Cinco eventos distintos viajan por el sistema. Tres por Supabase Realtime broadcast, uno por HTTP POST, uno por watch del contrato on-chain.
+
+```
+1. ContextTick           — every 1s                               ◀ pipeline → Realtime
+   topic     'context:<stream_id>'
+   producer  pipeline orchestrator (B-07)
+   consumers manager-worker  (C-08m)
+             /demo-display    (live debug feed, D-09)
+   payload {
+     stream_id, ts_ms,
+     audio_30s, audio_partial,
+     frame_summary, scene_type, energy_level, mood_tags, on_screen_text,
+     bw_effective_kbps, video_meta, audio_meta,
+     chat_velocity_now, chat_velocity_baseline, recent_keywords,
+     viewer_count, sentiment,
+     cheap_intensity         // [0..1] computed inline by B-07a
+   }
+
+2. ManagerDecision       — rare (~6 / 5min)                       ◀ manager-worker → HTTP
+   transport HTTP POST (sin Realtime topic — request/response sync)
+   producer  manager-worker
+   consumer  /api/auctions/run
+   payload {
+     stream_id,
+     tick: <ContextTick que disparó>,
+     manager_decision: {
+       should_auction: true,
+       intensity_label: 'epic'|'building'|'rage'|'mundane',
+       brand_safety_pre_flag: string|null,
+       recommended_zones: ['lower_third'|'bottom_right_corner'][],
+       recommended_max_duration_s: number,
+       reason: string         // español, ≤2 oraciones, audit
+     }
+   }
+
+3. AuctionStarted        — immediately on accept                  ◀ /api/auctions/run → Realtime
+   topic     'auction:<stream_id>'
+   producer  /api/auctions/run
+   consumers /demo-display (chat columnas)
+             /dock (saldo updates)
+   payload {
+     auction_id, stream_id, tick, manager_decision, started_at_ms,
+     market_signals: {
+       intensity_label, intensity_multiplier,
+       fair_value_usdc:        { lower_third, bottom_right_corner },
+       dynamic_reserve_usdc:   { lower_third, bottom_right_corner },
+       streamer_aspiration_usdc:{ lower_third, bottom_right_corner }
+     },
+     brands_evaluated: 8
+   }
+
+4. NegotiationTurn       — multiple per auction (~10-20 turns)    ◀ /api/auctions/run → Realtime
+   topic     'auction:<auction_id>:turn'
+   producer  /api/auctions/run (orchestrator interno)
+   consumer  /demo-display (chat de negociación en vivo)
+   payload {
+     auction_id, round, ts_ms,
+     from: 'brand'|'streamer', brand_id,
+     action: 'open'|'counter'|'accept'|'reject'|'walk',
+     message,                  // español, ≤25 palabras
+     terms: { bid_usdc, duration_s, zone, exclusivity_s? }?,
+     curve_target_usdc?,       // audit: target del concession curve
+     tactic?,                  // streamer-side: PLAY_BIDDERS / ANCHOR_ABOVE_RESERVE / etc.
+     override?                 // si AC_combi gate disparó (LLM trató de violar RP)
+   }
+
+5. AuctionSettled        — one per auction                        ◀ /api/auctions/run → Realtime
+   topic     'auction:<stream_id>:settled'
+   producer  /api/auctions/run
+   consumers /demo-display (winner banner)
+             /dock (balance actualizado)
+             /brands/<winner>/audit (toca refresh de la lista)
+   payload {
+     auction_id, stream_id, settled_at_ms,
+     winner: {
+       brand_id, terms, reason,
+       placement_id,           // FK a placements row
+       escrow_lock_tx_hash     // basescan link
+     } | null,                 // null si no hubo deal (pasa raro con default bidder)
+     rejected: [{ brand_id, reason }],
+     total_revenue_usdc,
+     metrics: {
+       total_rounds, total_llm_calls, ac_overrides_fired
+     }
+   }
+
+6. PlacementRendering    — overlay arranca el render              ◀ /api/auctions/run → Realtime
+   topic     'placement:<stream_id>'
+   producer  /api/auctions/run (post escrow.lock exitoso)
+   consumer  Browser Source overlay (/overlay/<stream_id>)
+   payload {
+     placement_id, ad_url, qr_url, zone,
+     duration_ms, brand_id, start_at_ms
+   }
+
+7. (on-chain)            — Locked / Released / Refunded events    ◀ AddieEscrow → viem watch
+   producer  AddieEscrow.sol on Base
+   consumer  TxFeed component (apps/web/src/components/demo/TxFeed.tsx, A-10)
+   payload   per-event ABI (placementId, payee, amount, txHash, blockNumber)
+```
+
+### Salience gate — anti-spam + cost ceiling
+
+Pipeline calcula `cheap_intensity` cada tick (heurística sin LLM, B-07a): chat velocity spike + sentiment + audio salience + audience size. **Solo ticks con `cheap_intensity > 0.5` despiertan al manager-agent**. El manager filtra más con su propia decisión LLM.
+
+Cifras esperadas (escenario fifa_goal en demo):
+
+| Etapa | Volumen / 5min | Costo |
+|---|---|---|
+| Ticks emitidos por pipeline | 300 (1/s) | $0 — heurística sin LLM |
+| Pasan cheap_intensity > 0.5 | ~30-50 | $0 |
+| Pasan también el cooldown (30s post-auction) | ~6-10 | — |
+| Manager LLM calls (Haiku) | ~6-10 | ~$0.01 total |
+| Auctions disparadas (~50% de manager YES) | ~6 | ~$0.60 total (~$0.10 c/u) |
+| **Total demo** | — | **~$0.61 USD** |
+
+### Cooldowns y fail-modes
+
+- Después de un `AuctionSettled`, el manager-worker setea `cooldown = now + 30s`. Cualquier tick recibido en ese período se ignora (anti-spam visual + ahorro LLM).
+- Si `managerDecide()` falla (LLM error, timeout): **fail-closed** → `should_auction = false`. Mejor perder un placement que disparar uno sin verificar brand-safety pre-flag.
+- Si `/api/auctions/run` está mid-flight cuando llega un nuevo trigger del manager: **drop el nuevo** (el cooldown del manager lo absorbe igual al settlement).
+- Si `escrow.lock()` falla on-chain post-settlement: fallback al runner-up (ver C-12). Si runner-up también falla: skip placement (el momento se pierde, no se rompe el demo).
+- Si la conexión Realtime del manager se cae: reconnect con backoff (Supabase JS lo hace solo); ticks perdidos durante reconnect = placements perdidos, aceptable.
+
 ### Mecánica
 
 ```
@@ -197,7 +381,7 @@ Esto significa:
 - El streamer-agent elige el ganador comparando revenue absoluto + fit del momento + marcas preferidas.
 - Las zonas se mantienen en el modelo porque definen el formato visual del ad ganador (tamaño, posición, duración), pero nunca corren en paralelo.
 
-**Default bidder vía mp.** Uno de los 8 brand-agents (MercadoPago con su `persistent_logo`) actúa como **default bidder al floor**: para cualquier contexto que no sea brand-unsafe, ofrece exactamente el reserve mínimo del streamer. Garantiza que toda subasta tenga al menos UNA standing offer cerrable al deadline, incluso si los otros 7 brands pasan el momento. Si una marca premium bidea más alto, la desplaza naturalmente. Es transparente — figura como tercera pata del *Know Your Agent* del mp (`always_bid_floor: true` en su mandate).
+**Default bidder vía mp.** Uno de los brand-agents (MercadoPago con su `persistent_logo`) actúa como **default bidder al floor**: para cualquier contexto que no sea brand-unsafe, ofrece exactamente el reserve mínimo del streamer. Garantiza que toda subasta tenga al menos UNA standing offer cerrable al deadline, incluso si los otros brands pasan el momento. Si una marca premium bidea más alto, la desplaza naturalmente. Es transparente — figura como tercera pata del *Know Your Agent* del mp (`always_bid_floor: true` en su mandate).
 
 ### Soft hold ledger (off-chain)
 
@@ -239,6 +423,57 @@ En subastas automáticas los brand-agents pueden ofertar en `lower_third` o `bot
 **Cadencia esperada en demo:** ~6 subastas en 5 min (una por momento épico) = ~6 placements = 12 txs on-chain (lock + release por placement).
 
 **Post-MVP:** reemplazar soft hold por **EIP-3009 `transferWithAuthorization`** (USDC nativo). Cada standing offer firmada como auth con `validBefore = T+10s`. Hold real on-chain, no centralizado, auditable. Ver §13.
+
+### Pre-LLM gate ladder — cómo cada brand decide MATCH/SKIP barato
+
+Ver `docs/GATES.md` para la spec completa. Resumen:
+
+Cuando un `ContextTick` llega al brand-agent worker, no se llama directo al LLM. Pasa por una **escalera de 4 gates** que filtran progresivamente, ordenados por costo/latencia ascendente. La marca solo "habla" (gasta tokens de LLM) si su mandate y su contexto sugieren que el momento le calza.
+
+```
+ContextTick + BrandMandate
+        │
+        ▼
+┌──────────────────────────────────────────────────────┐
+│ gate1 · MANDATE DETERMINÍSTICO   ~0ms / $0           │
+│ event_filters, dayparts, blocked_keywords,           │
+│ blocked_competitor_brands, min_viewers               │
+│ → SKIP rápido si el momento contradice el mandate    │
+└────────────────┬─────────────────────────────────────┘
+                 │ pasa
+                 ▼
+┌──────────────────────────────────────────────────────┐
+│ gate2 · EMBEDDING SIMILARITY     ~10ms / ~$0.0001    │
+│ cosine(embed(context), embed(ideal_contexts))        │
+│ → SKIP si fit semántico es muy bajo                  │
+└────────────────┬─────────────────────────────────────┘
+                 │ pasa
+                 ▼
+┌──────────────────────────────────────────────────────┐
+│ gate3 · HAIKU TRIAGE             ~200ms / ~$0.0008   │
+│ Claude Haiku decide go/no-go con razonamiento        │
+│ → SKIP con reason si el LLM cheap dice que no        │
+└────────────────┬─────────────────────────────────────┘
+                 │ pasa
+                 ▼
+┌──────────────────────────────────────────────────────┐
+│ gate4 · SONNET DECISIÓN          ~600ms / ~$0.009    │
+│ Claude Sonnet → BrandAgentDecision con bid + msg    │
+│ → bid concreto entra a la subasta                    │
+└──────────────────────────────────────────────────────┘
+```
+
+**Bypass del default bidder.** Brands con `always_bid_floor: true` (ej. TermoFlex / mp) saltean gate2/3/4: si pasan gate1 (no es brand-unsafe), emiten directo un bid al floor con `opening_message` templateado, sin LLM. Cero costo, latencia <5ms, fill garantizado.
+
+**Cost/latency budget esperado** (8 brands, 1 auction):
+- Sin escalera (todos directo a Sonnet): ~$0.04 + 1.5s p95.
+- Con escalera (3-4 brands llegan a Sonnet en promedio): ~$0.01 + 0.8s p95.
+
+**Eventos de logging.** Cada SKIP en cualquier gate emite un `GateSkipReason` event al topic `auction:<auction_id>:gate-skip` con `human_message` en es-AR — esto es lo que la UI didáctica del demo muestra ("☕ CafetITO → SKIP gate1: este momento no es para mí, hoy no hay clutch"). Ver `docs/GATES.md §6`.
+
+**Schema del mandate extendido.** `BrandMandate` adopta nuevos campos opcionales: `event_filters` (required_any_tag, preferred_categories, min_viewers, required_chat_keyword_any), `brand_safety` (blocked_keywords, blocked_categories, blocked_competitor_brands), `dayparts.active`, `ideal_contexts` (free-text para embeddings). Backwards-compatible con los YAMLs actuales — si no están seteados, el gate se saltea.
+
+Tasks de implementación: `C-08a` (gate1 mandate filter) → `C-08b` (gate2 embeddings) → `C-08c` (gate3 Haiku) → `C-08d` (Sonnet integration con outputs de gates anteriores como context).
 
 ---
 
@@ -407,7 +642,7 @@ Total ~4-6s, **async, no bloquea el placement** ni el settlement on-chain. La ma
 
 ## 6. Pre-generación de la biblioteca de ads (para el demo)
 
-Las marcas reales generarían sus ads con sus agencias / herramientas. Para el demo, **nosotros pre-generamos la biblioteca de las 8 brands con ElevenLabs Creative**, una sola vez antes del demo.
+Las marcas reales generarían sus ads con sus agencias / herramientas. Para el demo, **nosotros pre-generamos la biblioteca de las 2 brands del MVP (adidas + mp) con ElevenLabs Creative**, una sola vez antes del demo. Si queda tiempo, expandimos a más brands; el flow es idéntico — solo cambia la cantidad de iteraciones.
 
 ### Matriz a generar
 
@@ -531,7 +766,7 @@ addie/                                  ← repo platanus-hack-26-ar-team-2
 │       │       │   ├── streamer/       ← streamer-agent runner (defender)
 │       │       │   ├── negotiation/    ← multi-turn orchestrator
 │       │       │   ├── safety/         ← brand-safety auto-pull
-│       │       │   ├── brands/         ← 8 mandate templates
+│       │       │   ├── brands/         ← 2 mandate templates en MVP (adidas, mp)
 │       │       │   └── types.ts
 │       │       ├── pipeline/
 │       │       │   ├── rtmp.ts         ← orchestrator
@@ -561,8 +796,8 @@ addie/                                  ← repo platanus-hack-26-ar-team-2
 │   ├── 0003_ads.sql
 │   └── 0004_placements.sql              ← audit fields (§5)
 ├── scripts/
-│   ├── seed-wallets.ts                 ← genera 9 smart wallets (8 brand + 1 platform)
-│   ├── seed-mandates.ts                ← 8 brand mandates iniciales
+│   ├── seed-wallets.ts                 ← genera 3 smart wallets en MVP (2 brand + 1 platform)
+│   ├── seed-mandates.ts                ← 2 brand mandates iniciales (adidas, mp) en MVP
 │   ├── seed-inventory.ts               ← inventario del creator demo
 │   ├── pregen-brand-ads.ts             ← genera 32 ads con ElevenLabs Creative
 │   └── smoke-e2e.ts                    ← test integration
@@ -595,8 +830,8 @@ main                         ← integraciones, mergeos en checkpoints
 
 **Owns:**
 - `contracts/AddieEscrow.sol` + tests Foundry + deploy a Base mainnet
-- Privy setup + 9 smart wallets (8 brand + 1 platform owner del escrow)
-- Fondear las 8 brand wallets con $5 USDC cada una
+- Privy setup + 3 smart wallets en MVP (2 brand: adidas+mp + 1 platform owner del escrow)
+- Fondear las 2 brand wallets con $5 USDC cada una
 - viem clients + escrow bindings
 - TxFeed component (escucha eventos `Locked` / `Released` / `Refunded`)
 
@@ -630,7 +865,7 @@ main                         ← integraciones, mergeos en checkpoints
 #### 🤖 Dev 3 — AGENTS
 
 **Owns:**
-- 8 brand mandate templates (YAML), incluyendo `always_bid_floor: true` para mp (default bidder al floor, §4)
+- 2 brand mandate templates en MVP (adidas, mp) en YAML, incluyendo `always_bid_floor: true` para mp (default bidder al floor, §4). Escalable a N — la arquitectura es brand-count-agnóstica.
 - brand-agent runner (hunter logic — pickea ad variant + bid amount)
 - streamer-agent runner (defender logic — accept/counter/reject)
 - **Subasta con deadline duro (§4):** negotiation orchestrator multi-turno paralelo (3 turnos cap) + standing offers table actualizada turno a turno + **soft hold ledger off-chain** (10s expiry, expone `available_balance` corregido a cada LLM)
@@ -680,7 +915,7 @@ T+0h   06:00   Phase 0 — Setup compartido
                 • Supabase project + schema
                 • Foundry init
                 • Docker nginx-rtmp probado
-                • 8 brand mandates definidos
+                • 2 brand mandates definidos en MVP (adidas, mp)
                 • Tailwind theme
 
 T+2h   08:00   ✅ CHECKPOINT 1 — Phase 0 completa, todos arrancan tracks
@@ -728,7 +963,7 @@ T+30h  12:00   DEMO LIVE 🎤
 
 ### Acto 1 (45s) — Setup narrativo
 
-> *"Esto es Addie. 8 brand-agents corriendo, cada uno con USDC propio en Base, mandate firmado, y biblioteca de ads que la marca ya subió. Coscu — del equipo — está streameando FIFA en vivo a Twitch."*
+> *"Esto es Addie. 2 brand-agents corriendo en este MVP — adidas y MercadoPago — cada uno con USDC propio en Base, mandate firmado, y biblioteca de ads que la marca ya subió. La arquitectura escala a N marcas. Coscu — del equipo — está streameando FIFA en vivo a Twitch."*
 
 ### Acto 2 (90s) — Primer momento épico + negociación visible
 
@@ -799,7 +1034,7 @@ Lo que **sí está en MVP**: audit completo (clip + reasoning + transcript) y so
 - ❌ Cero YouTube Live discovery.
 - ❌ Cero browser extension propia.
 - ❌ Cero mobile app.
-- ❌ Cero brand onboarding flow real para humanos — 8 brand-agents pre-cargados con ads pre-generadas.
+- ❌ Cero brand onboarding flow real para humanos — 2 brand-agents pre-cargados (adidas + mp) con ads pre-generadas. Producción adopta el flow de §14.
 - ❌ Cero KYC.
 - ❌ Cero pricing dinámico complejo del streamer-agent.
 - ❌ Cero disputas/refunds automatizados — manual desde admin.
@@ -841,7 +1076,9 @@ Lo que **sí está en MVP**: audit completo (clip + reasoning + transcript) y so
 | **Inventario** | **Single-ad-per-moment. Zonas (lower_third / corner / takeover) son FORMATOS del único slot, no slots simultáneos. Entre subastas la pantalla está limpia.** |
 | **Audit por placement** | **Clip 30s + context snapshot + agent reasoning + transcript negociación, todo guardado y exportable a la marca** |
 | **Approve del creator per placement** | **Post-MVP §14. MVP confía en mandate firmado + brand-safety auto-pull.** |
-| **Hosting de los agents** | **MVP: 9 agents corren en infra de Addie. Post-MVP §14: marcas/streamers pueden traer su propio agent (BYO).** |
+| **Hosting de los agents** | **MVP: agents corren en infra de Addie (3 agents en MVP — manager + adidas + mp + streamer = 4 procesos). Post-MVP §14: marcas/streamers pueden traer su propio agent (BYO).** |
+| **MVP brand scope** | **2 brand-agents (adidas premium + mp default bidder). Arquitectura es brand-count-agnóstica — agregar más brands = más rows en `mandates`, sin cambios de código. Post-MVP escala a N.** |
+| **Brand prompting en DB** | **Columna dedicada `mandates.prompt jsonb` (separada de `mandates.payload`). Shape: `{ system_persona, voice_examples[], dont_say[], dont_do[] }`. Owned por marketing/creative team de la marca, no por legal/finance que owna `payload`. Migration `0005_mandates_prompt.sql`.** |
 
 ---
 

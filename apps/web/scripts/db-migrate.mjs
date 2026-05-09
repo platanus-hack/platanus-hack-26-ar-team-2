@@ -5,10 +5,10 @@
 //
 //   node --env-file=apps/web/.env.local apps/web/scripts/db-migrate.mjs
 //
-// Idempotency: each migration file should use `create extension if not exists`,
-// `create table` (will throw on existing — that's fine, you'll see clearly that
-// it's already applied). For repeated dev runs, drop the schema first via
-// the Supabase SQL editor (or extend this script with a `--reset` flag).
+// Idempotency: each migration runs in a transaction. If it fails with a
+// "duplicate object" error code (table/column/index/etc. already exists),
+// we treat it as already-applied and continue. Other errors abort.
+// This lets the script be re-run safely after partial / out-of-band applies.
 
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -49,16 +49,34 @@ if (files.length === 0) {
   process.exit(0);
 }
 
+// Postgres SQLSTATE codes treated as "object already exists" → already-applied.
+// https://www.postgresql.org/docs/current/errcodes-appendix.html
+const ALREADY_EXISTS_CODES = new Set([
+  "42P07", // duplicate_table
+  "42701", // duplicate_column
+  "42710", // duplicate_object (e.g. extension, type)
+  "42P06", // duplicate_schema
+  "42723", // duplicate_function
+  "42P16", // invalid_table_definition (sometimes thrown for re-creates)
+]);
+
 console.log(`applying ${files.length} migration${files.length === 1 ? "" : "s"} → ${url.split("@")[1]?.split("/")[0] ?? "?"}`);
 for (const f of files) {
   const sql = readFileSync(join(migrationDir, f), "utf-8");
   process.stdout.write(`  ${f} … `);
   try {
+    await client.query("begin");
     await client.query(sql);
+    await client.query("commit");
     console.log("✓");
   } catch (err) {
+    await client.query("rollback").catch(() => {});
+    if (ALREADY_EXISTS_CODES.has(err.code)) {
+      console.log("(already applied, skipped)");
+      continue;
+    }
     console.log("✗");
-    console.error(`  ${err.message}`);
+    console.error(`  [${err.code}] ${err.message}`);
     await client.end();
     process.exit(1);
   }

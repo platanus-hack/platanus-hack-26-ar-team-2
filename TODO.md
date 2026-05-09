@@ -23,7 +23,7 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 | Dev | Task ID | Scope | Started |
 |---|---|---|---|
 | Lucas | POC-PIPE | Pipeline POC standalone bajo `poc/pipeline/` (foundation para B-01..B-07: docker-compose nginx-rtmp + webhooks on_publish/on_publish_done + ffmpeg audio/frames + tmi.js chat + context tick en terminal) | 2026-05-09 |
-| Franco | P0-13 + P0-21 | `[INFRA]` App Alchemy en Base mainnet (`ALCHEMY_RPC_URL`) + ~$1 ETH a treasury para gas de las 9 wallets | 2026-05-09 |
+| Jere | C-02 | 8 mandate templates YAML (brands/*.yaml) + loader TypeScript | 2026-05-09 |
 
 ---
 
@@ -48,10 +48,10 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 - ⬜ **P0-10** `[INFRA]` ElevenLabs + key → `ELEVENLABS_API_KEY` (cubre **Scribe v2 realtime para STT** §3 + Creative para pre-gen ads §6 + TTS §6 — una sola cuenta)
 - ⬜ **P0-11** `[INFRA]` App Privy con embedded smart wallets en Base → `PRIVY_APP_ID`, `PRIVY_APP_SECRET`
 - ✅ **P0-12** `[INFRA]` Proyecto Supabase + URL + service-role + anon key
-- 🟡 **P0-13** `[INFRA]` App Alchemy en Base mainnet → `ALCHEMY_RPC_URL`
+- ✅ **P0-13** `[INFRA]` App Alchemy en Base mainnet → `ALCHEMY_RPC_URL`
 - ⬜ **P0-14** `[INFRA]` Vercel Blob token (CDN para assets de ads + clips de auditoría) → `BLOB_READ_WRITE_TOKEN`
 - ⬜ **P0-15** `[INFRA]` Cuenta Twitch para Coscu-test (stream key + channel name para tmi.js)
-- ⬜ **P0-16** `.env.example` con todas las vars + `.env.local` cargado (no commitear)
+- ✅ **P0-16** `.env.example` con todas las vars + `.env.local` cargado (no commitear)
 
 ### Infra local + chain
 
@@ -59,11 +59,11 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 - ⬜ **P0-18** `[INFRA]` OBS publica al RTMP local con un test stream (verificar con `ffprobe rtmp://localhost/live/test`)
 - ⬜ **P0-19** `[INFRA]` Plugin OBS *Multiple RTMP Outputs* instalado para multi-stream local + Twitch
 - ⬜ **P0-20** `[INFRA]` Conseguir 50–100 USDC en Base (treasury del equipo) para fondear escrow + 8 brand wallets a $5 c/u
-- 🟡 **P0-21** `[INFRA]` ~$1 ETH en Base para gas de las 9 wallets
+- ✅ **P0-21** `[INFRA]` ~$1 ETH en Base para gas de las 9 wallets
 
 ### Diseño compartido
 
-- ✅ **P0-22** Definir 8 brand mandates en YAML (adidas, nike, quilmes, mp, steam, rappi, globant, cocacola) — drafts iniciales en `apps/web/src/lib/agents/brands/*.yaml`. **mp con `always_bid_floor: true`** (default bidder al floor §4)
+- ✅ **P0-22** Definir brand mandates en YAML — drafts iniciales en `apps/web/src/lib/agents/brands/*.yaml`. **MVP scope reducido a 2 brands** (decisión 2026-05-09, ver DESIGN.md §17): **adidas** (premium episodic) + **mp** (`always_bid_floor: true` default bidder al floor §4). Los 6 brands restantes del draft inicial (nike, quilmes, steam, rappi, globant, cocacola) quedan como referencia para post-MVP — el código es brand-count-agnóstico.
 
 ✅ **Checkpoint 1 — sáb 08:00:** Phase 0 cerrada, todos arrancan tracks paralelos.
 
@@ -88,8 +88,8 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
   - **Signatures / replay** — n/a hoy; re-evaluar si se introduce EIP-712 (mandate signing, etc.).
 
   Si findings críticos → fix + `forge test` verde + re-audit. Si clean o nits → FF cierre de A-01 + A-02 + A-02b a `main`. **Mismo gate aplica a todo cambio futuro de `AddieEscrow.sol`.** — deps: A-02
-- ⬜ **A-03** `contracts/script/Deploy.s.sol` + deploy a Base mainnet — deps: A-02b, P0-13, P0-21
-- ⬜ **A-04** `[INFRA]` Anotar address del contrato deployed en `apps/web/src/lib/chain/escrow.ts` como const + verificar en basescan — deps: A-03
+- ✅ **A-03** `contracts/script/Deploy.s.sol` + deploy a Base mainnet @ [`0x8300B9Bd1B6a18163EBd5fB9e0EFa1b7Fd99bCfE`](https://basescan.org/address/0x8300B9Bd1B6a18163EBd5fB9e0EFa1b7Fd99bCfE) (verified, owner `0x7e6685A241278d83068f8Cfb0Dd145F62cb17914`, USDC `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`)
+- ✅ **A-04** `[INFRA]` Anotar address del contrato deployed en `apps/web/src/lib/chain/escrow.ts` como const + verificar en basescan — deps: A-03
 - ⬜ **A-05** `scripts/seed-wallets.ts` — genera 9 Privy smart wallets (8 brand + 1 platform owner) y persiste addresses en `accounts` — deps: P0-11, P0-12, P0-04
 - ⬜ **A-06** `[INFRA]` Fondear las 8 brand wallets con $5 USDC y ~$0.10 ETH cada una — deps: A-05, P0-20, P0-21
 - ⬜ **A-07** Cliente viem en `apps/web/src/lib/chain/viem.ts` (publicClient + walletClient factory por brand) — deps: A-04
@@ -99,15 +99,22 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 
 ### Track B · Pipeline (sugerido: Lucas)
 
-> **POC funcionando en `poc/pipeline/`** ([branch `track/b-pipeline`](../../tree/track/b-pipeline/poc/pipeline)). B-01..B-04 + B-12 verificados end-to-end con OBS + voz humana real. Falta portear a `apps/web/` cuando arranque esa fase: la lógica de cada módulo se reusa tal cual, solo cambia el host (Express POC → Next.js route handlers; orchestrator standalone → broadcast a Supabase Realtime).
+> **POC funcionando en `poc/pipeline/`** ([branch `track/b-pipeline`](../../tree/track/b-pipeline/poc/pipeline)). B-01..B-07 + B-07b + B-12 verificados end-to-end con OBS + voz humana real. **Track B cerrado salvo audit clip (B-08..B-11) que es post-MVP**. Falta portear a `apps/web/` cuando arranque esa fase: la lógica de cada módulo se reusa tal cual, solo cambia el host (Express POC → Next.js route handlers; chunkWriter ya escribe directo a Supabase con stream_id NULL, hay que llenar el FK al crear fila en `streams`).
+>
+> **Contrato con Track C — Andy lee esto antes de arrancar C-08m / C-08:**
+> - **Pull (cada 30-60s, sin LLM)**: `SELECT * FROM context_chunks WHERE stream_key = X ORDER BY ts_start DESC LIMIT 1`. Cada row tiene audio_text + scene + mood + on_screen_text + chat_velocity_avg/peak + chat_recent_keywords + sentiment_avg + viewers + game_category + stream_title.
+> - **Push (cada 1s, latencia <1s)**: `supabase.channel('context:<stream_key>').on('broadcast', { event: 'tick' }, ...)`. El payload del tick crudo incluye los mismos campos pero con velocity_now (5s window), audio_partial actual, frame fresco. Sin scoring derivado — el manager-worker decide si gastar LLM.
+> - Schema completo y código de ejemplo en [`poc/pipeline/README.md`](./poc/pipeline/README.md#contrato-con-track-c-agents--andy).
 
 - ✅ **B-01** docker-compose con nginx-rtmp + puertos. POC en [`poc/pipeline/docker-compose.yml`](./poc/pipeline/docker-compose.yml). Record desactivado en POC — lo re-habilita B-08 con permisos de volume mount correctos.
 - ✅ **B-02** `nginx-rtmp.conf` con `application live` + webhooks `on_publish`/`on_publish_done` + **`worker_processes=1`** (con auto-workers `/stat` devuelve datos inconsistentes entre workers). POC en [`poc/pipeline/nginx-rtmp.conf`](./poc/pipeline/nginx-rtmp.conf). En `apps/web/` los webhooks van a apuntar a `apps/web/src/app/api/stream/*` con `host.docker.internal:3000`.
 - ✅ **B-03** Endpoint `POST /api/stream/on-publish` (Express en POC) que crea sesión y arranca orchestrator (polling `/stat` cada 1s + audio pipe en paralelo). POC en [`poc/pipeline/src/server.ts`](./poc/pipeline/src/server.ts) + [`orchestrator.ts`](./poc/pipeline/src/orchestrator.ts). Falta swap a route handler de Next.js + crear fila en `streams` (Supabase). — deps: B-02, P0-04
 - ✅ **B-04** Audio pipe: `ffmpeg` child_process → 16kHz PCM mono → ElevenLabs **Scribe v2 realtime** WS (VAD auto-commit, lang `es`, soporte de keyterms para slang argentino), transcript rolling 30s + partial actual. Verificado end-to-end con OBS + voz humana: capturó `"¿Dónde va a ir? ¿Va, va a parar?"` con tildes y signos invertidos correctos. POC en [`poc/pipeline/src/transcribe.ts`](./poc/pipeline/src/transcribe.ts). — deps: B-03, P0-10
-- ⬜ **B-05** Vision pipe: `ffmpeg` frames @1fps → Gemini Flash multimodal (frame summary + tags) cada 1s — deps: B-03, P0-08
-- ⬜ **B-06** Twitch chat: tmi.js client conectado al canal de demo, calcula `chat_velocity`, `sentiment`, `recent_keywords` — deps: P0-15
-- ⬜ **B-07** Context buffer combinador (`apps/web/src/lib/pipeline/context.ts`): merge `audio_30s + frame + chat_vel + viewers + sentiment` y broadcast cada 1s a Supabase Realtime channel — deps: B-04, B-05, B-06, P0-12
+- ✅ **B-05** Vision pipe: ffmpeg long-lived que pulla el RTMP y tira N JPEGs/seg concatenados a stdout, parser SOI/EOI markers, cola tamaño 1 (descarta intermedios si el modelo está procesando). LLM call con **Vercel AI Gateway + Gemini 2.5 Flash** (model como string `'google/gemini-2.5-flash'`, NO hace falta `@ai-sdk/google`). Schema Zod agnóstico al contenido: `scene_type` (libre), `energy_level` (calm/medium/high/epic), `mood_tags` (max 5), `on_screen_text`, `summary`. Prompt explícito para NO asumir gaming. POC en [`poc/pipeline/src/frame.ts`](./poc/pipeline/src/frame.ts). — deps: B-03, AI_GATEWAY_API_KEY (P0-08 reemplazado por gateway de Vercel)
+- ✅ **B-06** Twitch chat: tmi.js anonymous IRC al canal de Twitch (TWITCH_CHANNEL). Buffer rolling de mensajes en memoria, ventanas configurables velocity (5s default) y keywords (30s), baseline aprendido en los primeros 60s. Calcula `velocity_now/avg/peak/baseline`, `recent_keywords` (top N con tokenizer + stopwords ES/EN), `sentiment` heurístico (positive/neutral/negative/hype) con listas curadas de palabras y emotes. Read-only sin auth. POC en [`poc/pipeline/src/chat.ts`](./poc/pipeline/src/chat.ts). — deps: P0-15
+- ✅ **B-07** Context broadcaster: en cada tick (1s), broadcast a Supabase Realtime channel `context:<stream_key>` con el payload completo crudo (audio + frame + chat + twitch). Sin scoring derivado — el manager-worker decide si gastar LLM. POC en [`poc/pipeline/src/realtimeBus.ts`](./poc/pipeline/src/realtimeBus.ts). Falta swap del `stream_key` por `stream_id` UUID cuando se portee a apps/web. — deps: B-04, B-05, B-06, P0-12
+- ⬜ **B-07a** Salience scorer en pipeline orchestrator (`apps/web/src/lib/pipeline/salience.ts`): heurística sin LLM que computa `cheap_intensity ∈ [0..1]` de cada tick (chat_velocity_spike + sentiment + audio_caps + audience_size). Se incluye en el payload del tick para que el manager-worker filtre antes de gastar LLM. — deps: B-07
+- ✅ **B-07b** Chunk writer + Twitch Helix metrics + persistencia en `context_chunks`. **Complementa B-07** (no lo reemplaza): mientras B-07 broadcastea cada 1s al Realtime channel para el manager-worker, B-07b consolida cada 30s y persiste en DB para que los brand-agents pollen + audit trail post-stream. Migration en [`supabase/migrations/0005_context_chunks.sql`](./supabase/migrations/0005_context_chunks.sql), módulos en [`poc/pipeline/src/chunkWriter.ts`](./poc/pipeline/src/chunkWriter.ts) + [`twitch.ts`](./poc/pipeline/src/twitch.ts). Twitch Helix usa Client Credentials grant (gratis, 800 req/min) para `viewer_count + game_name + title`. — deps: B-04, B-05, P0-12
 - ⬜ **B-08** Audit clip · etapa 1: nginx-rtmp `record` con segmentos de 1s en buffer circular ~60s (re-habilitar el `record on` que el POC tiene desactivado, con volume mount + permisos verificados) — deps: B-02
 - ⬜ **B-09** Audit clip · etapa 2: ffmpeg `cliprange` T-10s..T+20s del stream crudo cuando llega evento de placement — deps: B-08
 - ⬜ **B-10** Audit clip · etapa 3: segundo ffmpeg con overlay del ad video + QR en zona/timestamp del placement → mp4 final — deps: B-09, C-13
@@ -117,19 +124,28 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 ### Track C · Agents (sugerido: Andy)
 
 - ✅ **C-01** Tipos comunes (`Mandate`, `BrandAgentDecision`, `NegotiationTurn`, `StandingOffer`, `SoftHold`) en `apps/web/src/lib/agents/types.ts`
-- ⬜ **C-02** 8 mandate templates YAML en `apps/web/src/lib/agents/brands/*.yaml` + loader — deps: P0-22, C-01
-- ⬜ **C-03** Migración `0002_inventory.sql` (zonas, floors, max_duration por creator) — deps: P0-04
-- ⬜ **C-04** Migración `0003_ads.sql` (tabla `ads` ver §5 DESIGN.md) — deps: P0-04
-- ⬜ **C-05** Migración `0004_placements.sql` (tabla `placements` con audit fields: `clip_url`, `context_snapshot`, `agent_reasoning`, `negotiation_transcript`, `lock/release/refund_tx_hash`) — deps: P0-04
+- 🟡 **C-02** Mandate templates YAML en `apps/web/src/lib/agents/brands/*.yaml` + loader. **MVP scope reducido a 2 brands** (adidas + mp, ver P0-22). Loader tiene que parsear el nuevo `prompt` field de `BrandPrompt` (ver `apps/web/src/lib/agents/types.ts`) — system_persona / voice_examples / dont_say / dont_do — y el seed-mandates.ts (C-06) inserta en `mandates.prompt` jsonb (columna nueva, migration `0005_mandates_prompt.sql`). — deps: P0-22, C-01
+- ⬜ **C-02b** Extender `BrandMandate` (types.ts) + YAML schema con campos opcionales para gate ladder: `event_filters` (required_any_tag, preferred_categories, min_viewers, required_chat_keyword_any), `brand_safety` adicional (blocked_categories, blocked_competitor_brands), `dayparts.active`, `ideal_contexts[]` (free-text para embeddings de gate2). Backwards-compatible — si los campos no existen, el gate correspondiente se saltea. Spec en `docs/GATES.md §3`. — deps: C-02
+- ⬜ **C-02c** Stream metadata schema + loader para `apps/web/src/lib/streams/<stream_id>.yaml` (categorías del stream, audience profile, tags activos del momento). Lo consume gate1 al match contra `event_filters` del brand. Spec en `docs/GATES.md §5`. — deps: C-02b
+- ⬜ **C-02d** **Calibrar** los 4 mandates fictional (CafetITO/TermoFlex/Pancho Rex/MateBros) + stream metadata al `<TALENTO>` y `<JUEGO>` confirmados para el demo. Ajustar `event_filters.required_any_tag`, `dayparts.active`, `target_moods` para que el demo produzca al menos 6 placements en 5min con las 4 brands rotando (ver `docs/DEMO_RUNBOOK.md` Acto 3). — deps: C-02b, C-02c, ingest del talento confirmado
+- ⬜ **C-02e** Renombrar los YAMLs reales (adidas/nike/quilmes/mp/etc.) a las marcas fictional del demo: `cafetito.yaml` (premium episodic), `termoflex.yaml` (`always_bid_floor: true` default bidder, ex-mp), `pancho-rex.yaml` (niche lunch/late), `matebros.yaml` (community/casual_chat). Mandates con personality humorística. Mantener el shape — solo cambian display_name + tracking_url + persona + `target_moods/avoid_moods`. Ver `docs/PITCH.md` Bloque 3 + `docs/GATES.md §4`. — deps: C-02
+- ✅ **C-03** Migración `0002_inventory.sql` (zonas, floors, max_duration por creator) — deps: P0-04
+- ✅ **C-04** Migración `0003_ads.sql` (tabla `ads` ver §5 DESIGN.md) — deps: P0-04
+- ✅ **C-05** Migración `0004_placements.sql` (tabla `placements` con audit fields: `clip_url`, `context_snapshot`, `agent_reasoning`, `negotiation_transcript`, `lock/release/refund_tx_hash`) — deps: P0-04
 - ⬜ **C-06** `scripts/seed-mandates.ts` — inserta mandates + firma EIP-712 dummy por brand — deps: C-02, A-05
 - ⬜ **C-07** `scripts/seed-inventory.ts` — inventario del creator demo — deps: C-03
-- ⬜ **C-08** brand-agent runner (`apps/web/src/lib/agents/brand/`): subscribe al context channel, prompt a Claude con mandate + balance + ads disponibles, output `{should_bid, ad_id, bid_usdc_cents, zone, opening_message}` — deps: C-01, C-02, B-07, P0-07
+- ⬜ **C-08** brand-agent runner (`apps/web/src/lib/agents/brand/`): instanciado por `/api/auctions/run` (NO subscribe al context channel — ver DESIGN.md §4 manager-worker es el subscriber). Prompt a Claude Haiku con mandate + balance + ads + market_signals + manager_decision, output `BrandAgentDecision` con `valuation_breakdown` auditable. — deps: C-01, C-02, P0-07
+- ⬜ **C-08m** **Manager-agent worker** (`apps/manager-worker/`, ~50 LoC). Proceso Node standalone que `supabase.channel('context:<stream_id>').on('broadcast', ...)`, filtra `cheap_intensity > 0.5` + cooldown 30s post-auction, llama `managerDecide()` (Claude Haiku — `apps/web/src/lib/agents/manager/decide.ts`), y POSTea `/api/auctions/run` con `{ tick, manager_decision }`. Fail-closed si LLM falla. Ver DESIGN.md §4 Tres agentes + Event flow. — deps: B-07a, C-14, P0-07, P0-12
+- ⬜ **C-08a** **Gate1 — mandate determinístico** (`apps/web/src/lib/agents/brand/gates/gate1Mandate.ts`). Función pura que recibe `(BrandMandate, StreamMetadata, ContextTick)` → `{ pass: boolean, skip_reason?: GateSkipReason }`. Chequea `event_filters` (required_any_tag, preferred_categories, min_viewers, required_chat_keyword_any), `dayparts.active`, `brand_safety.blocked_keywords` contra `audio_30s/recent_keywords`, `blocked_competitor_brands` contra brands ya pautadas en últimos 5 min. Bypass para brands con `always_bid_floor: true` (skip gate2/3/4). Emite `GateSkipReason` con `human_message` es-AR. ~100 LoC, sin LLM. Spec en `docs/GATES.md §2-§3`. — deps: C-02b, C-02c
+- ⬜ **C-08b** **Gate2 — embedding similarity** (`apps/web/src/lib/agents/brand/gates/gate2Embeddings.ts`). Función `(BrandMandate.ideal_contexts[], ContextTick.audio_30s + frame_summary) → cosine_score`. Embeddings vía API (OpenAI `text-embedding-3-small` ~$0.00002/embed o Gemini `text-embedding-004` free tier). Cache de embeddings de `ideal_contexts` (no cambian) en memoria; embed del contexto fresh cada tick (~10ms). Threshold configurable por mandate (`gate2_min_similarity`, default 0.65). Decision: pgvector vs in-memory ANN — para 4 brands × 3 ideal_contexts = 12 vectores, in-memory es trivial. Marcar como tech-debt revisitar si crece. Spec en `docs/GATES.md §2`. — deps: C-08a, P0-07
+- ⬜ **C-08c** **Gate3 — Haiku triage** (`apps/web/src/lib/agents/brand/gates/gate3Haiku.ts`). Llamada barata a Claude Haiku con prompt mínimo: `{mandate.persona, recent_context, gate2_similarity}` → `{should_proceed: bool, skip_reason?: string}`. ~150 tokens IN, ~50 tokens OUT, ~$0.0008 por call, ~200ms p95. Lo importante es filtrar momentos que el embedding aprueba pero no calzan en voice/persona del brand (ej. CafetITO premium en clutch épico que también tiene chat tóxico). Spec en `docs/GATES.md §2`. — deps: C-08b, P0-07
+- ⬜ **C-08d** **Gate4 — Sonnet decision integration**. Modificar `huntForBrand()` (C-08) para que reciba `gate1_pass + gate2_score + gate3_reasoning` como context al prompt de Sonnet. Sonnet ahora solo se llama si los 3 gates anteriores pasaron — emite `BrandAgentDecision` con bid + opening_message. Logging del path de gates en `agent_reasoning` para audit. Spec en `docs/GATES.md §2 + §6`. — deps: C-08, C-08c
 - ⬜ **C-09** streamer-agent runner (`apps/web/src/lib/agents/streamer/`): recibe ofertas, evalúa contra mandate del creator, contraoferta o accept — deps: C-01, P0-07
 - ⬜ **C-10** Negotiation orchestrator (`apps/web/src/lib/agents/negotiation/`): subasta multi-turno paralela, 3 turnos cap, **5s hard deadline**, standing offers actualizadas turno a turno — deps: C-08, C-09
 - ⬜ **C-11** Soft hold ledger off-chain en memoria (`apps/web/src/lib/agents/negotiation/holds.ts`): refresca holds cada turno, expone `available_balance = on_chain - Σ(holds_propios)` al LLM — deps: C-10, A-08
 - ⬜ **C-12** Settlement engine: al T+5s pickea **single winner** mejor standing ≥ floor a través de TODAS las zonas competidoras (single-ad-per-moment §4), fallback a default bidder si nadie pasa el floor, fallback a runner-up si lock falla — deps: C-10, C-11, A-08
 - ⬜ **C-13** Default bidder al floor para mp (`always_bid_floor: true`): siempre emite floor offer si el contexto no es brand-unsafe; garantiza fill cuando ningún brand premium bidea — deps: C-08
-- ⬜ **C-14** Endpoint `POST /api/auctions/run` que dispara la subasta cuando llega un epic moment + emite evento de placement con `{ad_url, qr_url, duration_ms, zone, placement_id}` — deps: C-10, C-12
+- ⬜ **C-14** Endpoint `POST /api/auctions/run` que recibe `{ tick, manager_decision }` del manager-worker y corre la subasta sincrónica (~5-8s): `computeMarketSignals(tick)` → 8 brand-agents `huntForBrand()` paralelo → orchestrator multi-turno con AC_combi + curva de concesión → `pickWinner()` → INSERT placements → `escrow.lock()` → broadcast `auction:<stream_id>:settled` + `placement:<stream_id>` por Supabase Realtime (ver DESIGN.md §4 Event flow). Durante la subasta, broadcast `auction:<auction_id>:turn` por cada turno para el demo display. — deps: C-10, C-12
 - ⬜ **C-15** Brand-safety listener (`apps/web/src/lib/agents/safety/`) que monitorea audio + chat durante el render y dispara `escrow.refund` si hay keyword pull — deps: C-14, A-08, B-04, B-06
 - ⬜ **C-16** Persistir audit metadata al settlement: `agent_reasoning` (output LLM ganador) + `negotiation_transcript` (todos los turnos) + `winning_offer` en `placements` — deps: C-14, C-05
 - ⬜ **C-17** QR generator server-side + endpoint `GET /api/q/[placement]/route.ts` que redirige a `tracking_url` y registra el scan — deps: C-05
@@ -145,6 +161,7 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 - ⬜ **D-07** Ad uploader `apps/web/src/components/brands/AdUploader.tsx` (form + Vercel Blob upload + insert en `ads`) — deps: D-06, P0-14, C-04
 - ⬜ **D-08** Audit log panel en brand console: lista placements + `<video src={clip_url}>` + viewer JSON de `agent_reasoning` + transcript de negociación + export CSV/JSON — deps: D-06, C-05, B-11
 - ✅ **D-09** Demo Display `apps/web/src/app/demo-display/page.tsx`: bid leaderboard + tx feed + negotiation chat con standing offers actualizándose en vivo — deps: P0-02, A-10, C-10
+- ⬜ **D-09a** **Gate-skip didactic feed** en `/demo-display`: panel lateral que se subscribe al topic `auction:<auction_id>:gate-skip` y muestra cada decisión MATCH/SKIP de cada brand con su `human_message` en es-AR ("☕ CafetITO → SKIP gate1: este momento no es para mí, hoy no hay clutch"). Color por brand, ícono por gate (gate1 ⛔ / gate2 🧭 / gate3 🤔 / gate4 ✅). Esencial para que el jurado entienda visualmente el matcher win-win — ver `docs/DEMO_RUNBOOK.md` Acto 3 + `docs/PITCH.md` Bloque 4. — deps: D-09, C-08a, C-08b, C-08c, C-08d
 - ⬜ **D-10** `scripts/pregen-brand-ads.ts` — genera 32 ads (8 brands × 4 variants) con ElevenLabs Creative + insert en `ads` — deps: P0-10, C-04, P0-14
 - ⬜ **D-11** Correr el script de pre-gen el sábado de noche (~1.5 hs en background, paralelo con cualquier track) — deps: D-10
 - ⬜ **D-12** CSS fallback render (banda negra + logo + colores corporativos) si un ad no tiene `asset_url` — deps: D-02
@@ -180,6 +197,9 @@ Pares trabajando juntos para conectar cabos.
 - ⬜ **PD-05** `[INFRA]` Backup VOD pre-grabado del demo end-to-end (mp4 standby para switch invisible si algo se rompe en vivo)
 - ⬜ **PD-06** `[INFRA]` Hotspot 4G testeado como red backup
 - ⬜ **PD-07** Pitch slides (max 5 slides para 5 min)
+- ⬜ **PD-07a** Asignar speakers a cada bloque de `docs/PITCH.md` (Bloque 1-6) y a cada rol de `docs/DEMO_RUNBOOK.md` (speaker principal + operador stream + operador dashboard + backup on-chain). Reemplazar TBDs en ambos docs.
+- ⬜ **PD-07b** Confirmar `<TALENTO>` y `<JUEGO>` para el demo en vivo. Reemplazar placeholders en `docs/PITCH.md` y `docs/DEMO_RUNBOOK.md`. Disparar C-02d (calibración) en cuanto estén confirmados.
+- ⬜ **PD-07c** Grabar 3 clips de fallback (gol/clutch · charla casual · comeback) del `<TALENTO>` y configurar hotkeys en OBS según `docs/DEMO_RUNBOOK.md` Hardware/setup. — deps: PD-07b
 - ⬜ **PD-08** Ensayo completo 1 (full demo + pitch) — deps: PD-01..PD-04, PD-07
 - ⬜ **PD-09** Ensayo completo 2 con tweaks — deps: PD-08
 

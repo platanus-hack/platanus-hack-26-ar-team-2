@@ -1,8 +1,39 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useSyncExternalStore } from "react";
 
 type Theme = "dark" | "light";
+const THEME_STORAGE_KEY = "addie-theme";
+const THEME_EVENT = "addie-theme-change";
+
+function readTheme(): Theme {
+  if (typeof window === "undefined") return "dark";
+
+  const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+  return stored === "light" || stored === "dark" ? stored : "dark";
+}
+
+function subscribeTheme(callback: () => void) {
+  if (typeof window === "undefined") return () => {};
+
+  const handleChange = (event: Event) => {
+    if (event instanceof StorageEvent && event.key && event.key !== THEME_STORAGE_KEY) return;
+    callback();
+  };
+
+  window.addEventListener("storage", handleChange);
+  window.addEventListener(THEME_EVENT, handleChange);
+
+  return () => {
+    window.removeEventListener("storage", handleChange);
+    window.removeEventListener(THEME_EVENT, handleChange);
+  };
+}
+
+function writeTheme(theme: Theme) {
+  window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  window.dispatchEvent(new Event(THEME_EVENT));
+}
 
 const ThemeCtx = createContext<{ theme: Theme; toggle: () => void }>({
   theme: "dark",
@@ -10,20 +41,18 @@ const ThemeCtx = createContext<{ theme: Theme; toggle: () => void }>({
 });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>("dark");
+  const theme = useSyncExternalStore<Theme>(subscribeTheme, readTheme, () => "dark");
 
-  useEffect(() => {
-    const stored = localStorage.getItem("addie-theme") as Theme | null;
-    if (stored === "light" || stored === "dark") setTheme(stored);
-  }, []);
+  const toggle = useCallback(() => {
+    writeTheme(theme === "dark" ? "light" : "dark");
+  }, [theme]);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem("addie-theme", theme);
   }, [theme]);
 
   return (
-    <ThemeCtx.Provider value={{ theme, toggle: () => setTheme((t) => (t === "dark" ? "light" : "dark")) }}>
+    <ThemeCtx.Provider value={{ theme, toggle }}>
       {children}
     </ThemeCtx.Provider>
   );

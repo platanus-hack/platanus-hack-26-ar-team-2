@@ -15,7 +15,6 @@
  * BrandAgentDecision.
  *
  * Cross-reference: DESIGN.md §4 (negotiation), §5 (audit per placement).
- * See also poc/negotiation/src/types.ts for the prototype this distils.
  */
 
 // ─── Identity ────────────────────────────────────────────────────────
@@ -73,14 +72,55 @@ export type StreamContext = {
 // ─── Mandate (signed autonomy boundary) ──────────────────────────────
 
 /**
+ * AI prompting bundle for a brand-agent. Persisted on `mandates.prompt`
+ * (separate JSONB column from `mandates.payload` because it's owned by
+ * the brand's marketing/creative team, not legal/finance — different
+ * stakeholders, different update cadence).
+ *
+ * Goes into Claude's system message when the brand-agent runs.
+ */
+export type BrandPrompt = {
+  /**
+   * Full system persona block. Describes WHO the agent is, what it
+   * cares about, what tone to use. Goes verbatim into Claude system msg.
+   * Example: "Sos el agent de adidas Argentina. Voz épica, deportiva,
+   * segunda persona, energía alta. Mandate: máxima atención a momentos
+   * celebratorios deportivos."
+   */
+  system_persona: string;
+  /**
+   * 2–4 example utterances in brand voice. Few-shot anchor — helps the
+   * model nail tone faster than instructions alone.
+   * Example: ["Dale campeón, ese golazo merece adidas.", "Sentilo: tu juego, nuestra energía."]
+   */
+  voice_examples: string[];
+  /**
+   * Hard prohibitions — exact words/phrases the agent must never produce.
+   * Filtered against output post-LLM. Example: ["barato", "promo", "descuento"]
+   */
+  dont_say: string[];
+  /**
+   * Soft behavioral guidance — things to avoid in spirit, not exact strings.
+   * Example: ["mencionar precios competidores", "tono formal/corporativo"]
+   */
+  dont_do: string[];
+};
+
+/**
  * Brand mandate. Signed by the brand-human, carried by the brand-agent.
  * Stored as `mandates.payload` JSONB when type='brand'.
+ *
+ * The AI prompting (system persona, voice examples, prohibitions) lives
+ * SEPARATELY in `mandates.prompt` JSONB → see {@link BrandPrompt}.
  */
 export type BrandMandate = {
   type: "brand";
   account_id: AccountId;
   display_name: string;
-  /** Voice/tone fingerprint passed to Claude in the system prompt. */
+  /**
+   * Short voice/tone fingerprint — kept for backward compat + brevity in logs.
+   * The full prompting lives in {@link BrandPrompt} on `mandates.prompt`.
+   */
   brand_voice: string;
   /** Hard daily spend cap (USDC). */
   daily_cap_usdc: number;
