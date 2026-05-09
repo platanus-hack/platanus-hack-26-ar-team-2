@@ -346,8 +346,9 @@ event_filters:
   # max_viewers: NUEVO (extensión §3). El PITCH dice literal "audiencia muy grande
   # para su mandate" — necesitamos que el SKIP coincida con la narrativa. MateBros
   # prefiere fogón (íntimo), no estadio (masivo).
-  # TBD: ajustar pre-demo según viewer count real del canal Twitch del team (PD-07b).
-  max_viewers: 80
+  # Calibrado a 2 para el demo de hackathon (audiencia Twitch real ~5-10 personas
+  # durante el pitch, jurados miran físicamente). Ver streams/demo.yaml.
+  max_viewers: 2
 brand_safety:
   blocked_keywords:
     - menor
@@ -426,7 +427,7 @@ Payload: ver `GateSkipReason` en `types.ts` (será agregado por C-08a).
 | gate1 | `outside_daypart` | `"04:00 ART"` | `🌭 Pancho Rex → SKIP gate1: fuera de horario (ahora 04:00, abre 12:00)` |
 | gate1 | `daily_cap_exceeded` | `"$50.10/$50"` | `☕ CafetITO → SKIP gate1: daily cap quemado` |
 | gate1 | `blocked_competitor_brand` | `"redbull"` | `☕ CafetITO → SKIP gate1: competidor mencionado en chat (redbull)` |
-| gate1 | `viewers_above_max` | `"viewers=180 > max=80"` | `🧉 MateBros → SKIP gate1: audiencia muy grande para su mandate (180 > 80)` |
+| gate1 | `viewers_above_max` | `"viewers=8 > max=2"` | `🧉 MateBros → SKIP gate1: audiencia muy grande para su mandate (8 > 2)` |
 | gate2 | `cosine_below_threshold` | `"0.42 < 0.55"` | `🧉 MateBros → SKIP gate2: el momento no resuena (cosine 0.42)` |
 | gate3 | `triage_should_not_bid` | `null` | `🧉 MateBros → SKIP gate3: triage rechaza (Haiku)` |
 | gate4 | `sonnet_terms_violate_mandate` | `"bid > max_bid"` | `☕ CafetITO → SKIP gate4: sonnet quiso violar max_bid` |

@@ -11,7 +11,8 @@
     "seed:wallets": "node --env-file=.env.local --import tsx scripts/seed-wallets.ts",
     "smoke:privy": "node --env-file=.env.local --import tsx scripts/smoke-privy-sign.mts",
     "smoke:killswitch": "node --env-file=.env.local --import tsx scripts/smoke-a-12-killswitch.mts",
-    "fund:brands": "node --env-file=.env.local --import tsx scripts/fund-brands.mts"
+    "fund:brands": "node --env-file=.env.local --import tsx scripts/fund-brands.mts",
+    "smoke:mandates": "node --experimental-strip-types scripts/smoke-mandate-loader.mts"
   },
   "dependencies": {
     "@privy-io/server-auth": "^1.32.5",

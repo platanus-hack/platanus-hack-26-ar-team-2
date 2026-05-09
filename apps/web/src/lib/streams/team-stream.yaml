@@ -1,16 +1,12 @@
 # Stream metadata para el demo (Platanus Hack BSAS, 2026-05-10 12:00 ART).
 # Lo consume gate1 al match contra event_filters de cada brand.
 # Ver docs/GATES.md §5.
-#
-# TBD: completar con valores reales cuando PD-07b confirme:
-#   - canal Twitch del equipo (handle, slug)
-#   - viewer count baseline esperado durante el demo
-#   - categoría exacta del stream
-# Lo de abajo son placeholders calibrados para que el sistema funcione si PD-07b
-# se atrasa. NO commitear como real-real — son default-safe.
 
-stream_id: demo-001
-streamer: "platanus_streamer"            # placeholder hasta PD-07b
+# Canal real del team — confirmado en P0-15 ✅ (TODO.md:52). Stream key conventional:
+# `team-stream`. Verificado HTTP 200 en /o/team-stream en prod (A-11). El env var
+# correspondiente en producción es TWITCH_CHANNEL=team-stream (apps/web/.env.example).
+stream_id: team-stream
+streamer: "team-stream"
 category: just_chatting                   # categoría amplia → más brands matchean
 game: null
 language: es-AR
@@ -43,9 +39,12 @@ rehearsed_triggers:
   - word: "FOGÓN"
     expected_mood: casual_chat
 
-# Audience profile esperado para el demo. Ajustar pre-demo cuando PD-07b
-# confirme el viewer count real (impacta calibración de matebros.max_viewers).
+# Audience profile esperado para el demo de hackathon.
+# La audiencia EN TWITCH durante el pitch es minúscula — los jurados miran
+# físicamente, no por el stream. Realísticamente 2-10 viewers conectados.
+# Esto baseline calibra `matebros.max_viewers` (= 2): MateBros skipea cuando
+# hay >2 viewers, dando el SKIP literal "audiencia muy grande" del PITCH.
 audience:
-  expected_viewers_min: 30
-  expected_viewers_max: 200
+  expected_viewers_min: 2
+  expected_viewers_max: 10
   primary_locale: es-AR

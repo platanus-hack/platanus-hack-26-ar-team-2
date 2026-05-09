@@ -64,10 +64,11 @@ event_filters:
   # Razón: el PITCH Bloque 3 dice literalmente "MateBros porque la audiencia es muy
   # grande para su mandate" — necesitamos que el GateSkipReason coincida con la
   # narrativa del speaker. MateBros prefiere comunidades chicas/íntimas (fogón).
-  # TBD: ajustar pre-demo según viewer count real del canal Twitch del team (PD-07b).
-  # Si el canal tiene <80 viewers reales, bajar este número (e.g. 30-40) o incluso
-  # quitarlo y depender del SKIP por missing_required_tag (que ya cubre el caso).
-  max_viewers: 80
+  # Calibrado a 2: durante un demo de hackathon la audiencia EN TWITCH es
+  # minúscula (jurados miran físicamente, no por stream). 2 personas = ronda
+  # íntima, MateBros calza. >2 = ya es "muy grande para su mandate" → SKIP.
+  # Ver streams/demo.yaml audience.expected_viewers_max para baseline.
+  max_viewers: 2
 
 brand_safety:
   blocked_keywords:
