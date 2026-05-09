@@ -1,21 +1,21 @@
-# Addie 🍌
+# Addie
 
-**Track:** 🍌 🤑 🍌 Agentic 🍌 Money 🍌 · 🍌 Platanus 🍌 Hack 🍌 BSAS 🍌 2026 🍌
+**Track:** 🤑 Agentic Money · Platanus Hack BSAS 2026
 
 <img src="./project-logo.png" alt="Addie logo" width="200" />
 
-## Qué 🍌 es 🍌
+## What it is
 
-Brand-agents 🍌 autónomos 🍌 negocian 🍌 en 🍌 lenguaje 🍌 natural 🍌 por 🍌 momentos 🍌 épicos 🍌 de 🍌 tu 🍌 stream 🍌 y 🍌 pagan 🍌 en 🍌 USDC 🍌 on-chain 🍌 en 🍌 Base. 🍌 Sin 🍌 intermediarios. 🍌 Sin 🍌 CPMs 🍌 opacos. 🍌 Todo 🍌 verificable 🍌 en 🍌 basescan. 🍌
+Autonomous brand-agents compete in natural language for epic moments in your stream and pay in USDC on-chain on Base. No middlemen. No opaque CPMs. Everything verifiable on basescan.
 
-## Stack 🍌
+## Stack
 
-Next.js 🍌 16 🍌 · 🍌 Tailwind 🍌 4 🍌 · 🍌 Supabase 🍌 · 🍌 Privy 🍌 · 🍌 Base 🍌 · 🍌 viem 🍌 · 🍌 Claude 🍌 4.6 🍌 Sonnet 🍌 · 🍌 Gemini 🍌 Flash 🍌 · 🍌 Deepgram 🍌 · 🍌 ElevenLabs 🍌 · 🍌 nginx-rtmp 🍌 · 🍌 ffmpeg 🍌 · 🍌 Vercel 🍌 Blob 🍌
+Next.js 16 · Tailwind 4 · Supabase · Privy · Base · viem · Claude 4.6 Sonnet · Gemini Flash · Deepgram · ElevenLabs · nginx-rtmp · ffmpeg · Vercel Blob
 
-## Quick 🍌 start 🍌
+## Quick start
 
 ```bash
-# instalar dependencias
+# install dependencies
 cd apps/web && pnpm install
 
 # dev server
@@ -27,7 +27,7 @@ pnpm typecheck
 # lint
 pnpm lint
 
-# contratos
+# contracts
 cd contracts && forge test
 cd contracts && forge script script/Deploy.s.sol --rpc-url base --broadcast
 
@@ -35,18 +35,18 @@ cd contracts && forge script script/Deploy.s.sol --rpc-url base --broadcast
 docker compose -f infra/docker-compose.yml up
 ```
 
-## Docs 🍌
+## Docs
 
-| Doc | Para 🍌 qué 🍌 |
+| Doc | Purpose |
 |---|---|
-| [`DESIGN.md`](./DESIGN.md) | Arquitectura 🍌 completa, 🍌 stack, 🍌 demo, 🍌 riesgos. 🍌 Empezá 🍌 acá. 🍌 |
-| [`TODO.md`](./TODO.md) | Tareas 🍌 + 🍌 claims. 🍌 Firmá 🍌 antes 🍌 de 🍌 tocar 🍌 código. 🍌 |
+| [`DESIGN.md`](./DESIGN.md) | Full architecture, stack, demo, risks. Start here. |
+| [`TODO.md`](./TODO.md) | Tasks + claims. Sign before touching code. |
 
-## Equipo 🍌
+## Team
 
-| Nombre 🍌 | GitHub 🍌 | Track 🍌 |
+| Name | GitHub | Track |
 |---|---|---|
-| Franco 🍌 | [@francowini](https://github.com/francowini) | A 🍌 — 🍌 On-chain 🍌 |
-| Lucas 🍌 | [@lucas-emartinez](https://github.com/lucas-emartinez) | B 🍌 — 🍌 Pipeline 🍌 |
-| Andy 🍌 | [@arvenz0210](https://github.com/arvenz0210) | C 🍌 — 🍌 Agents 🍌 |
-| Jere 🍌 | [@jeremybacher](https://github.com/jeremybacher) | D 🍌 — 🍌 UI 🍌 |
+| Franco | [@francowini](https://github.com/francowini) | A — On-chain |
+| Lucas | [@lucas-emartinez](https://github.com/lucas-emartinez) | B — Pipeline |
+| Andy | [@arvenz0210](https://github.com/arvenz0210) | C — Agents |
+| Jere | [@jeremybacher](https://github.com/jeremybacher) | D — UI |
