@@ -21,6 +21,7 @@ import {
   type Hex,
   type Log,
 } from "viem";
+import { assertChainLiveTxsEnabled } from "./env.ts";
 import { publicClient, type AddieWalletClient } from "./viem.ts";
 
 // ====== Constants ======
@@ -251,6 +252,7 @@ export async function releaseEscrow(
   walletClient: AddieWalletClient,
   args: { placementId: Hex },
 ): Promise<Hash> {
+  assertChainLiveTxsEnabled();
   return walletClient.writeContract({
     account: walletClient.account,
     chain: walletClient.chain,
@@ -266,6 +268,7 @@ export async function refundEscrow(
   walletClient: AddieWalletClient,
   args: { placementId: Hex },
 ): Promise<Hash> {
+  assertChainLiveTxsEnabled();
   return walletClient.writeContract({
     account: walletClient.account,
     chain: walletClient.chain,
