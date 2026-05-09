@@ -1,5 +1,6 @@
 import type { StreamSession, StreamStats } from './types.js';
 import { fetchStreamStats } from './streamStats.js';
+import { startTranscribe, type TranscribeHandle } from './transcribe.js';
 import { log } from './log.js';
 
 const POLL_INTERVAL_MS = Number(process.env.STAT_POLL_MS ?? 1000);
@@ -10,16 +11,19 @@ interface ActiveSession {
   lastBytesIn: number;
   lastPollAt: number;
   interval: NodeJS.Timeout;
+  transcribe: TranscribeHandle | null;
 }
 
 const sessions = new Map<string, ActiveSession>();
 
-function flattenStats(stats: StreamStats, bwEffectiveKbps: number): Record<string, unknown> {
+function flattenStats(
+  stats: StreamStats,
+  bwEffectiveKbps: number,
+  audio30s: string,
+  audioPartial: string,
+): Record<string, unknown> {
   return {
     uptime_s: stats.uptime_seconds,
-    // bw_effective deriva del delta de bytes_in entre ticks → siempre poblado.
-    // bw_in/bw_video/bw_audio del XML solo se llenan cuando hay subscribers,
-    // los dejo abajo como referencia pero suelen ser 0 con solo publisher.
     bw_effective_kbps: bwEffectiveKbps,
     bw_in_kbps: stats.bw_in_kbps,
     bw_video_kbps: stats.bw_video_kbps,
@@ -32,6 +36,8 @@ function flattenStats(stats: StreamStats, bwEffectiveKbps: number): Record<strin
     audio: stats.audio
       ? `${stats.audio.codec} ${stats.audio.sample_rate}Hz ch=${stats.audio.channels}`
       : 'no audio meta yet',
+    audio_30s: audio30s || '(no committed transcript yet)',
+    audio_partial: audioPartial || '(no partial)',
   };
 }
 
@@ -49,6 +55,7 @@ export function startSession(session: StreamSession): void {
     pollCount: 0,
     lastBytesIn: 0,
     lastPollAt: 0,
+    transcribe: null,
     interval: setInterval(async () => {
       state.pollCount += 1;
       const stats = await fetchStreamStats(key);
@@ -67,11 +74,25 @@ export function startSession(session: StreamSession): void {
         dtSec > 0 && dBytes >= 0 ? Math.round((dBytes * 8) / 1000 / dtSec) : 0;
       state.lastBytesIn = stats.bytes_in;
       state.lastPollAt = now;
-      log.tick(state.pollCount, flattenStats(stats, bwEffectiveKbps));
+      const audio30s = state.transcribe?.getAudio30s() ?? '';
+      const audioPartial = state.transcribe?.getPartial() ?? '';
+      log.tick(state.pollCount, flattenStats(stats, bwEffectiveKbps, audio30s, audioPartial));
     }, POLL_INTERVAL_MS),
   };
 
   sessions.set(key, state);
+
+  // Audio pipe arranca en paralelo (no bloquea ticks). Si no hay API key o falla,
+  // el resto del pipeline sigue andando con audio_30s/audio_partial vacíos.
+  startTranscribe(key)
+    .then((handle) => {
+      const active = sessions.get(key);
+      if (active && handle) active.transcribe = handle;
+    })
+    .catch((e) => {
+      const msg = e instanceof Error ? e.message : String(e);
+      log.warn(`[transcribe ${key}] start failed: ${msg}`);
+    });
 }
 
 export function stopSession(streamKey: string): void {
@@ -81,6 +102,9 @@ export function stopSession(streamKey: string): void {
     return;
   }
   clearInterval(active.interval);
+  active.transcribe?.stop().catch(() => {
+    /* swallow — cleanup best-effort */
+  });
   sessions.delete(streamKey);
   const durationMs = Date.now() - active.session.started_at;
   log.success(
