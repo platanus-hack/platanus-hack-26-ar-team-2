@@ -23,7 +23,6 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 | Dev | Task ID | Scope | Started |
 |---|---|---|---|
 | Lucas | POC-PIPE | Pipeline POC standalone bajo `poc/pipeline/` (foundation para B-01..B-07: docker-compose nginx-rtmp + webhooks on_publish/on_publish_done + ffmpeg audio/frames + tmi.js chat + context tick en terminal) | 2026-05-09 |
-| Jere | P0-16 | Recrear `apps/web/.env.example` con todas las vars del proyecto (fue eliminado del repo) | 2026-05-09 |
 
 ---
 
@@ -51,7 +50,7 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 - ✅ **P0-13** `[INFRA]` App Alchemy en Base mainnet → `ALCHEMY_RPC_URL`
 - ⬜ **P0-14** `[INFRA]` Vercel Blob token (CDN para assets de ads + clips de auditoría) → `BLOB_READ_WRITE_TOKEN`
 - ⬜ **P0-15** `[INFRA]` Cuenta Twitch para Coscu-test (stream key + channel name para tmi.js)
-- 🟡 **P0-16** `.env.example` con todas las vars + `.env.local` cargado (no commitear)
+- ✅ **P0-16** `.env.example` con todas las vars + `.env.local` cargado (no commitear)
 
 ### Infra local + chain
 
