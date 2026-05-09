@@ -144,7 +144,8 @@ T+5.5s    Negociaciones cierran 3 turnos:
 T+5.7s    Streamer-agent compara: ADIDAS gana
           (mejor USD/seg en zona premium + brand fit alto)
 ─────────────────────────────────────────────────────────────────────
-T+6.0s    adidas-agent ejecuta: ⚡ escrow.lock(1.80 USDC)  [tx 0xAAA]
+T+6.0s    Orchestrator firma desde la wallet de adidas (session signer Privy):
+          ⚡ AddieEscrow.lock(1.80 USDC)  [tx 0xAAA]
 ─────────────────────────────────────────────────────────────────────
 T+6.2s    Plataforma arma placement assembly:
           { ad_url: "https://addie-cdn/.../adidas/epic_goal_lower.mp4",
@@ -400,6 +401,16 @@ Cada vez que un brand-agent emite o actualiza una standing offer, se crea/refres
 3. El hold del ganador se convierte en `escrow.lock()` on-chain real.
 4. Si el lock falla on-chain (defensivo), fallback al runner-up — también tiene hold activo.
 5. Holds de los perdedores se liberan; vuelven al `available_balance` del LLM en su próxima decisión.
+
+**Quién firma cada tx.** El brand-agent decide; el **orchestrator firma** desde la smart wallet del brand vía **session signer de Privy** pre-aprobado al crear el mandate (Know Your Agent). Concretamente:
+
+| Tx | Firma | Por qué |
+|---|---|---|
+| `escrow.lock()` | Orchestrator → wallet del brand ganador (session signer) | El brand está poniendo plata; la session key acotada al `AddieEscrow` + `validBefore` evita pedirle al humano-marca que firme cada placement (latencia <5s imposible si no). Revocable on-chain en cualquier momento. |
+| `escrow.release()` | Orchestrator → wallet plataforma (rol `releaser` en el contrato) | Trigger-only: el contrato chequea que `placement.status == 'rendered'` y libera al `payee` registrado en el `lock`. Plataforma firma porque tiene visibilidad del end-of-render event; no maneja los fondos. |
+| `escrow.refund()` | Orchestrator → wallet plataforma (rol `guardian`) | Brand-safety auto-pull. Mismo principio: plataforma es el listener; el contrato valida que `status == 'locked'` y devuelve al brand. |
+
+El orchestrator no custodia claves de usuarios — solo ejecuta sobre session keys que el humano-marca aprobó al firmar su mandate, y sobre la wallet plataforma para los roles `releaser`/`guardian`. La separación de roles vive en el contrato (`AddieEscrow.sol`, A-04), no en código off-chain.
 
 ### Garantías
 
