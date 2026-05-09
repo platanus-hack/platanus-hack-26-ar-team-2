@@ -22,7 +22,6 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 
 | Dev | Task ID | Scope | Started |
 |---|---|---|---|
-| Franco | P0-07 | Cargar `ANTHROPIC_API_KEY` en `apps/web/.env.local` + `apps/manager-worker/.env` + Vercel project `web` (production/preview/development) + uncomment línea en `.env.example`. Destraba C-08 / C-08c / C-08d (toda la pata LLM de Track C). | 2026-05-09 17:30 |
 | Andy | C-08m-cron | Variante Vercel Cron del manager — port de la lógica Stage1+Stage2 a `apps/web/src/lib/manager/` + route `GET /api/internal/manager-tick` con Bearer auth + cron 1/min en `vercel.json`. Sin Fly/Railway, todo Vercel. Trade-off: latencia 0–60s vs <1s del worker local. Co-existe con `apps/manager-worker/` — pick-at-deploy-time. **⚠ pending C-08m-cron-5s upgrade:** demo SLA pide polling cada 5s, no cada 1min — Vercel Cron nativo no permite sub-minute. Opciones documentadas en `DESIGN.md §2` (latencia note): (1) cron `* * * * *` que internamente itera 12×5s con sleeps dentro del timeout (alcanza con 60s en Pro, 10s en Hobby ≠ alcanza), (2) self-invoking edge function con setTimeout+fetch, (3) QStash/Inngest scheduler externo. Decidir post-MVP — el demo del domingo arranca con cron 1/min y se cuenta como "el sistema piensa cada minuto" si no llegamos al upgrade. | 2026-05-09 |
 
 ---
@@ -42,7 +41,7 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 
 ### Infra de cuentas y API keys
 
-- 🟡 **P0-07** `[INFRA]` Cuenta Anthropic + key Claude 4.6 Sonnet → `ANTHROPIC_API_KEY`
+- ✅ **P0-07** `[INFRA]` `ANTHROPIC_API_KEY` cargada en `apps/web/.env.local` + `apps/manager-worker/.env` + Vercel project `web` (production/preview/development). `.env.example` uncommented para que sea visible al resto del team. Smoke test verde contra Haiku 4.5 (`/v1/messages` → 200, 13 in / 4 out). Destraba C-08 / C-08c / C-08d / C-08m con LLM real (sin `MANAGER_DRY_RUN=true`).
 - ❌ **P0-08** ~~Google AI Studio + key Gemini 2.5 Flash~~ — **deprecado**. B-05 usa **Vercel AI Gateway** con `AI_GATEWAY_API_KEY` apuntando a `google/gemini-2.5-flash` — sin Gemini key directa.
 - ❌ **P0-09** ~~Deepgram + key streaming Nova~~ — **deprecado** ([commit 992e5a1](../../commit/992e5a1)). El POC usa ElevenLabs Scribe v2 realtime, que va con la misma key del P0-10.
 - ✅ **P0-10** `[INFRA]` ElevenLabs + key → `ELEVENLABS_API_KEY` confirmada en `apps/web/.env.local` (Vercel) y en `poc/pipeline/.env`. Una sola cuenta cubre **Scribe v2 realtime para STT** §3 + Creative para pre-gen ads §6 + TTS §6.
