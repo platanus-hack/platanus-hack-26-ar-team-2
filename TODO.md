@@ -26,6 +26,7 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 | Lucas | POC-PIPE | Pipeline POC standalone bajo `poc/pipeline/` (foundation para B-01..B-07: docker-compose nginx-rtmp + webhooks on_publish/on_publish_done + ffmpeg audio/frames + tmi.js chat + context tick en terminal) | 2026-05-09 |
 | Franco | A-01 | `contracts/src/AddieEscrow.sol` ~80 LoC — `lock(placementId, payee, amount)` / `release` / `refund` + eventos `Locked`/`Released`/`Refunded`, USDC en Base | 2026-05-09 09:33 |
 | Franco | A-02 | Tests Foundry happy path + reverts en `contracts/test/AddieEscrow.t.sol` (mock USDC, lock/release/refund + revert paths + event asserts) | 2026-05-09 09:48 |
+| Jere | D-04 | Inventory editor `/settings/inventory`: CRUD zonas/floors/max_duration | 2026-05-09 |
 
 ---
 
@@ -127,7 +128,7 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 - ✅ **D-01** Browser Source overlay `apps/web/src/app/overlay/[id]/page.tsx`: `<video autoplay>` + `<img class="qr-corner">` + framer-motion fade-in — deps: P0-02
 - ⬜ **D-02** PlacementRenderer component que consume placement events vía Supabase Realtime y renderiza — deps: D-01, C-14
 - ✅ **D-03** Browser Dock `apps/web/src/app/dock/page.tsx`: balance del creator + recent placements + hotkeys (FORCE EVENT, FULL BREAK) — deps: P0-02, A-08
-- ⬜ **D-04** Inventory editor `apps/web/src/app/settings/inventory/page.tsx` (CRUD zonas/floors/max_duration) — deps: P0-02, C-03
+- 🟡 **D-04** Inventory editor `apps/web/src/app/settings/inventory/page.tsx` (CRUD zonas/floors/max_duration) — deps: P0-02, C-03
 - ✅ **D-05** Preferences `apps/web/src/app/settings/preferences/page.tsx` (brands aprobadas, brand-safety keywords) — deps: P0-02
 - ⬜ **D-06** Brand console `apps/web/src/app/brands/[brandId]/page.tsx`: saldo, library viewer, mandate editor, performance stats — deps: P0-02, C-04, A-05
 - ⬜ **D-07** Ad uploader `apps/web/src/components/brands/AdUploader.tsx` (form + Vercel Blob upload + insert en `ads`) — deps: D-06, P0-14, C-04
