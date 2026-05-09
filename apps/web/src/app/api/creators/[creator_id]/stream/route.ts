@@ -31,6 +31,11 @@ type RenderEvent = {
   creator_id: string;
   message: string;
   created_at: string;
+  zone?: "lower_third" | "corner" | "fullscreen";
+  asset_url?: string;
+  asset_type?: "video" | "image";
+  duration_ms?: number;
+  qr_url?: string;
 };
 
 const HEARTBEAT_MS = 25_000;
@@ -97,9 +102,24 @@ export async function GET(
       await client.query("LISTEN render_events");
       client.on("notification", async (n) => {
         if (closed || !n.payload) return;
-        const [cid, eventId] = n.payload.split(":");
-        if (cid !== creator_id) return; // single channel, filter by creator
+        const colonIdx = n.payload.indexOf(":");
+        const colonIdx2 = n.payload.indexOf(":", colonIdx + 1);
+        const cid = n.payload.slice(0, colonIdx);
+        if (cid !== creator_id) return;
 
+        const jsonStr = colonIdx2 > -1 ? n.payload.slice(colonIdx2 + 1) : null;
+        if (jsonStr) {
+          try {
+            const event = JSON.parse(jsonStr) as RenderEvent;
+            await pushEvent(event);
+            return;
+          } catch {
+            // fall through to DB fetch
+          }
+        }
+
+        // Fallback: fetch from DB (catches old-format notifications)
+        const eventId = n.payload.slice(colonIdx + 1, colonIdx2 > -1 ? colonIdx2 : undefined);
         try {
           const r = await client.query<RenderEvent>(
             "select id, creator_id, message, created_at from render_events where id = $1",
@@ -107,7 +127,7 @@ export async function GET(
           );
           if (r.rows[0]) await pushEvent(r.rows[0]);
         } catch {
-          // Drop the event silently if SELECT fails — the row is still in the DB.
+          // ignore
         }
       });
 

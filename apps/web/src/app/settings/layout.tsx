@@ -1,6 +1,7 @@
 import Link from "next/link";
 import SettingsNav from "@/components/settings/SettingsNav";
 import ThemeToggle from "@/components/ThemeToggle";
+import { ToastProvider } from "@/components/Toast";
 
 export const metadata = { title: "Addie — Settings" };
 
@@ -14,7 +15,9 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
         </div>
         <h1 className="text-xl font-bold mb-1 text-[var(--text)]">Settings</h1>
         <SettingsNav />
-        {children}
+        <ToastProvider>
+          {children}
+        </ToastProvider>
       </div>
     </div>
   );

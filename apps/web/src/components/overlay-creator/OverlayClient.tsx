@@ -1,17 +1,23 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import PlacementOverlay from "@/components/overlay/PlacementOverlay";
 
 type RenderEvent = {
   id: string;
   creator_id: string;
   message: string;
   created_at: string;
+  zone?: "lower_third" | "corner" | "fullscreen";
+  asset_url?: string;
+  asset_type?: "video" | "image";
+  duration_ms?: number;
+  qr_url?: string;
 };
 
 type Status = "connecting" | "open" | "error" | "closed";
 
-const SHOW_DURATION_MS = 5000; // MVP: hold each message for 5s
+const SHOW_DURATION_MS = 5000;
 
 export default function OverlayClient({ creator_id }: { creator_id: string }) {
   const [status, setStatus] = useState<Status>("connecting");
@@ -33,9 +39,7 @@ export default function OverlayClient({ creator_id }: { creator_id: string }) {
 
       es.onopen = () => setStatus("open");
 
-      es.addEventListener("hello", () => {
-        // Connection confirmed by server. Status already 'open' from onopen.
-      });
+      es.addEventListener("hello", () => {});
 
       es.addEventListener("render", (msgEvent) => {
         try {
@@ -49,8 +53,6 @@ export default function OverlayClient({ creator_id }: { creator_id: string }) {
       });
 
       es.onerror = () => {
-        // EventSource auto-retries by default; we just reflect the state.
-        // But if it's been forced-closed (readyState===CLOSED), reconnect manually.
         if (es && es.readyState === EventSource.CLOSED) {
           setStatus("error");
           if (!stopped) setTimeout(connect, 2000);
@@ -69,17 +71,19 @@ export default function OverlayClient({ creator_id }: { creator_id: string }) {
     };
   }, [creator_id]);
 
-  // Auto-clear current message after SHOW_DURATION_MS.
+  // Auto-clear text-only messages after SHOW_DURATION_MS.
   useEffect(() => {
-    if (!current) return;
+    if (!current || current.asset_url) return;
     const t = setTimeout(() => setCurrent(null), SHOW_DURATION_MS);
     return () => clearTimeout(t);
   }, [current]);
 
+  const hasAsset = current?.asset_url;
+
   return (
     <div className="relative flex h-screen w-screen items-center justify-center p-8">
-      {/* Diagnostic chip — top-right, dim. Remove for the production overlay. */}
-      <div className="absolute top-3 right-3 flex items-center gap-2 font-mono text-xs opacity-60">
+      {/* Diagnostic chip */}
+      <div className="absolute top-3 right-3 flex items-center gap-2 font-mono text-xs opacity-60 z-50">
         <span
           className={
             "inline-block h-2 w-2 rounded-full " +
@@ -96,7 +100,20 @@ export default function OverlayClient({ creator_id }: { creator_id: string }) {
         <span className="opacity-50">· {count} msgs</span>
       </div>
 
-      {current ? (
+      {hasAsset ? (
+        <PlacementOverlay
+          key={current!.id}
+          streamId={creator_id}
+          initialPlacement={{
+            placement_id: current!.id,
+            ad_url: current!.asset_url!,
+            qr_url: current!.qr_url ?? "",
+            duration_ms: current!.duration_ms ?? 8000,
+            zone: mapZone(current!.zone),
+          }}
+          onExpire={() => setCurrent(null)}
+        />
+      ) : current ? (
         <div
           key={current.id}
           className="rounded-lg bg-foreground/95 px-8 py-6 text-3xl font-bold text-background shadow-lg animate-in fade-in zoom-in-95 duration-200"
@@ -108,4 +125,10 @@ export default function OverlayClient({ creator_id }: { creator_id: string }) {
       )}
     </div>
   );
+}
+
+function mapZone(zone?: string): "lower-third" | "fullscreen" | "corner" {
+  if (zone === "lower_third") return "lower-third";
+  if (zone === "fullscreen") return "fullscreen";
+  return "corner";
 }

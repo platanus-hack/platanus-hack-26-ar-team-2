@@ -2,6 +2,7 @@
 
 import { useCallback, useReducer, useRef, useState } from "react";
 import { BRANDS } from "@/lib/brands";
+import { useToast } from "@/components/Toast";
 
 type BrandId = string;
 
@@ -52,6 +53,7 @@ function reducer(state: State, action: Action): State {
 }
 
 export default function PreferencesClient({ initial }: { initial?: Partial<Preferences> }) {
+  const toast = useToast();
   const [state, dispatch] = useReducer(reducer, {
     approvedBrands: new Set((initial?.approvedBrands ?? BRANDS.map((b) => b.id)) as BrandId[]),
     keywords: initial?.safetyKeywords ?? [],
@@ -74,14 +76,16 @@ export default function PreferencesClient({ initial }: { initial?: Partial<Prefe
   async function save() {
     dispatch({ type: "SET_SAVING" });
     try {
-      await fetch("/api/settings/preferences", {
+      const res = await fetch("/api/settings/preferences", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ approvedBrands: [...state.approvedBrands], safetyKeywords: state.keywords }),
       });
       dispatch({ type: "SET_SAVED" });
+      toast.show({ kind: res.ok ? "ok" : "err", message: res.ok ? "Guardado" : "Error al guardar" });
     } catch {
       dispatch({ type: "SET_ERROR" });
+      toast.show({ kind: "err", message: "Error al guardar" });
     }
   }
 

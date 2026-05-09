@@ -56,6 +56,16 @@ export async function getDemoCreatorId(): Promise<string> {
 
 // ─── Brand accounts ──────────────────────────────────────────────────────────
 
+export async function getBrandWalletAddress(brandAccountId: string): Promise<string | null> {
+  const db = supabaseAdmin();
+  const { data } = await db
+    .from("accounts")
+    .select("wallet_address")
+    .eq("id", brandAccountId)
+    .maybeSingle();
+  return (data?.wallet_address as string | null) ?? null;
+}
+
 export async function getBrandAccountId(slug: string): Promise<string | null> {
   const meta = BRAND_META[slug];
   if (!meta) return null;

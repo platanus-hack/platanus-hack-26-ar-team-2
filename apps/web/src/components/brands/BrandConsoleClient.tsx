@@ -5,6 +5,7 @@ import { useReducer, useState, useRef, useCallback } from "react";
 import ThemeToggle from "@/components/ThemeToggle";
 import type { BrandMandateData, BrandStats, AdRow } from "@/lib/db";
 import { getBrand, type Brand } from "@/lib/brands";
+import { truncateAddress, basescanUrl } from "@/lib/format";
 
 export type BrandInitial = {
   mandate: BrandMandateData | null;
@@ -114,6 +115,18 @@ export default function BrandConsoleClient({ brandId, initial }: { brandId: stri
               <span className="text-[10px] bg-[#22d3ee]/15 text-[#22d3ee] border border-[#22d3ee]/30 rounded px-1.5 py-0.5 font-medium">
                 DEFAULT BIDDER
               </span>
+            )}
+            {initial?.wallet_address ? (
+              <a
+                href={basescanUrl(initial.wallet_address, "address")}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-auto text-[10px] font-mono text-[var(--text-3)] hover:text-[#22d3ee] hover:underline transition-colors"
+              >
+                {truncateAddress(initial.wallet_address)} ↗
+              </a>
+            ) : (
+              <span className="ml-auto text-[10px] text-[#f59e0b]">wallet not provisioned</span>
             )}
           </div>
           <p className="text-xs text-[var(--text-3)] mt-1 ml-7">{brand.default_persona}</p>

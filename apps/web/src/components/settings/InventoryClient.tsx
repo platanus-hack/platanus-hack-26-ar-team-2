@@ -1,6 +1,7 @@
 "use client";
 
 import { useReducer, useRef } from "react";
+import { useToast } from "@/components/Toast";
 
 export type ZoneId = "lower_third" | "bottom_right_corner" | "fullscreen_takeover";
 
@@ -68,15 +69,18 @@ function reducer(state: State, action: Action): State {
 }
 
 export default function InventoryClient({ initial }: { initial?: InventoryData }) {
+  const toast = useToast();
   const [state, dispatch] = useReducer(reducer, { zones: initial?.zones ?? DEFAULT_ZONES, dirty: false, saving: false, saved: true, saveError: false });
 
   async function save() {
     dispatch({ type: "SET_SAVING" });
     try {
-      await fetch("/api/settings/inventory", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ zones: state.zones }) });
+      const res = await fetch("/api/settings/inventory", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ zones: state.zones }) });
       dispatch({ type: "SET_SAVED" });
+      toast.show({ kind: res.ok ? "ok" : "err", message: res.ok ? "Guardado" : "Error al guardar" });
     } catch {
       dispatch({ type: "SET_ERROR" });
+      toast.show({ kind: "err", message: "Error al guardar" });
     }
   }
 

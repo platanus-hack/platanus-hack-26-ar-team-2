@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { getBrand } from "@/lib/brands";
 
 export interface Placement {
   placement_id: string;
@@ -9,35 +10,60 @@ export interface Placement {
   qr_url: string;
   duration_ms: number;
   zone: "lower-third" | "fullscreen" | "corner";
+  brand_id?: string;
 }
 
 interface Props {
   streamId: string;
-  /** Injected by the page during integration; kept optional so the shell renders standalone. */
+  /** Push-based: parent registers a handler and returns an unsub fn. */
   onPlacement?: (handler: (p: Placement) => void) => () => void;
+  /** Pull-based (D-13 SSE mode): start showing this placement immediately. */
+  initialPlacement?: Placement;
+  /** Called when the initialPlacement timer elapses or media errors. */
+  onExpire?: () => void;
 }
 
-const FADE_MS = 300;
+export const FADE_MS = 300;
 
-export default function PlacementOverlay({ streamId, onPlacement }: Props) {
-  const [current, setCurrent] = useState<Placement | null>(null);
+export default function PlacementOverlay({ streamId, onPlacement, initialPlacement, onExpire }: Props) {
+  const [current, setCurrent] = useState<Placement | null>(initialPlacement ?? null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const clearTimer = () => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  };
+
   const show = useCallback((p: Placement) => {
-    if (timerRef.current) clearTimeout(timerRef.current);
+    clearTimer();
     setCurrent(p);
     timerRef.current = setTimeout(() => setCurrent(null), p.duration_ms);
   }, []);
 
+  // Push-based mode.
   useEffect(() => {
     if (!onPlacement) return;
     const unsub = onPlacement(show);
     return () => {
       unsub();
-      if (timerRef.current) clearTimeout(timerRef.current);
+      clearTimer();
     };
   }, [onPlacement, show]);
+
+  // Pull-based mode: start timer when initialPlacement changes.
+  useEffect(() => {
+    if (!initialPlacement) return;
+    setCurrent(initialPlacement);
+    clearTimer();
+    timerRef.current = setTimeout(() => {
+      setCurrent(null);
+      onExpire?.();
+    }, initialPlacement.duration_ms);
+    return clearTimer;
+  }, [initialPlacement, onExpire]);
 
   useEffect(() => {
     if (current && videoRef.current) {
@@ -59,11 +85,11 @@ export default function PlacementOverlay({ streamId, onPlacement }: Props) {
             className="absolute inset-0"
           >
             {current.zone === "fullscreen" ? (
-              <FullscreenAd placement={current} videoRef={videoRef} />
+              <FullscreenAd placement={current} videoRef={videoRef} onExpire={onExpire} />
             ) : current.zone === "lower-third" ? (
-              <LowerThirdAd placement={current} videoRef={videoRef} />
+              <LowerThirdAd placement={current} videoRef={videoRef} onExpire={onExpire} />
             ) : (
-              <CornerAd placement={current} videoRef={videoRef} />
+              <CornerAd placement={current} videoRef={videoRef} onExpire={onExpire} />
             )}
           </motion.div>
         )}
@@ -75,20 +101,30 @@ export default function PlacementOverlay({ streamId, onPlacement }: Props) {
 function FullscreenAd({
   placement,
   videoRef,
+  onExpire,
 }: {
   placement: Placement;
   videoRef: React.RefObject<HTMLVideoElement | null>;
+  onExpire?: () => void;
 }) {
+  const [errored, setErrored] = useState(false);
+  const noUrl = !placement.ad_url;
+
   return (
     <div className="relative w-full h-full bg-black">
-      <video
-        ref={videoRef}
-        src={placement.ad_url}
-        className="w-full h-full object-cover"
-        muted
-        playsInline
-      />
-      <QrCorner qrUrl={placement.qr_url} />
+      {noUrl || errored ? (
+        <FallbackAd placement={placement} className="w-full h-full" />
+      ) : (
+        <video
+          ref={videoRef}
+          src={placement.ad_url}
+          className="w-full h-full object-cover"
+          muted
+          playsInline
+          onError={() => setErrored(true)}
+        />
+      )}
+      {placement.qr_url && <QrCorner qrUrl={placement.qr_url} />}
     </div>
   );
 }
@@ -96,20 +132,30 @@ function FullscreenAd({
 function LowerThirdAd({
   placement,
   videoRef,
+  onExpire,
 }: {
   placement: Placement;
   videoRef: React.RefObject<HTMLVideoElement | null>;
+  onExpire?: () => void;
 }) {
+  const [errored, setErrored] = useState(false);
+  const noUrl = !placement.ad_url;
+
   return (
     <div className="absolute bottom-0 left-0 right-0 h-[28%]">
-      <video
-        ref={videoRef}
-        src={placement.ad_url}
-        className="w-full h-full object-cover"
-        muted
-        playsInline
-      />
-      <QrCorner qrUrl={placement.qr_url} position="bottom-right" />
+      {noUrl || errored ? (
+        <FallbackAd placement={placement} className="w-full h-full" />
+      ) : (
+        <video
+          ref={videoRef}
+          src={placement.ad_url}
+          className="w-full h-full object-cover"
+          muted
+          playsInline
+          onError={() => setErrored(true)}
+        />
+      )}
+      {placement.qr_url && <QrCorner qrUrl={placement.qr_url} position="bottom-right" />}
     </div>
   );
 }
@@ -117,20 +163,48 @@ function LowerThirdAd({
 function CornerAd({
   placement,
   videoRef,
+  onExpire,
 }: {
   placement: Placement;
   videoRef: React.RefObject<HTMLVideoElement | null>;
+  onExpire?: () => void;
 }) {
+  const [errored, setErrored] = useState(false);
+  const noUrl = !placement.ad_url;
+
   return (
     <div className="absolute bottom-4 right-4 w-64 rounded-lg overflow-hidden shadow-2xl">
-      <video
-        ref={videoRef}
-        src={placement.ad_url}
-        className="w-full h-full object-cover"
-        muted
-        playsInline
-      />
-      <QrCorner qrUrl={placement.qr_url} position="bottom-right" size={48} />
+      {noUrl || errored ? (
+        <FallbackAd placement={placement} className="w-full aspect-video" />
+      ) : (
+        <video
+          ref={videoRef}
+          src={placement.ad_url}
+          className="w-full h-full object-cover"
+          muted
+          playsInline
+          onError={() => setErrored(true)}
+        />
+      )}
+      {placement.qr_url && <QrCorner qrUrl={placement.qr_url} position="bottom-right" size={48} />}
+    </div>
+  );
+}
+
+function FallbackAd({ placement, className = "" }: { placement: Placement; className?: string }) {
+  const brand = placement.brand_id ? getBrand(placement.brand_id) : undefined;
+  const bg = brand?.brand_color ?? "#111118";
+  return (
+    <div
+      className={`flex flex-col items-center justify-center gap-3 ${className}`}
+      style={{ background: bg }}
+    >
+      <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center">
+        <span className="text-white text-2xl font-bold">{brand?.display_name?.[0] ?? "A"}</span>
+      </div>
+      {brand && (
+        <p className="text-white font-semibold text-lg">{brand.display_name}</p>
+      )}
     </div>
   );
 }
