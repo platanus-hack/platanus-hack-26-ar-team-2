@@ -1,5 +1,16 @@
 # manager-worker (C-08m)
 
+> **Two deployment modes ship in `main` — pick one:**
+>
+> | Mode | Where it runs | Latency | Setup |
+> |---|---|---|---|
+> | **Push (this folder)** | local laptop / Fly / Railway | <1s | `pnpm dev` |
+> | **Pull (Vercel Cron, C-08m-cron)** | Vercel only, no extra host | 0–60s | `vercel.json` cron + `CRON_SECRET` |
+>
+> Same Stage 1 + Stage 2 logic in both. The Vercel-cron variant lives at [`apps/web/src/lib/manager/`](../web/src/lib/manager/) + route [`apps/web/src/app/api/internal/manager-tick/route.ts`](../web/src/app/api/internal/manager-tick/route.ts). It is currently active on prod (every minute).
+>
+> To **disable Vercel cron** and run only this push-based worker: remove the `crons[]` entry from [`apps/web/vercel.json`](../web/vercel.json) and redeploy.
+
 Standalone Node process that:
 1. Subscribes to `INSERT` on `context_chunks` via Supabase Realtime postgres_changes (filtered by `stream_key`).
 2. Applies a 2-stage filter: semantic Stage 1 (no LLM), Claude Haiku Stage 2 (returns `moment_quality` + `brand_match` scores, both must clear thresholds).
