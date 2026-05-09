@@ -26,6 +26,7 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 | Jere | C-02 | 8 mandate templates YAML (brands/*.yaml) + loader TypeScript | 2026-05-09 |
 | Franco | A-03 | `Deploy.s.sol` + deploy AddieEscrow a Base mainnet (USDC token + treasury owner) + verify en basescan | 2026-05-09 11:23 |
 | Andy | BRAND-SCOPE-2 + MANDATES-PROMPT | Decisión de scope: MVP con **2 brands** (adidas premium + mp default bidder) en vez de 8. Migration `0005_mandates_prompt.sql` añade columna `prompt jsonb` a `mandates` (system_persona + voice_examples + dont_say + dont_do). Update `BrandMandate` type en `apps/web/src/lib/agents/types.ts`. Update DESIGN.md §1/§3/§4. | 2026-05-09 |
+| Franco | PITCH+GATES-DOCS | `docs/PITCH.md` (5-min script) + `docs/DEMO_RUNBOOK.md` (coreografía 4 actos) + `docs/GATES.md` (hard-reject ladder spec) + DESIGN.md §4.X gate ladder + TODO.md tasks C-02b/c/d, C-08a/b/c/d, D-09a, PD-07a/b/c. **Branch `feat/pitch-and-gates-docs`** (transversal). | 2026-05-09 12:05 |
 
 ---
 
