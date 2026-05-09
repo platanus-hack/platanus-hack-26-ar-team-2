@@ -8,7 +8,12 @@ import {
 } from '@elevenlabs/elevenlabs-js/wrapper/realtime';
 import { log } from './log.js';
 
-const ROLLING_WINDOW_MS = Number(process.env.AUDIO_ROLLING_WINDOW_MS ?? 30_000);
+// Default 15s — bajado desde 30s el 2026-05-09 para matchear CHUNK_INTERVAL_MS
+// (chunkWriter.ts). Si rolling > chunk → cada chunk va a tener overlap del
+// audio_text con el chunk anterior (redundancia + más tokens en Gemini summary).
+// Si rolling < chunk → audio_text va a perder los primeros segundos. Mejor
+// matchear los dos.
+const ROLLING_WINDOW_MS = Number(process.env.AUDIO_ROLLING_WINDOW_MS ?? 15_000);
 const MODEL_ID = process.env.ELEVENLABS_STT_MODEL ?? 'scribe_v2_realtime';
 const LANGUAGE_CODE = process.env.ELEVENLABS_STT_LANGUAGE ?? 'es';
 
