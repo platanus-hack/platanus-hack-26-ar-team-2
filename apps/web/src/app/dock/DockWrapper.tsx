@@ -1,8 +1,8 @@
 "use client";
 
+import { useMemo } from "react";
 import type { PlacementRow } from "@/lib/db";
 import DockClient, { type DockHooks, type RecentPlacement } from "@/components/dock/DockClient";
-import { useMemo } from "react";
 
 const DEMO_PLACEMENTS: RecentPlacement[] = [
   {
