@@ -172,6 +172,120 @@ export type StreamerMandate = {
 
 export type Mandate = BrandMandate | StreamerMandate;
 
+// ─── Mandate extensions — gate ladder schema (C-02b) ─────────────────
+
+/**
+ * Gate-1 deterministic event filters. All optional — missing field = gate
+ * sub-check is skipped (backwards-compat with mandates that don't declare it).
+ *
+ * Spec: docs/GATES.md §3.
+ */
+export type EventFilters = {
+  /**
+   * Gate 1: at least ONE tag must match `frame_tags`/`scene_type`/`mood_tags`
+   * of the context tick. `undefined` or `[]` = no tag requirement.
+   */
+  required_any_tag?: string[];
+  /**
+   * Gate 1: stream's `StreamMetadata.category` must be in this list.
+   * `undefined` = any category allowed.
+   */
+  preferred_categories?: string[];
+  /** Gate 1: skip if `stream.viewers < min_viewers`. Default 0. */
+  min_viewers?: number;
+  /**
+   * Gate 1: skip if `stream.viewers > max_viewers`. Default = no upper bound.
+   *
+   * Used by community-style brands (e.g. MateBros) that prefer intimate
+   * audiences over massive ones — the SKIP message is "audience too big for
+   * this mandate". See docs/GATES.md §3 + docs/PITCH.md Bloque 3.
+   */
+  max_viewers?: number;
+  /**
+   * Gate 1: at least one keyword must appear in `recent_keywords`/`audio_30s`.
+   * `undefined` or `[]` = no chat keyword requirement.
+   */
+  required_chat_keyword_any?: string[];
+};
+
+/**
+ * Extended brand-safety. Merges with `BrandMandate.brand_safety.blocked_keywords`
+ * (legacy) and adds category + competitor checks.
+ */
+export type BrandSafetyExtended = {
+  /** Lower-cased keywords that trigger SKIP at gate 1 (and refund post-render). */
+  blocked_keywords: string[];
+  /** Stream categories to skip ('politics' | 'nsfw' | 'gambling' | …). */
+  blocked_categories?: string[];
+  /** Lowercased competitor brand names — SKIP if mentioned in chat/audio. */
+  blocked_competitor_brands?: string[];
+};
+
+/**
+ * Active dayparts. Each entry is a window in `"HH:MM-HH:MM TZ"` format
+ * (e.g. `"19:00-23:59 ART"`). Wrap-around past midnight is supported
+ * (e.g. `"23:00-02:00 ART"` matches `01:30 ART`).
+ */
+export type MandateDayparts = {
+  active: string[];
+};
+
+/**
+ * Free-text descriptions of moments the brand wants to bid on. Embedded
+ * once at boot for gate 2 (cosine similarity vs context_snapshot).
+ *
+ * Tradeoff: keeping these as `string[]` (not `{ text, weight }[]`) avoids
+ * over-engineering for MVP — equal weight is fine for 4 brands × 3-4
+ * contexts each. Revisit post-MVP if calibration needs per-context weighting.
+ */
+export type IdealContext = string;
+
+/**
+ * The gate-ladder schema extension. Sidecar to {@link BrandMandate} so the
+ * legal/financial mandate stays unchanged. Loader splits the YAML into
+ * (BrandMandate, BrandPrompt, MandateExtensions) — see brands/loader.ts.
+ *
+ * All fields optional: a mandate without extensions falls back to legacy
+ * behavior (no gate ladder, just BrandMandate.targeting + brand_safety).
+ */
+export type MandateExtensions = {
+  event_filters?: EventFilters;
+  brand_safety?: BrandSafetyExtended;
+  dayparts?: MandateDayparts;
+  ideal_contexts?: IdealContext[];
+};
+
+// ─── Stream metadata (C-02c) ─────────────────────────────────────────
+
+/**
+ * Per-stream config used by gate 1 (event_filters match) and as baseline
+ * context for gate 2 (embeddings). Loaded from
+ * `apps/web/src/lib/streams/<stream_id>.yaml`.
+ *
+ * Spec: docs/GATES.md §5.
+ */
+export type StreamMetadata = {
+  stream_id: string;
+  /** Twitch handle or platform-specific ID. */
+  streamer: string;
+  /** 'gaming' | 'just_chatting' | 'irl' | etc. — matched against EventFilters.preferred_categories. */
+  category: string;
+  /** Game title if applicable, else null. */
+  game: string | null;
+  language: string;
+  /** Daypart slugs (e.g. 'midday_arg', 'evening_arg') — informational, not gate-evaluated. */
+  expected_dayparts?: string[];
+  /** Topics the streamer plans to cover — used as gate-2 baseline if available. */
+  expected_topics?: string[];
+  /** Pre-rehearsed trigger words for demo (Bloque 3). Operator can use these to validate the pipeline. */
+  rehearsed_triggers?: { word: string; expected_mood: string }[];
+  audience?: {
+    expected_viewers_min?: number;
+    expected_viewers_max?: number;
+    primary_locale?: string;
+  };
+};
+
 // ─── Deal terms (multi-issue) ────────────────────────────────────────
 
 /**

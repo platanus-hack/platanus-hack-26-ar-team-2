@@ -107,6 +107,9 @@ event_filters:
     - gaming
     - just_chatting
   min_viewers: <int>               # gate 1: skip si stream.viewers < N
+  max_viewers: <int>               # gate 1: skip si stream.viewers > N (opcional)
+                                   #   úsalo en mandates community/intimate (e.g. MateBros)
+                                   #   que no quieren audiencias masivas.
   required_chat_keyword_any:       # gate 1: al menos uno presente en recent_keywords/audio_30s
     - <keyword>                    # opcional — usar solo cuando aplique
 
@@ -141,7 +144,9 @@ Los tipos canónicos (`StreamMetadata`, `EventFilters`, `BrandSafetyExtended`, `
 
 ## 4. Mandates calibrados — 4 ejemplos
 
-Estos 4 ilustran los perfiles representativos de mandate. Calibrados a **gaming + just_chatting es-AR genérico** (NO a un juego/talento específico — eso lo hace C-02d cuando el team confirme talento).
+Estos 4 ilustran los perfiles representativos de mandate. Calibrados al **demo del 2026-05-10 12:00 ART** (Bloque 3 del PITCH) sobre **gaming + just_chatting es-AR**.
+
+**Source of truth:** los YAMLs reales en `apps/web/src/lib/agents/brands/{cafetito,termoflex,pancho-rex,matebros}.yaml` — los snippets abajo son resumen didáctico. Los YAMLs ganan si hay diferencia.
 
 ### 4.1 ☕ CafetITO — premium energético (rol: adidas)
 
@@ -181,8 +186,8 @@ brand_safety:
   blocked_competitor_brands: [redbull, monster, speed]   # competidores energéticos
 dayparts:
   active:
-    - "07:00-11:00 ART"   # café de mañana, despertar épico
-    - "16:00-23:59 ART"   # tarde-noche gaming peak
+    # Calibrado para que CafetITO matchee en demo time (12:00 ART, Bloque 3 trigger 1).
+    - "11:00-23:59 ART"
 ideal_contexts:
   - "El streamer mete un clutch imposible y el chat explota"
   - "Comeback épico: venía perdiendo y da vuelta la partida"
@@ -291,7 +296,10 @@ brand_safety:
   blocked_competitor_brands: [mostaza, mcdonalds, burger_king]
 dayparts:
   active:
-    - "12:00-15:00 ART"     # almuerzo
+    # Calibrado: arranca 13:00 ART para que Pancho Rex SKIPee a las 12:00 (Bloque 3 trigger 1).
+    # GATES.md previo usaba 12:00 — descartado: hace al pancho matchear durante el demo y
+    # rompe la narrativa "no es lunch" del speaker.
+    - "13:00-15:00 ART"     # almuerzo corrido (no entra al inicio del lunch)
     - "20:00-02:00 ART"     # cena tarde + late-night gaming hambre
 ideal_contexts:
   - "Streamer charla relajado con el chat entre partidas"
@@ -330,9 +338,16 @@ tracking_url: "https://matebros.demo/addie"
 
 # extension (C-02b)
 event_filters:
-  required_any_tag: [celebration, social, chat_active, party, community, goal]
+  # IMPORTANTE: NO incluye high_energy/clutch — MateBros es momentos sociales,
+  # no momentos de adrenalina individual. Da el SKIP del trigger 1 del Bloque 3.
+  required_any_tag: [casual_chat, social, chat_active, celebration, party, community, fogón]
   preferred_categories: [gaming, just_chatting, irl]
-  min_viewers: 100      # MateBros prefiere community grande
+  min_viewers: 0
+  # max_viewers: NUEVO (extensión §3). El PITCH dice literal "audiencia muy grande
+  # para su mandate" — necesitamos que el SKIP coincida con la narrativa. MateBros
+  # prefiere fogón (íntimo), no estadio (masivo).
+  # TBD: ajustar pre-demo según viewer count real del canal Twitch del team (PD-07b).
+  max_viewers: 80
 brand_safety:
   blocked_keywords:
     - menor
@@ -351,7 +366,7 @@ ideal_contexts:
   - "Comunidad celebra logro común (raid, drop, milestone)"
 ```
 
-**Lugar en la escalera:** muy parecido a CafetITO en gate 1 (también pasa épica/celebration), pero embedding favorece momentos de **comunidad** sobre clutch individual. Si el momento es "1 jugador clava un tiro imposible solo", MateBros pasa gate 1 pero falla gate 2 (cosine ~0.4 vs ideal_contexts comunitarios). Si el momento es "todo el chat festeja juntos", MateBros pasa todos los gates y compite con CafetITO en gate 4.
+**Lugar en la escalera:** SKIPea en gate 1 cuando el trigger es high_energy (no incluye ese tag) o cuando viewers > max_viewers. Pasa gate 1 cuando el trigger es casual_chat/social y el viewer count es íntimo. Embedding (gate 2) favorece momentos de comunidad sobre clutch individual. Si el momento es "todo el chat festeja juntos", MateBros pasa todos los gates y compite con CafetITO solo en sus respectivos triggers (no chocan en mood).
 
 ---
 
@@ -411,6 +426,7 @@ Payload: ver `GateSkipReason` en `types.ts` (será agregado por C-08a).
 | gate1 | `outside_daypart` | `"04:00 ART"` | `🌭 Pancho Rex → SKIP gate1: fuera de horario (ahora 04:00, abre 12:00)` |
 | gate1 | `daily_cap_exceeded` | `"$50.10/$50"` | `☕ CafetITO → SKIP gate1: daily cap quemado` |
 | gate1 | `blocked_competitor_brand` | `"redbull"` | `☕ CafetITO → SKIP gate1: competidor mencionado en chat (redbull)` |
+| gate1 | `viewers_above_max` | `"viewers=180 > max=80"` | `🧉 MateBros → SKIP gate1: audiencia muy grande para su mandate (180 > 80)` |
 | gate2 | `cosine_below_threshold` | `"0.42 < 0.55"` | `🧉 MateBros → SKIP gate2: el momento no resuena (cosine 0.42)` |
 | gate3 | `triage_should_not_bid` | `null` | `🧉 MateBros → SKIP gate3: triage rechaza (Haiku)` |
 | gate4 | `sonnet_terms_violate_mandate` | `"bid > max_bid"` | `☕ CafetITO → SKIP gate4: sonnet quiso violar max_bid` |

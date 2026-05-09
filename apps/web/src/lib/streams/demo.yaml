@@ -1,0 +1,51 @@
+# Stream metadata para el demo (Platanus Hack BSAS, 2026-05-10 12:00 ART).
+# Lo consume gate1 al match contra event_filters de cada brand.
+# Ver docs/GATES.md §5.
+#
+# TBD: completar con valores reales cuando PD-07b confirme:
+#   - canal Twitch del equipo (handle, slug)
+#   - viewer count baseline esperado durante el demo
+#   - categoría exacta del stream
+# Lo de abajo son placeholders calibrados para que el sistema funcione si PD-07b
+# se atrasa. NO commitear como real-real — son default-safe.
+
+stream_id: demo-001
+streamer: "platanus_streamer"            # placeholder hasta PD-07b
+category: just_chatting                   # categoría amplia → más brands matchean
+game: null
+language: es-AR
+
+# Dayparts esperados — cuándo el stream va a estar al aire durante el hackaton.
+# El demo cae 12:00 ART → "midday_arg".
+expected_dayparts:
+  - midday_arg                            # cubre el demo
+  - evening_arg                           # cubre rehearsals previos
+
+# Topics que el speaker va a tocar durante el pitch (Bloques 1-5).
+# Útil para baseline de gate2 embedding cuando arranque la sesión.
+expected_topics:
+  - "demo de Addie en vivo"
+  - "agentes negociando ads en streams"
+  - "mandates firmados por las marcas"
+  - "escrow on-chain en USDC sobre Base"
+  - "matcher win-win-win streamer/marca/viewer"
+
+# Trigger words ensayadas del Bloque 3 — el operador del dashboard puede
+# usarlas para validar pre-demo que el pipeline detecta los moods correctos.
+# Ver docs/PITCH.md §"Notas de calibración".
+rehearsed_triggers:
+  - word: "ÉPICO"
+    expected_mood: high_energy
+  - word: "CLUTCH"
+    expected_mood: high_energy
+  - word: "TRANQUI"
+    expected_mood: casual_chat
+  - word: "FOGÓN"
+    expected_mood: casual_chat
+
+# Audience profile esperado para el demo. Ajustar pre-demo cuando PD-07b
+# confirme el viewer count real (impacta calibración de matebros.max_viewers).
+audience:
+  expected_viewers_min: 30
+  expected_viewers_max: 200
+  primary_locale: es-AR
