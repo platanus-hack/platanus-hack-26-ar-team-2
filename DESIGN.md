@@ -2,7 +2,7 @@
 
 **Fecha:** 2026-05-09
 **Hackatón:** Platanus Hack BSAS · track *agent money*
-**Demo:** domingo 2026-05-10
+**Demo:** domingo 2026-05-10 12:00
 **Equipo:** 4 ingenieros · ~22 hs efectivas
 **Repo:** [platanus-hack/platanus-hack-26-ar-team-2](https://github.com/platanus-hack/platanus-hack-26-ar-team-2)
 
@@ -654,12 +654,12 @@ main                         ← integraciones, mergeos en checkpoints
 
 ---
 
-## 11. Cronograma 24 horas
+## 11. Cronograma — 30 horas (sáb 06:00 → dom 12:00)
 
 ```
 SÁBADO
 ─────────────────────────────────────────────────────────────────────
-T+0h   16:00   Phase 0 — Setup compartido
+T+0h   06:00   Phase 0 — Setup compartido
                 • Repo + Next.js scaffold
                 • API keys (Anthropic, Gemini, Deepgram, ElevenLabs, Privy, Supabase, Alchemy)
                 • Supabase project + schema
@@ -668,32 +668,34 @@ T+0h   16:00   Phase 0 — Setup compartido
                 • 8 brand mandates definidos
                 • Tailwind theme
 
-T+2h   18:00   ✅ CHECKPOINT 1 — Phase 0 completa, todos arrancan tracks
+T+2h   08:00   ✅ CHECKPOINT 1 — Phase 0 completa, todos arrancan tracks
 
 T+2h-12h        Phase 1 — TRACKS PARALELOS
                 Cada dev en su rama, sin tocar a otros.
 
-T+12h  04:00   ✅ CHECKPOINT 2 — Tracks individuales done, merge a main
+T+12h  18:00   ✅ CHECKPOINT 2 — Tracks individuales done, merge a main
 
 T+12h-18h       Phase 2 — INTEGRACIÓN
                 Dev 1+3 (par): negociación → escrow.lock → render → release
                 Dev 2+4 (par): pipeline → context → dock preview
                 Dev 4: PRE-GEN ADS con ElevenLabs Creative (en background, ~1.5 hs)
+                (cruza medianoche del sábado al domingo)
 
-T+18h  10:00   ✅ CHECKPOINT 3 — End-to-end completo, merge final
+DOMINGO
+T+18h  00:00   ✅ CHECKPOINT 3 — End-to-end completo, merge final
 
 T+18h-22h       Phase 3 — POLISH + DEMO
                 Scripting demo flow, hotkeys (FORCE EVENT, FULL BREAK),
                 brand-safety triggers, coalición visible, cash-out con SMS,
                 backup VOD pre-grabado, pitch slides, 2 ensayos completos.
 
-DOMINGO
-T+22h  14:00   ✅ CHECKPOINT 4 — Demo grabable lista
+T+22h  04:00   ✅ CHECKPOINT 4 — Demo grabable lista
 
-T+22h-24h       Phase 4 — FINAL
-                Sleep + shower + arrive at venue + ensayo técnico final.
+T+22h-30h       Phase 4 — FINAL (8h, incluye buffer)
+                Power nap + shower + arrive at venue + setup físico
+                + test wifi + ensayo técnico final.
 
-T+24h  16:00   DEMO LIVE 🎤
+T+30h  12:00   DEMO LIVE 🎤
 ```
 
 ---
