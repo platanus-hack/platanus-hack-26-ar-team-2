@@ -25,6 +25,7 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 | Andy | POC-NEG | Multi-agent negotiation POC bajo `poc/negotiation/` (foundation para C-08..C-13: valuation CPM-based, concession curves Faratin, AC_combi gate, BATNA, multi-issue exclusivity) | 2026-05-09 |
 | Lucas | POC-PIPE | Pipeline POC standalone bajo `poc/pipeline/` (foundation para B-01..B-07: docker-compose nginx-rtmp + webhooks on_publish/on_publish_done + ffmpeg audio/frames + tmi.js chat + context tick en terminal) | 2026-05-09 |
 | Franco | A-01 | `contracts/src/AddieEscrow.sol` ~80 LoC — `lock(placementId, payee, amount)` / `release` / `refund` + eventos `Locked`/`Released`/`Refunded`, USDC en Base | 2026-05-09 09:33 |
+| Franco | A-02 | Tests Foundry happy path + reverts en `contracts/test/AddieEscrow.t.sol` (mock USDC, lock/release/refund + revert paths + event asserts) | 2026-05-09 09:48 |
 | Jere | D-03 | Browser Dock `/dock`: balance creator + recent placements + hotkeys FORCE EVENT / FULL BREAK | 2026-05-09 |
 
 ---
@@ -76,7 +77,7 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 ### Track A · On-chain (sugerido: Franco)
 
 - 🟡 **A-01** `contracts/src/AddieEscrow.sol` (~80 LoC) con `lock(placementId, payee, amount)`, `release(placementId)`, `refund(placementId)` + eventos `Locked`/`Released`/`Refunded` — deps: P0-03
-- ⬜ **A-02** Tests Foundry happy path + reverts en `contracts/test/AddieEscrow.t.sol` — deps: A-01
+- 🟡 **A-02** Tests Foundry happy path + reverts en `contracts/test/AddieEscrow.t.sol` — deps: A-01
 - ⬜ **A-03** `contracts/script/Deploy.s.sol` + deploy a Base mainnet — deps: A-02, P0-13, P0-21
 - ⬜ **A-04** `[INFRA]` Anotar address del contrato deployed en `apps/web/src/lib/chain/escrow.ts` como const + verificar en basescan — deps: A-03
 - ⬜ **A-05** `scripts/seed-wallets.ts` — genera 9 Privy smart wallets (8 brand + 1 platform owner) y persiste addresses en `accounts` — deps: P0-11, P0-12, P0-04
