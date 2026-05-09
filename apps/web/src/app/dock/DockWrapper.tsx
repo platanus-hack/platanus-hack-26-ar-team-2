@@ -1,7 +1,8 @@
 "use client";
 
+import type { PlacementRow } from "@/lib/db";
 import DockClient, { type DockHooks, type RecentPlacement } from "@/components/dock/DockClient";
-import { useRef } from "react";
+import { useMemo } from "react";
 
 const DEMO_PLACEMENTS: RecentPlacement[] = [
   {
@@ -46,11 +47,40 @@ function makeDemoHooks(): DockHooks {
   };
 }
 
-export default function DockWrapper({ demo }: { demo: boolean }) {
-  const hooksRef = useRef<DockHooks | undefined>(demo ? makeDemoHooks() : undefined);
+function makeLiveHooks(rows: PlacementRow[]): DockHooks {
+  return {
+    onPlacement: (handler) => {
+      rows.forEach((r) =>
+        handler({
+          placement_id: r.id,
+          brand: r.brand_display_name,
+          ad_label: r.ad_variant_name,
+          amount_usdc: r.amount_usdc_cents / 100,
+          zone: r.zone,
+          status: r.status as RecentPlacement["status"],
+          ts: new Date(r.created_at).getTime(),
+        }),
+      );
+      return () => {};
+    },
+  };
+}
+
+export default function DockWrapper({
+  demo,
+  recentPlacements,
+}: {
+  demo: boolean;
+  recentPlacements: PlacementRow[];
+}) {
+  const hooks = useMemo(
+    () => (demo ? makeDemoHooks() : makeLiveHooks(recentPlacements)),
+    [demo, recentPlacements],
+  );
+
   return (
     <main className="p-0">
-      <DockClient hooks={hooksRef.current} />
+      <DockClient hooks={hooks} />
     </main>
   );
 }

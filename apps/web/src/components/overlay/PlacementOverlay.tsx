@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface Placement {
   placement_id: string;
@@ -19,16 +19,16 @@ interface Props {
 
 const FADE_MS = 300;
 
-export default function PlacementOverlay({ streamId: _streamId, onPlacement }: Props) {
+export default function PlacementOverlay({ streamId, onPlacement }: Props) {
   const [current, setCurrent] = useState<Placement | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const show = (p: Placement) => {
+  const show = useCallback((p: Placement) => {
     if (timerRef.current) clearTimeout(timerRef.current);
     setCurrent(p);
     timerRef.current = setTimeout(() => setCurrent(null), p.duration_ms);
-  };
+  }, []);
 
   useEffect(() => {
     if (!onPlacement) return;
@@ -37,8 +37,7 @@ export default function PlacementOverlay({ streamId: _streamId, onPlacement }: P
       unsub();
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onPlacement]);
+  }, [onPlacement, show]);
 
   useEffect(() => {
     if (current && videoRef.current) {
@@ -48,7 +47,7 @@ export default function PlacementOverlay({ streamId: _streamId, onPlacement }: P
   }, [current]);
 
   return (
-    <div className="fixed inset-0 pointer-events-none overflow-hidden">
+    <div className="fixed inset-0 pointer-events-none overflow-hidden" data-stream-id={streamId}>
       <AnimatePresence>
         {current && (
           <motion.div
