@@ -1,0 +1,24 @@
+{
+  "name": "manager-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Addie manager-agent (C-08m). Subscribes to context_chunks INSERTs via Supabase Realtime, applies a 2-stage filter (semantic Stage1 + Claude Haiku Stage2), and POSTs a render event to the creator's SSE stream.",
+  "scripts": {
+    "dev": "node --env-file=.env.local --import tsx src/index.ts",
+    "smoke": "node --env-file=.env.local --import tsx scripts/smoke-insert.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.40.1",
+    "@supabase/supabase-js": "^2.105.4",
+    "pg": "^8.20.0",
+    "yaml": "^2.6.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/pg": "^8.20.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5"
+  }
+}
