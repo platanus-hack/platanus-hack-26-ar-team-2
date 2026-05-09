@@ -24,6 +24,7 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 |---|---|---|---|
 | Lucas | POC-PIPE | Pipeline POC standalone bajo `poc/pipeline/` (foundation para B-01..B-07: docker-compose nginx-rtmp + webhooks on_publish/on_publish_done + ffmpeg audio/frames + tmi.js chat + context tick en terminal) | 2026-05-09 |
 | Jere | C-02 | 8 mandate templates YAML (brands/*.yaml) + loader TypeScript | 2026-05-09 |
+| Andy | A-11 | Sync 4 env vars Track A (ALCHEMY_RPC_URL, PRIVY_APP_ID, NEXT_PUBLIC_PRIVY_APP_ID, PRIVY_APP_SECRET) → Vercel × 3 envs | 2026-05-09 |
 
 ---
 
