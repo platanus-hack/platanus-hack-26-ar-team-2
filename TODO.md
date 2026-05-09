@@ -25,6 +25,7 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 | Andy | POC-NEG | Multi-agent negotiation POC bajo `poc/negotiation/` (foundation para C-08..C-13: valuation CPM-based, concession curves Faratin, AC_combi gate, BATNA, multi-issue exclusivity) | 2026-05-09 |
 | Lucas | POC-PIPE | Pipeline POC standalone bajo `poc/pipeline/` (foundation para B-01..B-07: docker-compose nginx-rtmp + webhooks on_publish/on_publish_done + ffmpeg audio/frames + tmi.js chat + context tick en terminal) | 2026-05-09 |
 | Franco | A-01 | `contracts/src/AddieEscrow.sol` ~80 LoC — `lock(placementId, payee, amount)` / `release` / `refund` + eventos `Locked`/`Released`/`Refunded`, USDC en Base | 2026-05-09 09:33 |
+| Jere | D-01 | Browser Source overlay `apps/web/src/app/overlay/[id]/page.tsx`: video autoplay + QR corner + framer-motion fade-in | 2026-05-09 |
 
 ---
 
@@ -122,7 +123,7 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 
 ### Track D · UI (sugerido: Jere)
 
-- ⬜ **D-01** Browser Source overlay `apps/web/src/app/overlay/[id]/page.tsx`: `<video autoplay>` + `<img class="qr-corner">` + framer-motion fade-in — deps: P0-02
+- 🟡 **D-01** Browser Source overlay `apps/web/src/app/overlay/[id]/page.tsx`: `<video autoplay>` + `<img class="qr-corner">` + framer-motion fade-in — deps: P0-02
 - ⬜ **D-02** PlacementRenderer component que consume placement events vía Supabase Realtime y renderiza — deps: D-01, C-14
 - ⬜ **D-03** Browser Dock `apps/web/src/app/dock/page.tsx`: balance del creator + recent placements + hotkeys (FORCE EVENT, FULL BREAK) — deps: P0-02, A-08
 - ⬜ **D-04** Inventory editor `apps/web/src/app/settings/inventory/page.tsx` (CRUD zonas/floors/max_duration) — deps: P0-02, C-03
