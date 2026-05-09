@@ -36,7 +36,7 @@ Mapeo dev → track (de [`CLAUDE.md`](../../CLAUDE.md)):
    - Las `[INFRA]` se hacen *just-in-time* — solo recomendalas si la tarea siguiente del flujo las necesita ya
 
 3. **Chequeá el reparto entre devs (mirá la tabla *Currently working on*):**
-   - Si el dev del arg ya tiene una fila activa, primero pensá si la siguiente tarea de su track está disponible (deps cumplidas) y no choca con archivos del claim activo. Si **sí** hay algo paralelizable, recomendalo con el bloque de claim en modo **worktree** (ver §5). Si **no**, sugerile terminar/desbloquear lo suyo primero (una línea, no insistas).
+   - Si el dev del arg ya tiene una fila activa, primero pensá si la siguiente tarea de su track está disponible (deps cumplidas) y no choca con archivos del claim activo. Si **sí** hay algo paralelizable, recomendalo (el claim ya va siempre en worktree, ver §5). Si **no**, sugerile terminar/desbloquear lo suyo primero (una línea, no insistas).
    - Si otro dev ya está laburando algo de la track pedida, evitá recomendar tareas que pisen las mismas deps/archivos — ofrecé la siguiente tarea no-solapada de esa track o una transversal que la complemente.
    - Si una track está **vacía y bloqueada** (devs ociosos esperando deps de Phase 0), recomendá agarrar la dep de Phase 0 que más desbloquea aunque sea fuera del track pedido.
    - Si el reparto se desbalanceó (3 devs amontonados en una track, 1 solo en la suya), notalo en una línea de "estado del equipo".
@@ -49,11 +49,7 @@ Mapeo dev → track (de [`CLAUDE.md`](../../CLAUDE.md)):
 
 5. **Salida (formato corto, en español rioplatense, sin emojis salvo los de estado del TODO):**
 
-   El bloque de claim tiene **dos variantes** según el estado del dev:
-
-   **A) Variante normal** (el dev no tiene claim activo en *Currently working on*): checkout sobre la track branch existente.
-
-   **B) Variante worktree** (el dev YA tiene un claim activo o ya hay worktrees adicionales en `git worktree list`): se asume que está corriendo otra tarea en paralelo en otro chat, así que evitamos pisar el workdir actual creando un worktree nuevo. La feature branch se llama `feat/<task-id-lower>-<slug>` (ej. `feat/p0-04-supabase-init`).
+   El bloque de claim **siempre usa worktree** (decisión de equipo: cada tarea corre en su propio worktree para que múltiples chats / Claude Codes puedan paralelizar sin pisarse, y para uniformar el flow). La feature branch se llama `feat/<task-id-lower>-<slug>` (ej. `feat/p0-04-supabase-init`). Si el dev no tiene claims paralelos hoy, igual usás worktree — el costo es bajo y el flow queda consistente.
 
    Formato:
 
@@ -69,21 +65,14 @@ Mapeo dev → track (de [`CLAUDE.md`](../../CLAUDE.md)):
       - <Task-ID> — <razón en media línea>
       - <Task-ID> — <razón en media línea>
 
-   📋 Claim (variante A — sin paralelo):
-      git checkout main && git pull --rebase origin main
-      # editá TODO.md: agregá fila a "Currently working on" + estado 🟡 en <Task-ID>
-      git add TODO.md && git commit -m "claim: <Nombre> arranca <Task-ID> — <scope corto>"
-      git push origin main
-      git checkout track/<x>     # o: git checkout -b feat/<short-desc> si es transversal
-
-   📋 Claim (variante B — paralelo con worktree, usar si ya tenés <Task-ID-activo> en otro chat):
-      # 1) lock en main (desde el workdir principal, NO desde el worktree del otro chat):
+   📋 Claim (worktree por defecto):
+      # 1) lock en main (desde el workdir principal):
       git checkout main && git pull --rebase origin main
       # editá TODO.md: agregá fila a "Currently working on" + estado 🟡 en <Task-ID>
       git add TODO.md && git commit -m "claim: <Nombre> arranca <Task-ID> — <scope corto>"
       git push origin main
 
-      # 2) worktree separado para esta tarea (no pisa el chat de <Task-ID-activo>):
+      # 2) worktree separado para esta tarea (no pisa otros chats):
       git worktree add ../<repo>-<task-id-lower> main -b feat/<task-id-lower>-<slug>
       cd ../<repo>-<task-id-lower>
       # ← abrí Claude Code acá para esta tarea
@@ -100,8 +89,6 @@ Mapeo dev → track (de [`CLAUDE.md`](../../CLAUDE.md)):
       git worktree remove ../<repo>-<task-id-lower>
       git branch -d feat/<task-id-lower>-<slug>   # ya está mergeada a main
    ```
-
-   Mostrá **solo una variante** en la respuesta — la que corresponda al estado del dev. No copies las dos. La sección 🧹 va junto con la variante B, no con la A.
 
 6. **Reglas de la respuesta:**
    - **No hagas el claim vos** — solo recomendás. El humano firma su propio claim.
