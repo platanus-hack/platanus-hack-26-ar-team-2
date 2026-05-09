@@ -115,6 +115,8 @@ Dos agents AI negocian en tiempo real durante un stream en vivo. El brand-agent 
 
 ## 3. Diagrama de flujo — vida de un placement
 
+> **Nota — ejemplo ilustrativo.** El timeline de abajo usa nombres de marca reales (adidas/nike/mp) porque corresponde al spec técnico pre-pivote. El **demo final** usa marcas inventadas (☕ CafetITO, 🧊 TermoFlex, 🌭 Pancho Rex, 🧉 MateBros) y la narrativa externa es de **matching win-win-win** en vez de subasta competitiva — ver `docs/PITCH.md` y `docs/DEMO_RUNBOOK.md`. El mecanismo interno (auction con deadline + standing offers + soft holds) **no cambia**: es el plumbing que implementa el matching. Solo cambia cómo se cuenta hacia afuera.
+
 ```
 T+0.0s    Coscu mete gol en FIFA
 ─────────────────────────────────────────────────────────────────────
@@ -421,6 +423,57 @@ En subastas automáticas los brand-agents pueden ofertar en `lower_third` o `bot
 **Cadencia esperada en demo:** ~6 subastas en 5 min (una por momento épico) = ~6 placements = 12 txs on-chain (lock + release por placement).
 
 **Post-MVP:** reemplazar soft hold por **EIP-3009 `transferWithAuthorization`** (USDC nativo). Cada standing offer firmada como auth con `validBefore = T+10s`. Hold real on-chain, no centralizado, auditable. Ver §13.
+
+### Pre-LLM gate ladder — cómo cada brand decide MATCH/SKIP barato
+
+Ver `docs/GATES.md` para la spec completa. Resumen:
+
+Cuando un `ContextTick` llega al brand-agent worker, no se llama directo al LLM. Pasa por una **escalera de 4 gates** que filtran progresivamente, ordenados por costo/latencia ascendente. La marca solo "habla" (gasta tokens de LLM) si su mandate y su contexto sugieren que el momento le calza.
+
+```
+ContextTick + BrandMandate
+        │
+        ▼
+┌──────────────────────────────────────────────────────┐
+│ gate1 · MANDATE DETERMINÍSTICO   ~0ms / $0           │
+│ event_filters, dayparts, blocked_keywords,           │
+│ blocked_competitor_brands, min_viewers               │
+│ → SKIP rápido si el momento contradice el mandate    │
+└────────────────┬─────────────────────────────────────┘
+                 │ pasa
+                 ▼
+┌──────────────────────────────────────────────────────┐
+│ gate2 · EMBEDDING SIMILARITY     ~10ms / ~$0.0001    │
+│ cosine(embed(context), embed(ideal_contexts))        │
+│ → SKIP si fit semántico es muy bajo                  │
+└────────────────┬─────────────────────────────────────┘
+                 │ pasa
+                 ▼
+┌──────────────────────────────────────────────────────┐
+│ gate3 · HAIKU TRIAGE             ~200ms / ~$0.0008   │
+│ Claude Haiku decide go/no-go con razonamiento        │
+│ → SKIP con reason si el LLM cheap dice que no        │
+└────────────────┬─────────────────────────────────────┘
+                 │ pasa
+                 ▼
+┌──────────────────────────────────────────────────────┐
+│ gate4 · SONNET DECISIÓN          ~600ms / ~$0.009    │
+│ Claude Sonnet → BrandAgentDecision con bid + msg    │
+│ → bid concreto entra a la subasta                    │
+└──────────────────────────────────────────────────────┘
+```
+
+**Bypass del default bidder.** Brands con `always_bid_floor: true` (ej. TermoFlex / mp) saltean gate2/3/4: si pasan gate1 (no es brand-unsafe), emiten directo un bid al floor con `opening_message` templateado, sin LLM. Cero costo, latencia <5ms, fill garantizado.
+
+**Cost/latency budget esperado** (8 brands, 1 auction):
+- Sin escalera (todos directo a Sonnet): ~$0.04 + 1.5s p95.
+- Con escalera (3-4 brands llegan a Sonnet en promedio): ~$0.01 + 0.8s p95.
+
+**Eventos de logging.** Cada SKIP en cualquier gate emite un `GateSkipReason` event al topic `auction:<auction_id>:gate-skip` con `human_message` en es-AR — esto es lo que la UI didáctica del demo muestra ("☕ CafetITO → SKIP gate1: este momento no es para mí, hoy no hay clutch"). Ver `docs/GATES.md §6`.
+
+**Schema del mandate extendido.** `BrandMandate` adopta nuevos campos opcionales: `event_filters` (required_any_tag, preferred_categories, min_viewers, required_chat_keyword_any), `brand_safety` (blocked_keywords, blocked_categories, blocked_competitor_brands), `dayparts.active`, `ideal_contexts` (free-text para embeddings). Backwards-compatible con los YAMLs actuales — si no están seteados, el gate se saltea.
+
+Tasks de implementación: `C-08a` (gate1 mandate filter) → `C-08b` (gate2 embeddings) → `C-08c` (gate3 Haiku) → `C-08d` (Sonnet integration con outputs de gates anteriores como context).
 
 ---
 
