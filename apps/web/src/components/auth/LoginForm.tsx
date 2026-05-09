@@ -1,11 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "@/lib/auth-client";
+
+function safeNext(raw: string | null): string {
+  // Allow only same-origin paths to prevent open-redirect.
+  if (raw && raw.startsWith("/") && !raw.startsWith("//")) return raw;
+  return "/dashboard";
+}
 
 export default function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = safeNext(searchParams.get("next"));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -21,7 +29,7 @@ export default function LoginForm() {
       setError(err.message ?? "No se pudo iniciar sesión");
       return;
     }
-    router.push("/");
+    router.push(next);
     router.refresh();
   }
 

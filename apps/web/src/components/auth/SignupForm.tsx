@@ -1,11 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signUp } from "@/lib/auth-client";
+
+function safeNext(raw: string | null): string {
+  if (raw && raw.startsWith("/") && !raw.startsWith("//")) return raw;
+  return "/dashboard";
+}
 
 export default function SignupForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = safeNext(searchParams.get("next"));
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -23,7 +30,7 @@ export default function SignupForm() {
       return;
     }
     // Better Auth signs in automatically on signup unless requireEmailVerification.
-    router.push("/");
+    router.push(next);
     router.refresh();
   }
 

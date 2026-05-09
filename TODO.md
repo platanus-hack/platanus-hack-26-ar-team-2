@@ -24,7 +24,6 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 |---|---|---|---|
 | Lucas | POC-PIPE | Pipeline POC standalone bajo `poc/pipeline/` (foundation para B-01..B-07: docker-compose nginx-rtmp + webhooks on_publish/on_publish_done + ffmpeg audio/frames + tmi.js chat + context tick en terminal) | 2026-05-09 |
 | Jere | C-02 | 8 mandate templates YAML (brands/*.yaml) + loader TypeScript | 2026-05-09 |
-| Andy | AUTH-DASHBOARD | `/dashboard` route + auth gate (Next middleware cookie-check sobre `/dashboard/*` + server-side session validation en page). Login/Signup redirect a `/dashboard` post-success. Existing `/dock` `/settings` `/brands` quedan sin gate por ahora — task separada. | 2026-05-09 |
 | Franco | A-07 | Cliente viem en `apps/web/src/lib/chain/viem.ts` (publicClient Base mainnet desde ALCHEMY_RPC_URL + walletClient factory por brand) | 2026-05-09 |
 
 ---
