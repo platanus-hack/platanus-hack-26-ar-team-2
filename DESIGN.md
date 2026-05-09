@@ -174,6 +174,182 @@ Demo de 5 min con ~6 placements = ~12 txs visibles en basescan.
 
 La negociación no funciona como un protocolo "sí/no" donde los agents tienen que llegar a un acuerdo explícito. Es una **subasta con deadline duro de 5s** sobre standing offers que se actualizan turno a turno.
 
+### Tres agentes
+
+Tres roles agénticos, todos LLM-powered, cada uno con su propio prompt + tooling:
+
+| Agent | Cuántos | Modelo | Trigger | Job |
+|---|---|---|---|---|
+| **Manager** | 1 por stream | Claude Haiku 4.5 | tick filtrado por cheap intensity (B-07a) | Decide si el momento amerita pautar (auctionable). Pre-flag de brand-safety. Sugiere zonas + duración. |
+| **Brand-agent** | 8 (uno por marca) | Claude Haiku 4.5 | inicio de auction | Hunt + bid + counter-response con curva de concesión. Walk-away discipline. |
+| **Streamer-agent** | 1 por creator | Claude Sonnet 4.6 | inicio de auction (parallel batched) | Counter-batched a todas las ofertas, picks single winner. Defiende inventario. |
+
+El **Manager** es el filtro económico: protege costos LLM (8 brand-agents corriendo en cada tick sería ~$3-10/min) y la experiencia del viewer (no pautar cada 5 segundos). Los **Brand-agents** son cazadores con disciplina de mandate. El **Streamer-agent** es defensor de inventario con visión global.
+
+### Process topology — qué corre dónde
+
+```
+LAPTOP / VPS BACKEND (un solo host físico para el demo)
+├── nginx-rtmp (Docker container)
+│   recibe RTMP de OBS, dispara on_publish/on_publish_done webhooks
+│
+├── pipeline orchestrator
+│   (Node, port de poc/pipeline → apps/web/src/lib/pipeline/)
+│   ↳ ffmpeg → ElevenLabs Scribe v2 (audio) + Gemini Flash (frame) + tmi.js (chat)
+│   ↳ ContextTick cada 1s
+│   ↳ cheap_intensity = score(chat_spike, sentiment, audio_caps, audience)  // B-07a, sin LLM
+│   ↳ supabase.realtime.broadcast('context:<stream_id>', tick)
+│
+├── manager-worker (proceso Node, ~50 LoC, apps/manager-worker/)  // C-08m
+│   ↳ supabase.channel('context:<stream_id>').on('broadcast', { event: 'tick' }, …)
+│   ↳ filtra cheap_intensity > 0.5 + cooldown_ok (30s post-auction)
+│   ↳ await managerDecide(tick)  → Claude Haiku
+│   ↳ if decision.should_auction:
+│       POST /api/auctions/run  { tick, manager_decision }
+│
+└── Next.js (apps/web, deployable a Vercel)
+    /api/stream/{on-publish,on-publish-done}      ← arrancan/limpian el orchestrator (B-03)
+    /api/auctions/run                              ← runs full auction (sync, ~5-8s)  (C-14)
+    /api/q/[placement]                             ← QR redirect + tracking (C-17)
+    /overlay/[stream_id]                           ← Browser Source overlay (D-01)
+    /dock                                          ← OBS Browser Dock (D-03)
+    /demo-display                                  ← pantalla principal del demo (D-09)
+    /brands/[brandId]                              ← brand console (D-06)
+
+LAPTOP STREAMER (uno del equipo, Coscu-test)
+├── OBS (publica RTMP a backend)
+├── Browser Source overlay (loads /overlay/<stream_id>)
+└── OBS Browser Dock (loads /dock)
+```
+
+**Por qué Manager-as-worker en vez de inline en el pipeline:** mantiene la separación 1-rol-1-proceso (el pitch dice "tres agentes"; los hacemos visibles), usa Supabase Realtime de verdad como transporte, y deja el pipeline puro (solo ingest + emit). Trade-off: un proceso más para lanzar en el demo. Para producción multi-stream, manager-worker se replica fácil.
+
+### Event flow — Supabase Realtime topics + payloads
+
+Cinco eventos distintos viajan por el sistema. Tres por Supabase Realtime broadcast, uno por HTTP POST, uno por watch del contrato on-chain.
+
+```
+1. ContextTick           — every 1s                               ◀ pipeline → Realtime
+   topic     'context:<stream_id>'
+   producer  pipeline orchestrator (B-07)
+   consumers manager-worker  (C-08m)
+             /demo-display    (live debug feed, D-09)
+   payload {
+     stream_id, ts_ms,
+     audio_30s, audio_partial,
+     frame_summary, scene_type, energy_level, mood_tags, on_screen_text,
+     bw_effective_kbps, video_meta, audio_meta,
+     chat_velocity_now, chat_velocity_baseline, recent_keywords,
+     viewer_count, sentiment,
+     cheap_intensity         // [0..1] computed inline by B-07a
+   }
+
+2. ManagerDecision       — rare (~6 / 5min)                       ◀ manager-worker → HTTP
+   transport HTTP POST (sin Realtime topic — request/response sync)
+   producer  manager-worker
+   consumer  /api/auctions/run
+   payload {
+     stream_id,
+     tick: <ContextTick que disparó>,
+     manager_decision: {
+       should_auction: true,
+       intensity_label: 'epic'|'building'|'rage'|'mundane',
+       brand_safety_pre_flag: string|null,
+       recommended_zones: ['lower_third'|'bottom_right_corner'][],
+       recommended_max_duration_s: number,
+       reason: string         // español, ≤2 oraciones, audit
+     }
+   }
+
+3. AuctionStarted        — immediately on accept                  ◀ /api/auctions/run → Realtime
+   topic     'auction:<stream_id>'
+   producer  /api/auctions/run
+   consumers /demo-display (chat columnas)
+             /dock (saldo updates)
+   payload {
+     auction_id, stream_id, tick, manager_decision, started_at_ms,
+     market_signals: {
+       intensity_label, intensity_multiplier,
+       fair_value_usdc:        { lower_third, bottom_right_corner },
+       dynamic_reserve_usdc:   { lower_third, bottom_right_corner },
+       streamer_aspiration_usdc:{ lower_third, bottom_right_corner }
+     },
+     brands_evaluated: 8
+   }
+
+4. NegotiationTurn       — multiple per auction (~10-20 turns)    ◀ /api/auctions/run → Realtime
+   topic     'auction:<auction_id>:turn'
+   producer  /api/auctions/run (orchestrator interno)
+   consumer  /demo-display (chat de negociación en vivo)
+   payload {
+     auction_id, round, ts_ms,
+     from: 'brand'|'streamer', brand_id,
+     action: 'open'|'counter'|'accept'|'reject'|'walk',
+     message,                  // español, ≤25 palabras
+     terms: { bid_usdc, duration_s, zone, exclusivity_s? }?,
+     curve_target_usdc?,       // audit: target del concession curve
+     tactic?,                  // streamer-side: PLAY_BIDDERS / ANCHOR_ABOVE_RESERVE / etc.
+     override?                 // si AC_combi gate disparó (LLM trató de violar RP)
+   }
+
+5. AuctionSettled        — one per auction                        ◀ /api/auctions/run → Realtime
+   topic     'auction:<stream_id>:settled'
+   producer  /api/auctions/run
+   consumers /demo-display (winner banner)
+             /dock (balance actualizado)
+             /brands/<winner>/audit (toca refresh de la lista)
+   payload {
+     auction_id, stream_id, settled_at_ms,
+     winner: {
+       brand_id, terms, reason,
+       placement_id,           // FK a placements row
+       escrow_lock_tx_hash     // basescan link
+     } | null,                 // null si no hubo deal (pasa raro con default bidder)
+     rejected: [{ brand_id, reason }],
+     total_revenue_usdc,
+     metrics: {
+       total_rounds, total_llm_calls, ac_overrides_fired
+     }
+   }
+
+6. PlacementRendering    — overlay arranca el render              ◀ /api/auctions/run → Realtime
+   topic     'placement:<stream_id>'
+   producer  /api/auctions/run (post escrow.lock exitoso)
+   consumer  Browser Source overlay (/overlay/<stream_id>)
+   payload {
+     placement_id, ad_url, qr_url, zone,
+     duration_ms, brand_id, start_at_ms
+   }
+
+7. (on-chain)            — Locked / Released / Refunded events    ◀ AddieEscrow → viem watch
+   producer  AddieEscrow.sol on Base
+   consumer  TxFeed component (apps/web/src/components/demo/TxFeed.tsx, A-10)
+   payload   per-event ABI (placementId, payee, amount, txHash, blockNumber)
+```
+
+### Salience gate — anti-spam + cost ceiling
+
+Pipeline calcula `cheap_intensity` cada tick (heurística sin LLM, B-07a): chat velocity spike + sentiment + audio salience + audience size. **Solo ticks con `cheap_intensity > 0.5` despiertan al manager-agent**. El manager filtra más con su propia decisión LLM.
+
+Cifras esperadas (escenario fifa_goal en demo):
+
+| Etapa | Volumen / 5min | Costo |
+|---|---|---|
+| Ticks emitidos por pipeline | 300 (1/s) | $0 — heurística sin LLM |
+| Pasan cheap_intensity > 0.5 | ~30-50 | $0 |
+| Pasan también el cooldown (30s post-auction) | ~6-10 | — |
+| Manager LLM calls (Haiku) | ~6-10 | ~$0.01 total |
+| Auctions disparadas (~50% de manager YES) | ~6 | ~$0.60 total (~$0.10 c/u) |
+| **Total demo** | — | **~$0.61 USD** |
+
+### Cooldowns y fail-modes
+
+- Después de un `AuctionSettled`, el manager-worker setea `cooldown = now + 30s`. Cualquier tick recibido en ese período se ignora (anti-spam visual + ahorro LLM).
+- Si `managerDecide()` falla (LLM error, timeout): **fail-closed** → `should_auction = false`. Mejor perder un placement que disparar uno sin verificar brand-safety pre-flag.
+- Si `/api/auctions/run` está mid-flight cuando llega un nuevo trigger del manager: **drop el nuevo** (el cooldown del manager lo absorbe igual al settlement).
+- Si `escrow.lock()` falla on-chain post-settlement: fallback al runner-up (ver C-12). Si runner-up también falla: skip placement (el momento se pierde, no se rompe el demo).
+- Si la conexión Realtime del manager se cae: reconnect con backoff (Supabase JS lo hace solo); ticks perdidos durante reconnect = placements perdidos, aceptable.
+
 ### Mecánica
 
 ```
