@@ -7,26 +7,26 @@ import DockClient, { type DockHooks, type RecentPlacement } from "@/components/d
 const DEMO_PLACEMENTS: RecentPlacement[] = [
   {
     placement_id: "demo-1",
-    brand: "GamerGear AR",
-    ad_label: "banner_epic",
-    amount_usdc: 2.40,
+    brand: "☕ CafetITO",
+    ad_label: "epic_goal_lower",
+    amount_usdc: 1.80,
     zone: "lower_third",
     status: "released",
     ts: Date.now() - 120_000,
   },
   {
     placement_id: "demo-2",
-    brand: "FitMax Argentina",
-    ad_label: "pantalla_completa",
-    amount_usdc: 4.80,
+    brand: "🧊 TermoFlex",
+    ad_label: "premium_takeover",
+    amount_usdc: 5.20,
     zone: "fullscreen_takeover",
     status: "released",
     ts: Date.now() - 45_000,
   },
   {
     placement_id: "demo-3",
-    brand: "PixelBros Studio",
-    ad_label: "logo_esquina",
+    brand: "🧊 TermoFlex",
+    ad_label: "corner_logo_persistent",
     amount_usdc: 0.20,
     zone: "bottom_right_corner",
     status: "locked",
@@ -77,6 +77,7 @@ export default function DockWrapper({
     () => (demo ? makeDemoHooks() : makeLiveHooks(recentPlacements)),
     [demo, recentPlacements],
   );
+
 
   return (
     <main className="p-0">

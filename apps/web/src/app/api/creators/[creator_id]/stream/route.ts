@@ -31,6 +31,12 @@ type RenderEvent = {
   creator_id: string;
   message: string;
   created_at: string;
+  /**
+   * 'render' = generic message from POST /render (default).
+   * 'raw'    = full Supabase chunk JSON dump from manager-tick (firehose, every 5s).
+   * 'brand'  = brand placement winner from Stage1+Stage2 in manager-tick (gated).
+   */
+  kind?: "render" | "raw" | "brand";
   zone?: "lower_third" | "corner" | "fullscreen";
   asset_url?: string;
   asset_type?: "video" | "image";
@@ -79,12 +85,12 @@ export async function GET(
       // 2. Catch-up: replay anything created after `since` (or undelivered).
       try {
         const catchupQuery = since
-          ? `select id, creator_id, message, created_at
+          ? `select id, creator_id, message, created_at, kind
                from render_events
               where creator_id = $1 and created_at > (select created_at from render_events where id = $2)
               order by created_at asc
               limit 50`
-          : `select id, creator_id, message, created_at
+          : `select id, creator_id, message, created_at, kind
                from render_events
               where creator_id = $1 and delivered_at is null
               order by created_at asc
@@ -122,7 +128,7 @@ export async function GET(
         const eventId = n.payload.slice(colonIdx + 1, colonIdx2 > -1 ? colonIdx2 : undefined);
         try {
           const r = await client.query<RenderEvent>(
-            "select id, creator_id, message, created_at from render_events where id = $1",
+            "select id, creator_id, message, created_at, kind from render_events where id = $1",
             [eventId],
           );
           if (r.rows[0]) await pushEvent(r.rows[0]);

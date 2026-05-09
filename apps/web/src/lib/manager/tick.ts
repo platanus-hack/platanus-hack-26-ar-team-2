@@ -106,10 +106,52 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
       }),
     );
 
-    // 2. Last emit timestamp (cooldown anchor)
+    // EVERY tick → emit a `raw` render_event with the full chunk JSON.
+    // This is the firehose the iframe at /o/<creator_id> shows as live debug.
+    // Independent of Stage1/2 — brand emits below are still gated normally.
+    // We keep the chunk shape compact (drop noisy/duplicated fields).
+    const rawPayload = {
+      type: "raw_chunk",
+      tick_at: new Date().toISOString(),
+      chunk: {
+        id: chunk.id,
+        ts_start: chunk.ts_start,
+        age_s: ageS,
+        duration_s: chunk.duration_s,
+        audio_text: chunk.audio_text,
+        audio_summary: chunk.audio_summary,
+        audio_intent: chunk.audio_intent,
+        audio_mentions: chunk.audio_mentions,
+        audio_topics: chunk.audio_topics,
+        scene_type: chunk.scene_type,
+        energy_level: chunk.energy_level,
+        mood_tags: chunk.mood_tags,
+        on_screen_text: chunk.on_screen_text,
+        chat_velocity_avg: chunk.chat_velocity_avg,
+        chat_velocity_peak: chunk.chat_velocity_peak,
+        chat_recent_keywords: chunk.chat_recent_keywords,
+        sentiment_avg: chunk.sentiment_avg,
+        viewers: chunk.viewers,
+        viewers_delta_30s: chunk.viewers_delta_30s,
+        game_category: chunk.game_category,
+        stream_title: chunk.stream_title,
+      },
+    };
+    const rawInsert = await client.query<{ id: string }>(
+      `insert into render_events (creator_id, message, kind)
+       values ($1, $2, 'raw')
+       returning id`,
+      [config.creatorId, JSON.stringify(rawPayload)],
+    );
+    await client.query("select pg_notify('render_events', $1)", [
+      `${config.creatorId}:${rawInsert.rows[0]!.id}`,
+    ]);
+
+    // 2. Last BRAND emit timestamp (cooldown anchor). Filter by kind so the
+    //    raw-chunk firehose (kind='raw') doesn't keep cooldown permanently active.
     const lastEmitRes = await client.query<{ created_at: string }>(
       `select created_at from render_events
-        where creator_id = $1
+        where creator_id = $1 and kind = 'brand'
         order by created_at desc
         limit 1`,
       [config.creatorId],
@@ -167,10 +209,10 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
       return { decision: "skip:empty_message", stream_key: config.streamKey, chunk: meta, pick };
     }
 
-    // 5. Emit — same shape as POST /api/creators/[id]/render writes.
+    // 5. Emit — kind='brand' so cooldown query picks it up next tick.
     const insert = await client.query<{ id: string }>(
-      `insert into render_events (creator_id, message)
-       values ($1, $2)
+      `insert into render_events (creator_id, message, kind)
+       values ($1, $2, 'brand')
        returning id`,
       [config.creatorId, pick.message.slice(0, 280)],
     );

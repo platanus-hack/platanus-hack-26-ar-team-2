@@ -10,7 +10,7 @@ export default function Home() {
           <div>
             <h1 className="text-4xl font-bold tracking-tight">Addie</h1>
             <p className="text-[var(--text-2)] mt-1 text-sm">
-              Brand agents bid for epic stream moments · USDC on-chain
+              Marcas compiten por momentos épicos del stream · USDC on-chain
             </p>
           </div>
           <ThemeToggle className="mt-1" />

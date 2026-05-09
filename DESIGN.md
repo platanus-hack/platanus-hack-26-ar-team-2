@@ -109,7 +109,9 @@ Dos agents AI negocian en tiempo real durante un stream en vivo. El brand-agent 
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-**Latencia end-to-end:** ~5-7 segundos del momento épico al placement on-screen (sin step de approve manual en MVP). **2 txs por placement** (lock + release).
+**Latencia end-to-end:** **~8-13 segundos** del momento detectable al placement on-screen (sin step de approve manual en MVP). El budget se compone de: (a) hasta **5s de polling cadence** del Vercel Cron del manager (decision 2026-05-09 — pivote de manager-worker always-on a Vercel Cron `/api/internal/manager-tick` cada 5s, ver C-08m-cron en TODO + nota Vercel-Cron-min-interval abajo), (b) ~2-5s de orchestrator (LLM brand-agents en paralelo + negociación 2-3 turnos con deadline de 5s), (c) ~0.5-1s de `escrow.lock()` en Base, (d) ~0.5s de SSE push + fade-in del overlay. **2 txs por placement** (lock + release).
+
+> **⚠️ Vercel Cron min-interval gotcha.** Vercel Cron Jobs nativos solo permiten cron expressions de **1/min mínimo** (tanto en Hobby como en Pro). Para llegar a polling cada 5s se necesita una de estas tres salidas: (1) cron `* * * * *` que invoca una route handler que internamente hace 12 iteraciones × 5s sleep dentro del timeout (10s en Hobby, 60s en Pro, 300s en Pro extendido — alcanza para 12 iters); (2) usar QStash / Inngest / Trigger.dev como scheduler externo y disparar el route handler vía webhook; (3) self-invoking edge function que se reagenda con `setTimeout` + `fetch(self.url)` (frágil pero MVP-OK). C-08m-cron arrancó con cadence de 1/min — necesita upgrade a alguna de las tres opciones para llegar a los 5s del SLA del demo.
 
 ---
 
