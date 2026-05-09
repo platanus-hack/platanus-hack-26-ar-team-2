@@ -100,7 +100,7 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
         decision: "skip:already_processed",
         stream_key: config.streamKey,
         chunk_id: chunk.id,
-      } as TickResult;
+      };
     }
 
     // Visibility: log the chunk we're about to evaluate, so it's obvious

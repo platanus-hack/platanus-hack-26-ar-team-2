@@ -80,6 +80,7 @@ export type ChunkMeta = {
 /** Discriminated union the cron route returns as JSON for observability. */
 export type TickResult =
   | { decision: "no_chunks"; stream_key: string }
+  | { decision: "skip:already_processed"; stream_key: string; chunk_id: string }
   | {
       decision: "cooldown";
       stream_key: string;
