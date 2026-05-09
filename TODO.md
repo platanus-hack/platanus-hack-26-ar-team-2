@@ -23,7 +23,6 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 | Dev | Task ID | Scope | Started |
 |---|---|---|---|
 | Lucas | POC-PIPE | Pipeline POC standalone bajo `poc/pipeline/` (foundation para B-01..B-07: docker-compose nginx-rtmp + webhooks on_publish/on_publish_done + ffmpeg audio/frames + tmi.js chat + context tick en terminal) | 2026-05-09 |
-| Jere | C-03 + C-04 + C-05 | Migrations `0002_inventory.sql` + `0003_ads.sql` + `0004_placements.sql` — desbloquea D-07, D-08 y track C completo | 2026-05-09 |
 
 ---
 
@@ -118,9 +117,9 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 
 - ✅ **C-01** Tipos comunes (`Mandate`, `BrandAgentDecision`, `NegotiationTurn`, `StandingOffer`, `SoftHold`) en `apps/web/src/lib/agents/types.ts`
 - ⬜ **C-02** 8 mandate templates YAML en `apps/web/src/lib/agents/brands/*.yaml` + loader — deps: P0-22, C-01
-- 🟡 **C-03** Migración `0002_inventory.sql` (zonas, floors, max_duration por creator) — deps: P0-04
-- 🟡 **C-04** Migración `0003_ads.sql` (tabla `ads` ver §5 DESIGN.md) — deps: P0-04
-- 🟡 **C-05** Migración `0004_placements.sql` (tabla `placements` con audit fields: `clip_url`, `context_snapshot`, `agent_reasoning`, `negotiation_transcript`, `lock/release/refund_tx_hash`) — deps: P0-04
+- ✅ **C-03** Migración `0002_inventory.sql` (zonas, floors, max_duration por creator) — deps: P0-04
+- ✅ **C-04** Migración `0003_ads.sql` (tabla `ads` ver §5 DESIGN.md) — deps: P0-04
+- ✅ **C-05** Migración `0004_placements.sql` (tabla `placements` con audit fields: `clip_url`, `context_snapshot`, `agent_reasoning`, `negotiation_transcript`, `lock/release/refund_tx_hash`) — deps: P0-04
 - ⬜ **C-06** `scripts/seed-mandates.ts` — inserta mandates + firma EIP-712 dummy por brand — deps: C-02, A-05
 - ⬜ **C-07** `scripts/seed-inventory.ts` — inventario del creator demo — deps: C-03
 - ⬜ **C-08** brand-agent runner (`apps/web/src/lib/agents/brand/`): subscribe al context channel, prompt a Claude con mandate + balance + ads disponibles, output `{should_bid, ad_id, bid_usdc_cents, zone, opening_message}` — deps: C-01, C-02, B-07, P0-07
