@@ -1,5 +1,9 @@
 .claude/settings.local.json
+.claude/worktrees/
 tmp/
+worktrees/
+skills-lock.json
+.agents/
 
 # secrets — never commit
 .env
