@@ -25,6 +25,7 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 | Lucas | POC-PIPE | Pipeline POC standalone bajo `poc/pipeline/` (foundation para B-01..B-07: docker-compose nginx-rtmp + webhooks on_publish/on_publish_done + ffmpeg audio/frames + tmi.js chat + context tick en terminal) | 2026-05-09 |
 | Jere | C-02 | 8 mandate templates YAML (brands/*.yaml) + loader TypeScript | 2026-05-09 |
 | Andy | A-11 | Sync 4 env vars Track A (ALCHEMY_RPC_URL, PRIVY_APP_ID, NEXT_PUBLIC_PRIVY_APP_ID, PRIVY_APP_SECRET) → Vercel × 3 envs | 2026-05-09 |
+| Franco | P0-20 + A-06 | Treasury team con $25-30 USDC en Base + transferir $5 USDC + ~$0.10 ETH a c/u de las 4 brand wallets (CafetITO/TermoFlex/Pancho Rex/MateBros) | 2026-05-09 |
 
 ---
 
@@ -59,7 +60,7 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 - ⬜ **P0-17** `[INFRA]` Docker compose con `nginx-rtmp` (localhost:1935 RTMP + 8080 HTTP control + volumen para `record`)
 - ⬜ **P0-18** `[INFRA]` OBS publica al RTMP local con un test stream (verificar con `ffprobe rtmp://localhost/live/test`)
 - ⬜ **P0-19** `[INFRA]` Plugin OBS *Multiple RTMP Outputs* instalado para multi-stream local + Twitch
-- ⬜ **P0-20** `[INFRA]` Conseguir ~$25-30 USDC en Base (treasury del equipo) para fondear las **4 brand wallets** a $5 c/u + buffer. La wallet del streamer-team no requiere USDC (solo recibe en `release()`); la platform owner tampoco (no firma `lock()`).
+- 🟡 **P0-20** `[INFRA]` Conseguir ~$25-30 USDC en Base (treasury del equipo) para fondear las **4 brand wallets** a $5 c/u + buffer. La wallet del streamer-team no requiere USDC (solo recibe en `release()`); la platform owner tampoco (no firma `lock()`).
 - ✅ **P0-21** `[INFRA]` ~$1 ETH en Base para gas — alcanza de sobra para las 5 wallets que firman txs (4 brands + platform owner). La streamer-team wallet no firma nada, no necesita ETH.
 
 ### Diseño compartido
@@ -92,7 +93,7 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 - ✅ **A-03** `contracts/script/Deploy.s.sol` + deploy a Base mainnet @ [`0x8300B9Bd1B6a18163EBd5fB9e0EFa1b7Fd99bCfE`](https://basescan.org/address/0x8300B9Bd1B6a18163EBd5fB9e0EFa1b7Fd99bCfE) (verified, owner `0x7e6685A241278d83068f8Cfb0Dd145F62cb17914`, USDC `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`)
 - ✅ **A-04** `[INFRA]` Anotar address del contrato deployed en `apps/web/src/lib/chain/escrow.ts` como const + verificar en basescan — deps: A-03
 - ✅ **A-05** `apps/web/scripts/seed-wallets.ts` — generó **5 Privy smart wallets** (4 brands: CafetITO `0x7529…2099` / TermoFlex `0x599e…EA25` / Pancho Rex `0xad1b…FA88` / MateBros `0x96D2…087D` + streamer-team `0x8B0d…374c`) y persistió addresses en `accounts` con `metadata.privy_wallet_id`. Idempotente (re-run → skip). Mismo patrón que `db-migrate.mjs` (pg directo + `POSTGRES_URL_NON_POOLING`). La platform owner (`0x7e6685A241278d83068f8Cfb0Dd145F62cb17914`) NO se genera vía Privy — es owner inmutable de `AddieEscrow`.
-- ⬜ **A-06** `[INFRA]` Fondear las **4 brand wallets** con $5 USDC y ~$0.10 ETH cada una. La streamer-team wallet no necesita fondos (solo recibe USDC en `release()`, no firma nada). — deps: A-05, P0-20, P0-21
+- 🟡 **A-06** `[INFRA]` Fondear las **4 brand wallets** con $5 USDC y ~$0.10 ETH cada una. La streamer-team wallet no necesita fondos (solo recibe USDC en `release()`, no firma nada). — deps: A-05, P0-20, P0-21
 - ✅ **A-07** Cliente viem en `apps/web/src/lib/chain/viem.ts` (publicClient + walletClient factory por brand) — deps: A-04
 - ✅ **A-08** Bindings escrow en `apps/web/src/lib/chain/escrow.ts` (`lockEscrow`, `releaseEscrow`, `refundEscrow`, watchers de eventos) + helper `approveUsdcForEscrow` (USDC approve para que la brand wallet pueda hacer `transferFrom` desde el lock) + smoke `apps/web/scripts/smoke-escrow.mts` que valida ABI/RPC contra Base mainnet (verificado: owner/usdc/placements). — deps: A-07
 - ✅ **A-09** Helper Privy server-side en `apps/web/src/lib/chain/privy.ts` — `getBrandWallet(slug)` + `getBrandWalletClient(slug)` (factoría de viem WalletClient vía `createViemAccount` de `@privy-io/server-auth/viem`) + wrappers `signApproveUsdc` / `signLockEscrow`. Smoke `apps/web/scripts/smoke-privy-sign.mts` (`pnpm smoke:privy`) verifica end-to-end: lookup → sign EIP-191 → recover address matches `accounts.wallet_address` → read USDC allowance contra Base mainnet (gas-free). Solo cubre brand wallets — la owner key (release/refund) no vive en Privy, va a usar `privateKeyToAccount` cuando esa firma haga falta. — deps: A-05, A-07
