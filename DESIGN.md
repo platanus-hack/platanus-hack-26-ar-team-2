@@ -124,7 +124,7 @@ T+1.3s    Gemini Flash describe frame: "FIFA replay celebration"
 T+1.5s    tmi.js detecta chat velocity 12→180 msg/s
 T+1.5s    Context broadcast a brand-agents
 ─────────────────────────────────────────────────────────────────────
-T+2.0s    LLM call paralela en 8 brand-agents:
+T+2.0s    LLM call paralela en los brand-agents (2 en MVP: adidas + mp; N en prod):
           → adidas: HUNT con "epic_goal_lower" (FIFA + epic + audience match)
           → nike: HUNT con "win_moment_lower"
           → quilmes: HUNT con "social_celebration"
@@ -181,8 +181,14 @@ Tres roles agénticos, todos LLM-powered, cada uno con su propio prompt + toolin
 | Agent | Cuántos | Modelo | Trigger | Job |
 |---|---|---|---|---|
 | **Manager** | 1 por stream | Claude Haiku 4.5 | tick filtrado por cheap intensity (B-07a) | Decide si el momento amerita pautar (auctionable). Pre-flag de brand-safety. Sugiere zonas + duración. |
-| **Brand-agent** | 8 (uno por marca) | Claude Haiku 4.5 | inicio de auction | Hunt + bid + counter-response con curva de concesión. Walk-away discipline. |
+| **Brand-agent** | **2 en MVP** (adidas + mp), escalable a N | Claude Haiku 4.5 | inicio de auction | Hunt + bid + counter-response con curva de concesión. Walk-away discipline. |
 | **Streamer-agent** | 1 por creator | Claude Sonnet 4.6 | inicio de auction (parallel batched) | Counter-batched a todas las ofertas, picks single winner. Defiende inventario. |
+
+**MVP scope — 2 brands:**
+- **adidas** (premium episodic) — apunta a momentos celebratorios deportivos. Bidea fuerte en zonas premium (`lower_third`) cuando el manager flaggea épico.
+- **mp / MercadoPago** (default bidder al floor, `always_bid_floor: true`) — siempre ofrece el reserve mínimo del streamer si el contexto no es brand-unsafe. Llena los momentos en los que adidas no bidea (calm chat, audiencia chica).
+
+Esto preserva los dos roles del diseño (premium vs floor) con la cantidad mínima de marcas. Producción agrega N brands sin cambios de arquitectura — solo más rows en `mandates`. El resto del diseño (manager + streamer-agent + orchestrator + settlement) es brand-count-agnóstico.
 
 El **Manager** es el filtro económico: protege costos LLM (8 brand-agents corriendo en cada tick sería ~$3-10/min) y la experiencia del viewer (no pautar cada 5 segundos). Los **Brand-agents** son cazadores con disciplina de mandate. El **Streamer-agent** es defensor de inventario con visión global.
 
@@ -373,7 +379,7 @@ Esto significa:
 - El streamer-agent elige el ganador comparando revenue absoluto + fit del momento + marcas preferidas.
 - Las zonas se mantienen en el modelo porque definen el formato visual del ad ganador (tamaño, posición, duración), pero nunca corren en paralelo.
 
-**Default bidder vía mp.** Uno de los 8 brand-agents (MercadoPago con su `persistent_logo`) actúa como **default bidder al floor**: para cualquier contexto que no sea brand-unsafe, ofrece exactamente el reserve mínimo del streamer. Garantiza que toda subasta tenga al menos UNA standing offer cerrable al deadline, incluso si los otros 7 brands pasan el momento. Si una marca premium bidea más alto, la desplaza naturalmente. Es transparente — figura como tercera pata del *Know Your Agent* del mp (`always_bid_floor: true` en su mandate).
+**Default bidder vía mp.** Uno de los brand-agents (MercadoPago con su `persistent_logo`) actúa como **default bidder al floor**: para cualquier contexto que no sea brand-unsafe, ofrece exactamente el reserve mínimo del streamer. Garantiza que toda subasta tenga al menos UNA standing offer cerrable al deadline, incluso si los otros brands pasan el momento. Si una marca premium bidea más alto, la desplaza naturalmente. Es transparente — figura como tercera pata del *Know Your Agent* del mp (`always_bid_floor: true` en su mandate).
 
 ### Soft hold ledger (off-chain)
 
@@ -583,7 +589,7 @@ Total ~4-6s, **async, no bloquea el placement** ni el settlement on-chain. La ma
 
 ## 6. Pre-generación de la biblioteca de ads (para el demo)
 
-Las marcas reales generarían sus ads con sus agencias / herramientas. Para el demo, **nosotros pre-generamos la biblioteca de las 8 brands con ElevenLabs Creative**, una sola vez antes del demo.
+Las marcas reales generarían sus ads con sus agencias / herramientas. Para el demo, **nosotros pre-generamos la biblioteca de las 2 brands del MVP (adidas + mp) con ElevenLabs Creative**, una sola vez antes del demo. Si queda tiempo, expandimos a más brands; el flow es idéntico — solo cambia la cantidad de iteraciones.
 
 ### Matriz a generar
 
@@ -707,7 +713,7 @@ addie/                                  ← repo platanus-hack-26-ar-team-2
 │       │       │   ├── streamer/       ← streamer-agent runner (defender)
 │       │       │   ├── negotiation/    ← multi-turn orchestrator
 │       │       │   ├── safety/         ← brand-safety auto-pull
-│       │       │   ├── brands/         ← 8 mandate templates
+│       │       │   ├── brands/         ← 2 mandate templates en MVP (adidas, mp)
 │       │       │   └── types.ts
 │       │       ├── pipeline/
 │       │       │   ├── rtmp.ts         ← orchestrator
@@ -737,8 +743,8 @@ addie/                                  ← repo platanus-hack-26-ar-team-2
 │   ├── 0003_ads.sql
 │   └── 0004_placements.sql              ← audit fields (§5)
 ├── scripts/
-│   ├── seed-wallets.ts                 ← genera 9 smart wallets (8 brand + 1 platform)
-│   ├── seed-mandates.ts                ← 8 brand mandates iniciales
+│   ├── seed-wallets.ts                 ← genera 3 smart wallets en MVP (2 brand + 1 platform)
+│   ├── seed-mandates.ts                ← 2 brand mandates iniciales (adidas, mp) en MVP
 │   ├── seed-inventory.ts               ← inventario del creator demo
 │   ├── pregen-brand-ads.ts             ← genera 32 ads con ElevenLabs Creative
 │   └── smoke-e2e.ts                    ← test integration
@@ -771,8 +777,8 @@ main                         ← integraciones, mergeos en checkpoints
 
 **Owns:**
 - `contracts/AddieEscrow.sol` + tests Foundry + deploy a Base mainnet
-- Privy setup + 9 smart wallets (8 brand + 1 platform owner del escrow)
-- Fondear las 8 brand wallets con $5 USDC cada una
+- Privy setup + 3 smart wallets en MVP (2 brand: adidas+mp + 1 platform owner del escrow)
+- Fondear las 2 brand wallets con $5 USDC cada una
 - viem clients + escrow bindings
 - TxFeed component (escucha eventos `Locked` / `Released` / `Refunded`)
 
@@ -806,7 +812,7 @@ main                         ← integraciones, mergeos en checkpoints
 #### 🤖 Dev 3 — AGENTS
 
 **Owns:**
-- 8 brand mandate templates (YAML), incluyendo `always_bid_floor: true` para mp (default bidder al floor, §4)
+- 2 brand mandate templates en MVP (adidas, mp) en YAML, incluyendo `always_bid_floor: true` para mp (default bidder al floor, §4). Escalable a N — la arquitectura es brand-count-agnóstica.
 - brand-agent runner (hunter logic — pickea ad variant + bid amount)
 - streamer-agent runner (defender logic — accept/counter/reject)
 - **Subasta con deadline duro (§4):** negotiation orchestrator multi-turno paralelo (3 turnos cap) + standing offers table actualizada turno a turno + **soft hold ledger off-chain** (10s expiry, expone `available_balance` corregido a cada LLM)
@@ -856,7 +862,7 @@ T+0h   06:00   Phase 0 — Setup compartido
                 • Supabase project + schema
                 • Foundry init
                 • Docker nginx-rtmp probado
-                • 8 brand mandates definidos
+                • 2 brand mandates definidos en MVP (adidas, mp)
                 • Tailwind theme
 
 T+2h   08:00   ✅ CHECKPOINT 1 — Phase 0 completa, todos arrancan tracks
@@ -904,7 +910,7 @@ T+30h  12:00   DEMO LIVE 🎤
 
 ### Acto 1 (45s) — Setup narrativo
 
-> *"Esto es Addie. 8 brand-agents corriendo, cada uno con USDC propio en Base, mandate firmado, y biblioteca de ads que la marca ya subió. Coscu — del equipo — está streameando FIFA en vivo a Twitch."*
+> *"Esto es Addie. 2 brand-agents corriendo en este MVP — adidas y MercadoPago — cada uno con USDC propio en Base, mandate firmado, y biblioteca de ads que la marca ya subió. La arquitectura escala a N marcas. Coscu — del equipo — está streameando FIFA en vivo a Twitch."*
 
 ### Acto 2 (90s) — Primer momento épico + negociación visible
 
@@ -975,7 +981,7 @@ Lo que **sí está en MVP**: audit completo (clip + reasoning + transcript) y so
 - ❌ Cero YouTube Live discovery.
 - ❌ Cero browser extension propia.
 - ❌ Cero mobile app.
-- ❌ Cero brand onboarding flow real para humanos — 8 brand-agents pre-cargados con ads pre-generadas.
+- ❌ Cero brand onboarding flow real para humanos — 2 brand-agents pre-cargados (adidas + mp) con ads pre-generadas. Producción adopta el flow de §14.
 - ❌ Cero KYC.
 - ❌ Cero pricing dinámico complejo del streamer-agent.
 - ❌ Cero disputas/refunds automatizados — manual desde admin.
@@ -1017,7 +1023,9 @@ Lo que **sí está en MVP**: audit completo (clip + reasoning + transcript) y so
 | **Inventario** | **Single-ad-per-moment. Zonas (lower_third / corner / takeover) son FORMATOS del único slot, no slots simultáneos. Entre subastas la pantalla está limpia.** |
 | **Audit por placement** | **Clip 30s + context snapshot + agent reasoning + transcript negociación, todo guardado y exportable a la marca** |
 | **Approve del creator per placement** | **Post-MVP §14. MVP confía en mandate firmado + brand-safety auto-pull.** |
-| **Hosting de los agents** | **MVP: 9 agents corren en infra de Addie. Post-MVP §14: marcas/streamers pueden traer su propio agent (BYO).** |
+| **Hosting de los agents** | **MVP: agents corren en infra de Addie (3 agents en MVP — manager + adidas + mp + streamer = 4 procesos). Post-MVP §14: marcas/streamers pueden traer su propio agent (BYO).** |
+| **MVP brand scope** | **2 brand-agents (adidas premium + mp default bidder). Arquitectura es brand-count-agnóstica — agregar más brands = más rows en `mandates`, sin cambios de código. Post-MVP escala a N.** |
+| **Brand prompting en DB** | **Columna dedicada `mandates.prompt jsonb` (separada de `mandates.payload`). Shape: `{ system_persona, voice_examples[], dont_say[], dont_do[] }`. Owned por marketing/creative team de la marca, no por legal/finance que owna `payload`. Migration `0005_mandates_prompt.sql`.** |
 
 ---
 

@@ -25,7 +25,6 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 | Lucas | POC-PIPE | Pipeline POC standalone bajo `poc/pipeline/` (foundation para B-01..B-07: docker-compose nginx-rtmp + webhooks on_publish/on_publish_done + ffmpeg audio/frames + tmi.js chat + context tick en terminal) | 2026-05-09 |
 | Jere | C-02 | 8 mandate templates YAML (brands/*.yaml) + loader TypeScript | 2026-05-09 |
 | Franco | A-03 | `Deploy.s.sol` + deploy AddieEscrow a Base mainnet (USDC token + treasury owner) + verify en basescan | 2026-05-09 11:23 |
-| Andy | BRAND-SCOPE-2 + MANDATES-PROMPT | Decisión de scope: MVP con **2 brands** (adidas premium + mp default bidder) en vez de 8. Migration `0005_mandates_prompt.sql` añade columna `prompt jsonb` a `mandates` (system_persona + voice_examples + dont_say + dont_do). Update `BrandMandate` type en `apps/web/src/lib/agents/types.ts`. Update DESIGN.md §1/§3/§4. | 2026-05-09 |
 | Franco | PITCH+GATES-DOCS | `docs/PITCH.md` (5-min script) + `docs/DEMO_RUNBOOK.md` (coreografía 4 actos) + `docs/GATES.md` (hard-reject ladder spec) + DESIGN.md §4.X gate ladder + TODO.md tasks C-02b/c/d, C-08a/b/c/d, D-09a, PD-07a/b/c. **Branch `feat/pitch-and-gates-docs`** (transversal). | 2026-05-09 12:05 |
 
 ---
@@ -66,7 +65,7 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 
 ### Diseño compartido
 
-- ✅ **P0-22** Definir 8 brand mandates en YAML (adidas, nike, quilmes, mp, steam, rappi, globant, cocacola) — drafts iniciales en `apps/web/src/lib/agents/brands/*.yaml`. **mp con `always_bid_floor: true`** (default bidder al floor §4)
+- ✅ **P0-22** Definir brand mandates en YAML — drafts iniciales en `apps/web/src/lib/agents/brands/*.yaml`. **MVP scope reducido a 2 brands** (decisión 2026-05-09, ver DESIGN.md §17): **adidas** (premium episodic) + **mp** (`always_bid_floor: true` default bidder al floor §4). Los 6 brands restantes del draft inicial (nike, quilmes, steam, rappi, globant, cocacola) quedan como referencia para post-MVP — el código es brand-count-agnóstico.
 
 ✅ **Checkpoint 1 — sáb 08:00:** Phase 0 cerrada, todos arrancan tracks paralelos.
 
@@ -124,7 +123,7 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 ### Track C · Agents (sugerido: Andy)
 
 - ✅ **C-01** Tipos comunes (`Mandate`, `BrandAgentDecision`, `NegotiationTurn`, `StandingOffer`, `SoftHold`) en `apps/web/src/lib/agents/types.ts`
-- 🟡 **C-02** 8 mandate templates YAML en `apps/web/src/lib/agents/brands/*.yaml` + loader — deps: P0-22, C-01
+- 🟡 **C-02** Mandate templates YAML en `apps/web/src/lib/agents/brands/*.yaml` + loader. **MVP scope reducido a 2 brands** (adidas + mp, ver P0-22). Loader tiene que parsear el nuevo `prompt` field de `BrandPrompt` (ver `apps/web/src/lib/agents/types.ts`) — system_persona / voice_examples / dont_say / dont_do — y el seed-mandates.ts (C-06) inserta en `mandates.prompt` jsonb (columna nueva, migration `0005_mandates_prompt.sql`). — deps: P0-22, C-01
 - ✅ **C-03** Migración `0002_inventory.sql` (zonas, floors, max_duration por creator) — deps: P0-04
 - ✅ **C-04** Migración `0003_ads.sql` (tabla `ads` ver §5 DESIGN.md) — deps: P0-04
 - ✅ **C-05** Migración `0004_placements.sql` (tabla `placements` con audit fields: `clip_url`, `context_snapshot`, `agent_reasoning`, `negotiation_transcript`, `lock/release/refund_tx_hash`) — deps: P0-04
