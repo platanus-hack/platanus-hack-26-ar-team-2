@@ -21,6 +21,7 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 | Dev | Task ID | Scope | Started |
 |---|---|---|---|
 | Andy | POC-NEG | Multi-agent negotiation POC bajo `poc/negotiation/` (foundation para C-08..C-13: valuation CPM-based, concession curves Faratin, AC_combi gate, BATNA, multi-issue exclusivity) | 2026-05-09 |
+| Lucas | POC-PIPE | Pipeline POC standalone bajo `poc/pipeline/` (foundation para B-01..B-07: docker-compose nginx-rtmp + webhooks on_publish/on_publish_done + ffmpeg audio/frames + tmi.js chat + context tick en terminal) | 2026-05-09 |
 
 ---
 
