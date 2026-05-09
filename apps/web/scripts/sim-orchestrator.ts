@@ -199,14 +199,19 @@ async function insertChunk(
   return res.rows[0]!.id;
 }
 
-type BrandEventRow = { id: string; message: string; created_at: Date };
+type BrandEventRow = {
+  id: string;
+  message: string;
+  created_at: Date;
+  payload: unknown;
+};
 
 async function fetchBrandEventsAfter(
   creatorId: string,
   since: Date,
 ): Promise<BrandEventRow[]> {
   const res = await pool().query<BrandEventRow>(
-    `select id, message, created_at
+    `select id, message, created_at, payload
        from render_events
       where creator_id = $1 and kind = 'brand' and created_at >= $2
       order by created_at asc`,
@@ -216,6 +221,29 @@ async function fetchBrandEventsAfter(
 }
 
 type Verdict = { ok: true; summary: string } | { ok: false; reason: string };
+
+type ActualGateSkip = {
+  brand_id: string;
+  brand_display_name?: string;
+  gate: number;
+  code: string;
+  detail?: string;
+  human_message?: string;
+};
+
+function extractGateSkips(payload: unknown): ActualGateSkip[] {
+  if (!payload || typeof payload !== "object") return [];
+  const skips = (payload as { gate_skips?: unknown }).gate_skips;
+  if (!Array.isArray(skips)) return [];
+  return skips.filter(
+    (s): s is ActualGateSkip =>
+      !!s &&
+      typeof s === "object" &&
+      typeof (s as ActualGateSkip).brand_id === "string" &&
+      typeof (s as ActualGateSkip).gate === "number" &&
+      typeof (s as ActualGateSkip).code === "string",
+  );
+}
 
 function check(
   c: OrchestratorCase,
@@ -242,7 +270,14 @@ function check(
   const pick = "pick" in result ? result.pick : null;
   const actualBrand = pick?.brand_id ?? null;
 
-  if (expect.brand_id !== actualBrand) {
+  if (expect.brand_id_any_of !== undefined) {
+    if (!expect.brand_id_any_of.includes(actualBrand)) {
+      return {
+        ok: false,
+        reason: `expected brand_id ∈ [${expect.brand_id_any_of.join(",")}], got ${actualBrand} (msg="${last.message}")`,
+      };
+    }
+  } else if (expect.brand_id !== undefined && expect.brand_id !== actualBrand) {
     return {
       ok: false,
       reason: `expected brand_id=${expect.brand_id}, got ${actualBrand} (msg="${last.message}")`,
@@ -256,11 +291,40 @@ function check(
     };
   }
 
-  // TODO C-08d: assert pick.bid_usdc >= expect.bid_usdc_min when BrandPick gains it.
-  // TODO C-08a..d: assert events[N].payload.gate_skip_reasons contains expect.gate_skips.
+  // C-08a: gate_skips subset match against render_events.payload.gate_skips.
+  if (expect.gate_skips && expect.gate_skips.length > 0) {
+    const actual = extractGateSkips(last.payload);
+    for (const want of expect.gate_skips) {
+      const match = actual.find(
+        (a) => a.brand_id === want.brand && a.gate === want.gate,
+      );
+      if (!match) {
+        const got = actual.map((a) => `${a.brand_id}:g${a.gate}=${a.code}`).join(", ");
+        return {
+          ok: false,
+          reason: `expected gate_skip ${want.brand}:g${want.gate} not in actual [${got || "(empty)"}]`,
+        };
+      }
+      if (want.reason_substring) {
+        const haystack = `${match.code} ${match.detail ?? ""} ${match.human_message ?? ""}`.toLowerCase();
+        if (!haystack.includes(want.reason_substring.toLowerCase())) {
+          return {
+            ok: false,
+            reason: `expected gate_skip ${want.brand}:g${want.gate} to mention "${want.reason_substring}", got code="${match.code}" detail="${match.detail ?? ""}"`,
+          };
+        }
+      }
+    }
+  }
 
+  // TODO C-08d: assert pick.bid_usdc >= expect.bid_usdc_min when BrandPick gains it.
+
+  const actualSkips = extractGateSkips(last.payload);
+  const skipSummary = actualSkips.length
+    ? ` skips=[${actualSkips.map((a) => `${a.brand_id}:g${a.gate}=${a.code}`).join(", ")}]`
+    : "";
   return {
     ok: true,
-    summary: `brand=${actualBrand ?? "(none)"} msg="${last.message}"`,
+    summary: `brand=${actualBrand ?? "(none)"} msg="${last.message}"${skipSummary}`,
   };
 }

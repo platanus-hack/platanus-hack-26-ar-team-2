@@ -106,13 +106,35 @@ function buildTool(brands: LoadedBrand[]): Anthropic.Tool {
 
 const TOOL_NAME = "emit_decision";
 
-export type Picker = (chunk: ContextChunk) => Promise<BrandPick>;
+/**
+ * Picker signature. `brands` is OPTIONAL — if omitted, the picker reads
+ * the full cached YAML registry via `getLoadedBrands()`. If provided,
+ * the picker only considers that list. This is the integration point
+ * for the gate ladder (C-08a `applyGateLadder`) which pre-filters
+ * brands before LLM evaluation.
+ */
+export type Picker = (
+  chunk: ContextChunk,
+  brands?: LoadedBrand[],
+) => Promise<BrandPick>;
 
 export function makeClaudePicker(apiKey: string, model: string): Picker {
   let clientPromise: Promise<Anthropic> | null = null;
 
-  return async function pickBrand(chunk) {
+  return async function pickBrand(chunk, brandsOverride) {
     const t0 = Date.now();
+
+    const brands = brandsOverride ?? getLoadedBrands();
+    if (brands.length === 0) {
+      return {
+        should_emit: false,
+        brand_id: null,
+        moment_quality: 0,
+        brand_match: 0,
+        reason: "gate1 filtró todos los brands — no hay candidatos",
+        message: "...",
+      };
+    }
 
     if (!clientPromise) {
       clientPromise = import("@anthropic-ai/sdk").then(
@@ -122,7 +144,6 @@ export function makeClaudePicker(apiKey: string, model: string): Picker {
     const client = await clientPromise;
     const tSdkInit = Date.now() - t0;
 
-    const brands = getLoadedBrands();
     const userPrompt = renderPrompt(chunk, brands);
     const systemPrompt = buildSystemPrompt(brands);
     const tool = buildTool(brands);
@@ -184,8 +205,18 @@ export function makeClaudePicker(apiKey: string, model: string): Picker {
  * Returns brand display_name if match found, "..." otherwise.
  */
 export function makeStubPicker(): Picker {
-  return async function pickBrand(chunk) {
-    const brands = getLoadedBrands();
+  return async function pickBrand(chunk, brandsOverride) {
+    const brands = brandsOverride ?? getLoadedBrands();
+    if (brands.length === 0) {
+      return {
+        should_emit: false,
+        brand_id: null,
+        moment_quality: 0,
+        brand_match: 0,
+        reason: "[DRY_RUN] gate1 filtró todos los brands — no hay candidatos",
+        message: "...",
+      };
+    }
     const text = (chunk.audio_text ?? "").toLowerCase();
     if (!text) {
       return {

@@ -3,13 +3,21 @@
  *
  * 1. Fetch latest context_chunks row for stream_key.
  * 2. Emit raw firehose event.
- * 3. Claude (or stub) picker analyses audio_text against 3 brands.
- * 4. ALWAYS emit to SSE: brand display_name if match, "..." if not.
+ * 3. Apply gate1 (C-08a) — filter brands deterministically; emit
+ *    structured `gate1:eval` log lines + accumulate skips for the brand
+ *    event payload.
+ * 4. Claude (or stub) picker analyses audio_text against the SURVIVING
+ *    brands only.
+ * 5. ALWAYS emit to SSE: brand display_name if match, "..." if not. The
+ *    brand event payload carries `gate_skips[]` so the D-09a feed (and
+ *    the C-08test harness) can verify per-brand reasoning.
  *
  * No HTTP roundtrip — we hit the DB directly via the shared pg pool.
  */
 
 import { pool } from "@/lib/pg";
+
+import { applyGateLadder } from "@/lib/agents/brand/gates/applyGateLadder";
 
 import { getLoadedBrands, makeClaudePicker, makeStubPicker, type Picker } from "./pickBrand";
 import type { ChunkMeta, ContextChunk, TickResult } from "./types";
@@ -172,7 +180,20 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
 
     const meta = toChunkMeta(chunk);
 
-    // 2. Claude (or stub) picker decides: brand display_name or "..."
+    // 2. Gate1 — deterministic mandate filter (C-08a). Splits the YAML
+    //    registry into surviving (LLM picker sees these) and skips
+    //    (logged + persisted to render_events.payload.gate_skips for the
+    //    D-09a feed + harness).
+    const allBrands = getLoadedBrands();
+    const ladder = applyGateLadder({
+      brands: allBrands,
+      context: chunk,
+      stream: null,
+      log_context: { stream_key: config.streamKey, chunk_id: String(chunk.id) },
+    });
+    const tGate1 = elapsed();
+
+    // 3. Claude (or stub) picker decides among surviving brands.
     const picker: Picker = config.dryRun
       ? makeStubPicker()
       : (() => {
@@ -184,7 +205,7 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
           return makeClaudePicker(config.anthropicKey, config.anthropicModel);
         })();
 
-    const pick = await picker(chunk);
+    const pick = await picker(chunk, ladder.surviving);
     const tPicker = elapsed();
 
     // Always emit: brand display_name if Claude matched, "..." otherwise.
@@ -192,28 +213,31 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
 
     // If the matched brand has a pre-uploaded ad asset, emit a full placement
     // payload so the overlay renders the video/image instead of just text.
-    const brands = getLoadedBrands();
     const matchedBrand = pick.brand_id
-      ? brands.find((b) => b.slug === pick.brand_id)
+      ? allBrands.find((b) => b.slug === pick.brand_id)
       : undefined;
     const hasAsset = matchedBrand?.ad.asset_url;
 
-    const payload = hasAsset
-      ? {
-          asset_url: matchedBrand.ad.asset_url,
-          asset_type: matchedBrand.ad.asset_type ?? "video",
-          zone_id: matchedBrand.ad.zone ?? "fullscreen_takeover",
-          duration_ms: matchedBrand.ad.duration_ms ?? 8000,
-          brand_id: matchedBrand.slug,
-          audio: true,
-        }
-      : null;
+    // Brand event payload always includes `gate_skips[]` (audit trail for
+    // D-09a + C-08test harness verification). Asset fields layer on top
+    // when the matched brand has a pre-uploaded creative.
+    const payload: Record<string, unknown> = {
+      gate_skips: ladder.skips,
+    };
+    if (hasAsset) {
+      payload.asset_url = matchedBrand.ad.asset_url;
+      payload.asset_type = matchedBrand.ad.asset_type ?? "video";
+      payload.zone_id = matchedBrand.ad.zone ?? "fullscreen_takeover";
+      payload.duration_ms = matchedBrand.ad.duration_ms ?? 8000;
+      payload.brand_id = matchedBrand.slug;
+      payload.audio = true;
+    }
 
     const insert = await client.query<{ id: string; created_at: string }>(
       `insert into render_events (creator_id, message, kind, payload)
        values ($1, $2, 'brand', $3)
        returning id, created_at`,
-      [config.creatorId, message.slice(0, 280), payload ? JSON.stringify(payload) : null],
+      [config.creatorId, message.slice(0, 280), JSON.stringify(payload)],
     );
     const event_id = insert.rows[0]!.id;
 
@@ -223,7 +247,7 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
       created_at: insert.rows[0]!.created_at,
       kind: "brand",
       message,
-      ...(payload ?? {}),
+      ...payload,
     };
     await client.query("select pg_notify('render_events', $1)", [
       `${config.creatorId}:${event_id}:${JSON.stringify(sseEvent)}`,
@@ -235,7 +259,8 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
       chunk_query_ms: tChunkQuery - tPool,
       dedup_query_ms: tDedupQuery - tChunkQuery,
       raw_emit_ms: tRawEmit - tDedupQuery,
-      picker_ms: tPicker - tRawEmit,
+      gate1_ms: tGate1 - tRawEmit,
+      picker_ms: tPicker - tGate1,
       brand_emit_ms: tBrandEmit - tPicker,
       total_ms: tBrandEmit,
     };
@@ -248,11 +273,20 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
         brand_id: pick.brand_id ?? null,
         has_asset: !!hasAsset,
         dry_run: config.dryRun,
+        surviving_count: ladder.surviving.length,
+        skip_count: ladder.skips.length,
         timing,
       }),
     );
 
-    return { decision: "emit", stream_key: config.streamKey, chunk: meta, pick, event_id };
+    return {
+      decision: "emit",
+      stream_key: config.streamKey,
+      chunk: meta,
+      pick,
+      event_id,
+      gate_skips: ladder.skips,
+    };
   } finally {
     client.release();
   }

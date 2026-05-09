@@ -6,6 +6,8 @@
  * subscribe vs cron pull). Schema mirrors the rows produced by B-07b/c.
  */
 
+import type { GateSkipReason } from "@/lib/agents/types";
+
 export type ContextChunk = {
   id: string;
   stream_key: string;
@@ -105,5 +107,11 @@ export type TickResult =
       chunk: ChunkMeta;
       pick: BrandPick;
       event_id: string;
+      /**
+       * Gate1 (C-08a) skips that landed on this tick. Mirrored to
+       * `render_events.payload.gate_skips`. Empty array if all brands
+       * passed gate1.
+       */
+      gate_skips: GateSkipReason[];
     }
   | { decision: "error"; stream_key: string; error: string };

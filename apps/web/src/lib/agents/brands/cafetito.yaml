@@ -62,7 +62,11 @@ event_filters:
     - gaming
     - just_chatting
     - tech-pitch
-  min_viewers: 50
+  # C-08a calibración 2026-05-09 (Franco): 50 → 2. Audiencia demo Twitch
+  # real son 5-10 viewers (jurados miran físico, no por stream). Con
+  # min_viewers=50 cafetito skipearía gate1 viewers_below_min al demo time
+  # y nunca matchearía el primer trigger del PITCH Bloque 3.
+  min_viewers: 2
 
 brand_safety:
   blocked_keywords:

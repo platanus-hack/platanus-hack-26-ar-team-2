@@ -56,7 +56,12 @@ event_filters:
   preferred_categories:
     - just_chatting
     - gaming
-  min_viewers: 30
+  # C-08a calibración 2026-05-09 (Franco): 30 → 0. PITCH Bloque 3 trigger 1
+  # dice literal "Pancho Rex porque no es lunch" (daypart). Con min_viewers=30
+  # y audiencia demo 5-10, pancho-rex skipearía por viewers_below_min ANTES
+  # de evaluar daypart (gate1 order spec en docs/GATES.md §8.1). Bajando a 0,
+  # daypart se convierte en la causa del SKIP — alineado a la narrativa.
+  min_viewers: 0
 
 brand_safety:
   blocked_keywords:

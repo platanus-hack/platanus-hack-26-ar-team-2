@@ -255,6 +255,65 @@ export type MandateExtensions = {
   ideal_contexts?: IdealContext[];
 };
 
+// ─── Gate ladder runtime types (C-08a/c/d) ──────────────────────────
+
+/**
+ * Gate1 (deterministic mandate filter) skip reason codes. Pure function,
+ * no LLM. Spec: docs/GATES.md §8.1 — order is budget → brand_safety →
+ * event_filters → dayparts (early-return on first match).
+ */
+export type Gate1ReasonCode =
+  | "daily_cap_exceeded"
+  | "available_balance_below_min_bid"
+  | "blocked_keyword"
+  | "blocked_competitor_brand"
+  | "blocked_category"
+  | "category_not_preferred"
+  | "viewers_below_min"
+  | "viewers_above_max"
+  | "missing_required_tag"
+  | "missing_required_chat_keyword"
+  | "outside_daypart";
+
+/**
+ * Gate3 (cheap-LLM triage) skip reason codes. Per-brand Haiku call that
+ * filters voice/persona mismatches surviving gate1. Spec: docs/GATES.md §8.3.
+ */
+export type Gate3ReasonCode = "triage_should_not_bid" | "triage_low_confidence";
+
+/**
+ * Per-skip audit + UI event emitted whenever a brand fails any gate.
+ * Persisted to `render_events.payload.gate_skips[]` and rendered verbatim
+ * by the D-09a didactic feed.
+ */
+export type GateSkipReason = {
+  brand_id: string;
+  brand_display_name: string;
+  gate: 1 | 2 | 3 | 4;
+  /** Machine-readable code. Cast to Gate{N}ReasonCode at consumption site. */
+  code: string;
+  /** Context detail: which keyword matched / which threshold was breached. */
+  detail?: string;
+  /** Spanish, ≤25 words. Renderable verbatim in the gate-skip feed. */
+  human_message: string;
+};
+
+/**
+ * Minimal shape gate1 reads from the context tick. Both `ContextChunk`
+ * (manager/types.ts, post-B-07c) and `StreamContext` (in-memory pipeline
+ * tick) satisfy this structurally — gate1 stays decoupled from either.
+ */
+export type Gate1Context = {
+  audio_text?: string | null;
+  audio_mentions?: string[] | null;
+  audio_topics?: string[] | null;
+  mood_tags?: string[] | null;
+  scene_type?: string | null;
+  chat_recent_keywords?: string[] | null;
+  viewers?: number | null;
+  game_category?: string | null;
+};
+
 // ─── Stream metadata (C-02c) ─────────────────────────────────────────
 
 /**
