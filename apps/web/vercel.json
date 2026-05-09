@@ -1,6 +1,6 @@
 {
-  "installCommand": "pnpm install",
-  "buildCommand": "pnpm build",
+  "installCommand": "npm install --legacy-peer-deps",
+  "buildCommand": "npx next build",
   "framework": "nextjs",
   "crons": [
     {
