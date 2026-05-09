@@ -50,7 +50,7 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 - ✅ **P0-11** `[INFRA]` App Privy con embedded smart wallets en Base (Kernel implementation) → `PRIVY_APP_ID`, `NEXT_PUBLIC_PRIVY_APP_ID`, `PRIVY_APP_SECRET` cargados en `apps/web/.env.local`. Smoke test OK: `POST /v1/wallets` devolvió address válido (ver `tmp/test-privy.sh`, gitignored).
 - ✅ **P0-12** `[INFRA]` Proyecto Supabase + URL + service-role + anon key
 - ✅ **P0-13** `[INFRA]` App Alchemy en Base mainnet → `ALCHEMY_RPC_URL`
-- 🚧 **P0-14** `[INFRA]` **(Andy — BLOQUEANTE para B-11 audit clip + D-07 ad uploader)** Vercel Blob token → `BLOB_READ_WRITE_TOKEN`. Sacar en Vercel Dashboard → Storage → Blob → crear store si no existe → copiar token. Cargarla en `apps/web/.env.local` (Vercel proyecto `web`) Y en `poc/pipeline/.env` local. **El POC pipeline ya falla con HTTP 503 cuando le pegan a `/api/audit/clip` sin esta token** — código en [`poc/pipeline/src/auditClip.ts`](./poc/pipeline/src/auditClip.ts), error class `MissingBlobTokenError`. NO hay fallback local — el audit clip requiere URL pública para que la marca lo consuma.
+- ✅ **P0-14** `[INFRA]` Vercel Blob token → `BLOB_READ_WRITE_TOKEN` cargada en `poc/pipeline/.env` local (smoke test [`scripts/smoke-clip.ts`](./poc/pipeline/scripts/smoke-clip.ts) verificó upload e2e: `https://tcbljbmedl5ntsz1.public.blob.vercel-storage.com/audit-clips/...`). **Falta cargar también en `apps/web/.env.local` y en Vercel project (`web`)** para que C-14 pueda llamar `/api/audit/clip` desde producción — Andy hace `vercel env add BLOB_READ_WRITE_TOKEN` cuando arranque C-14.
 - ✅ **P0-15** `[INFRA]` Canal Twitch del team creado para meta-streaming + chat tmi.js (read-only anonymous, sin auth). Stream key conventional: `team-stream`. Per pivote a meta-streaming (`docs/PITCH.md`), el equipo se streamea a sí mismo durante el pitch — no hay videojuego, los speakers + dashboard son el contenido.
 - ✅ **P0-16** `.env.example` con todas las vars + `.env.local` cargado (no commitear)
 
@@ -192,7 +192,7 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 
 Andy cerró C-08m (manager-worker subscribe a context_chunks via Realtime, 2-stage filter con scores moment_quality/brand_match, POST a `/api/creators/<id>/render`). El orden sugerido para próximas tareas es:
 
-1. **P0-14** [INFRA, 5 min] — cargar `BLOB_READ_WRITE_TOKEN` en `apps/web/.env.local` Y en `poc/pipeline/.env`. **Bloqueante para B-11 y D-07**. Sin esto, el endpoint `/api/audit/clip` del pipeline tira HTTP 503 y la subasta C-14 queda sin clip auditable. Vercel Dashboard → Storage → Blob → token.
+1. ~~**P0-14**~~ ✅ ya cargada en `poc/pipeline/.env` (Lucas, 2026-05-09). Falta cargarla en Vercel proyecto `web` cuando arranques C-14 — `vercel env add BLOB_READ_WRITE_TOKEN production preview development`.
 2. **P0-07** [INFRA, 5 min] — `ANTHROPIC_API_KEY` en Vercel + local. Sin esto C-08, C-08c, C-08m, C-09, C-10 todos rompen.
 3. **C-02e** [30 min] — renombrar YAMLs: `cafetito.yaml` / `termoflex.yaml` / `pancho-rex.yaml` / `matebros.yaml` (mantener shape, cambiar display_name + persona + target_moods).
 4. **C-06** [1 h] — `scripts/seed-mandates.ts` que parsea YAMLs → INSERT en `mandates` table.
