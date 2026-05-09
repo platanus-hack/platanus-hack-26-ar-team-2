@@ -26,7 +26,6 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 | Jere | C-02 | 8 mandate templates YAML (brands/*.yaml) + loader TypeScript | 2026-05-09 |
 | Andy | C-13a | Event broadcast foundation: `POST /api/banner/broadcast` (Supabase Realtime broadcast REST) + `/banner` page (subscribe via supabase-js). Pattern base para C-14 (auction events) y D-02 (placement overlay). | 2026-05-09 |
 | Franco | A-05 | scripts/seed-wallets.ts (5 Privy smart wallets: 4 brands fictional + streamer-team, persistidas en accounts) | 2026-05-09 |
-| Franco | A-08 | Bindings escrow en `apps/web/src/lib/chain/escrow.ts` — `lockEscrow`/`releaseEscrow`/`refundEscrow` + watchers de eventos `Locked`/`Released`/`Refunded` con viem | 2026-05-09 |
 
 ---
 
@@ -96,7 +95,7 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 - 🟡 **A-05** `scripts/seed-wallets.ts` — genera **5 Privy smart wallets** (4 brands: cafetito/termoflex/pancho-rex/matebros + 1 streamer-team) y persiste addresses en `accounts`. La platform owner (`0x7e6685A241278d83068f8Cfb0Dd145F62cb17914`) ya existe — es quien deployó `AddieEscrow` y es `owner` inmutable; NO se genera vía Privy. — deps: P0-11, P0-12, P0-04
 - ⬜ **A-06** `[INFRA]` Fondear las **4 brand wallets** con $5 USDC y ~$0.10 ETH cada una. La streamer-team wallet no necesita fondos (solo recibe USDC en `release()`, no firma nada). — deps: A-05, P0-20, P0-21
 - ✅ **A-07** Cliente viem en `apps/web/src/lib/chain/viem.ts` (publicClient + walletClient factory por brand) — deps: A-04
-- 🟡 **A-08** Bindings escrow en `apps/web/src/lib/chain/escrow.ts` (`lockEscrow`, `releaseEscrow`, `refundEscrow`, watchers de eventos) — deps: A-07
+- ✅ **A-08** Bindings escrow en `apps/web/src/lib/chain/escrow.ts` (`lockEscrow`, `releaseEscrow`, `refundEscrow`, watchers de eventos) + helper `approveUsdcForEscrow` (USDC approve para que la brand wallet pueda hacer `transferFrom` desde el lock) + smoke `apps/web/scripts/smoke-escrow.mts` que valida ABI/RPC contra Base mainnet (verificado: owner/usdc/placements). — deps: A-07
 - ⬜ **A-09** Helper Privy server-side en `apps/web/src/lib/chain/privy.ts` (sign + send tx por brand id) — deps: A-05, A-07
 - ⬜ **A-10** Componente `TxFeed` (`apps/web/src/components/demo/TxFeed.tsx`) escuchando eventos on-chain con links a basescan — deps: A-08, P0-02
 

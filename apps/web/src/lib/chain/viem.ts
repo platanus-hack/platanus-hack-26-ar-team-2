@@ -27,5 +27,7 @@ export function getWalletClient(account: Account) {
   return createWalletClient({ account, chain: base, transport });
 }
 
+export type AddieWalletClient = ReturnType<typeof getWalletClient>;
+
 export { base };
 export type { Account, Address, Hash, Hex, PublicClient, WalletClient };
