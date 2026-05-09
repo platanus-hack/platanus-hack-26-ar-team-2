@@ -24,7 +24,6 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 |---|---|---|---|
 | Lucas | POC-PIPE | Pipeline POC standalone bajo `poc/pipeline/` (foundation para B-01..B-07: docker-compose nginx-rtmp + webhooks on_publish/on_publish_done + ffmpeg audio/frames + tmi.js chat + context tick en terminal) | 2026-05-09 |
 | Jere | C-02 | 8 mandate templates YAML (brands/*.yaml) + loader TypeScript | 2026-05-09 |
-| Franco | A-10 | TxFeed component (`apps/web/src/components/demo/TxFeed.tsx`): escucha eventos `Locked`/`Released`/`Refunded` del escrow con links a basescan | 2026-05-09 |
 | Franco | A-09 | Privy server-side sign helper (`apps/web/src/lib/chain/privy.ts`) — sign + send tx por brand id | 2026-05-09 |
 
 ---
@@ -97,7 +96,7 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 - ✅ **A-07** Cliente viem en `apps/web/src/lib/chain/viem.ts` (publicClient + walletClient factory por brand) — deps: A-04
 - ✅ **A-08** Bindings escrow en `apps/web/src/lib/chain/escrow.ts` (`lockEscrow`, `releaseEscrow`, `refundEscrow`, watchers de eventos) + helper `approveUsdcForEscrow` (USDC approve para que la brand wallet pueda hacer `transferFrom` desde el lock) + smoke `apps/web/scripts/smoke-escrow.mts` que valida ABI/RPC contra Base mainnet (verificado: owner/usdc/placements). — deps: A-07
 - 🟡 **A-09** Helper Privy server-side en `apps/web/src/lib/chain/privy.ts` (sign + send tx por brand id) — deps: A-05, A-07
-- 🟡 **A-10** Componente `TxFeed` (`apps/web/src/components/demo/TxFeed.tsx`) escuchando eventos on-chain con links a basescan — deps: A-08, P0-02
+- ✅ **A-10** Componente `TxFeed` (`apps/web/src/components/demo/TxFeed.tsx`) escuchando eventos on-chain con links a basescan via `watchEscrowEvents`. Client Component standalone — `useEffect` subscribe en mount, unwatch en unmount. Cap configurable (`maxItems`, default 20), backfill opcional (`fromBlock`), labels por address (`addressLabels`) para mostrar brand names en lugar de hex truncado. Cada row: icono + tipo (LOCK/RELEASE/REFUND) + counterparty + monto USDC formateado + hash truncado clickeable a `basescan.org/tx/<hash>`. Animaciones framer-motion (entrada slide-down) consistentes con `DemoDisplay`. — deps: A-08, P0-02
 
 ### Track B · Pipeline (sugerido: Lucas)
 
