@@ -15,7 +15,8 @@
     "smoke:privy": "node --env-file=.env.local --import tsx scripts/smoke-privy-sign.mts",
     "smoke:killswitch": "node --env-file=.env.local --import tsx scripts/smoke-a-12-killswitch.mts",
     "fund:brands": "node --env-file=.env.local --import tsx scripts/fund-brands.mts",
-    "smoke:mandates": "node --experimental-strip-types scripts/smoke-mandate-loader.mts"
+    "smoke:mandates": "node --experimental-strip-types scripts/smoke-mandate-loader.mts",
+    "sim:orch": "node --env-file=.env.local --import tsx scripts/sim-orchestrator.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.40.1",

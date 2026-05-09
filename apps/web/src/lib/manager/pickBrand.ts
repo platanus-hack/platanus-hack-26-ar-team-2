@@ -8,7 +8,10 @@
  * Stub picker available for `MANAGER_DRY_RUN=true` (no API key needed).
  */
 
-import Anthropic from "@anthropic-ai/sdk";
+// Type-only import — runtime require() is deferred to makeClaudePicker so
+// dry-run flows (stub picker) and harnesses (C-08test) work without the SDK
+// installed locally.
+import type Anthropic from "@anthropic-ai/sdk";
 
 import { BRANDS, type Brand } from "@/lib/brands";
 
@@ -57,9 +60,15 @@ const TOOL: Anthropic.Tool = {
 export type Picker = (chunk: ContextChunk) => Promise<BrandPick>;
 
 export function makeClaudePicker(apiKey: string, model: string): Picker {
-  const client = new Anthropic({ apiKey });
+  let clientPromise: Promise<Anthropic> | null = null;
 
   return async function pickBrand(chunk) {
+    if (!clientPromise) {
+      clientPromise = import("@anthropic-ai/sdk").then(
+        (m) => new m.default({ apiKey }),
+      );
+    }
+    const client = await clientPromise;
     const userPrompt = renderPrompt(chunk, BRANDS);
 
     const response = await client.messages.create({
