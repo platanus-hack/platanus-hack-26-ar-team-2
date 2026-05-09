@@ -1,0 +1,13 @@
+services:
+  rtmp:
+    image: tiangolo/nginx-rtmp:latest
+    container_name: addie-rtmp
+    ports:
+      - "1935:1935"
+      - "8080:80"
+    volumes:
+      - ./nginx-rtmp.conf:/etc/nginx/nginx.conf:ro
+      - ./record:/tmp/record
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
