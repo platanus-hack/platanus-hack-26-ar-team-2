@@ -9,6 +9,8 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "seed:wallets": "node --env-file=.env.local --import tsx scripts/seed-wallets.ts",
+    "seed:mandates": "node --env-file=.env.local --import tsx scripts/seed-mandates.ts",
+    "seed:inventory": "node --env-file=.env.local --import tsx scripts/seed-inventory.ts",
     "smoke:privy": "node --env-file=.env.local --import tsx scripts/smoke-privy-sign.mts",
     "smoke:killswitch": "node --env-file=.env.local --import tsx scripts/smoke-a-12-killswitch.mts",
     "fund:brands": "node --env-file=.env.local --import tsx scripts/fund-brands.mts",
