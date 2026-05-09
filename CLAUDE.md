@@ -17,6 +17,7 @@ Reglas y contexto para que cualquier agente (humano o LLM) pueda colaborar en es
 | [`DESIGN.md`](./DESIGN.md) | Diseño completo: arquitectura, stack, demo, riesgos. **Empezá leyendo esto.** |
 | [`TODO.md`](./TODO.md) | Tareas con dependencias + tabla de claims. **Antes de programar, firmá tu claim acá.** |
 | [`README.md`](./README.md) | Quick-start del repo. |
+| [`apps/web/scripts/sim-orchestrator.ts`](./apps/web/scripts/sim-orchestrator.ts) + [`fixtures/orchestrator-cases.ts`](./apps/web/scripts/fixtures/orchestrator-cases.ts) | Harness del orquestador (C-08test). Corré `pnpm sim:orch` antes de mergear cualquier cambio que toque manager/gates/agentes/settlement — ver [Tests](#tests--verificar-antes-de-mergear). |
 
 ## Equipo
 
@@ -110,6 +111,29 @@ Reglas:
 - ⛔ Cero features fuera del [§15 DESIGN.md](./DESIGN.md) (YAGNI duro durante 24h).
 - ⛔ Cero generación de creative en runtime — todo pre-subido por la marca (ver §6 DESIGN.md).
 
+## Tests / verificar antes de mergear
+
+Antes de pushear a `main` un cambio que toque **manager / gates / brand-agents / negotiation / settlement**, corré el harness del orquestador (C-08test) y verificá que los fixtures enabled sigan verde:
+
+```bash
+cd apps/web
+pnpm sim:orch                        # corre todos los enabled (hoy F-01 + F-04)
+pnpm sim:orch -- --case F-01         # uno solo
+MANAGER_DRY_RUN=false pnpm sim:orch  # con LLM real (requiere ANTHROPIC_API_KEY)
+```
+
+El harness INSERTa chunks sintéticos en `context_chunks` (sin OBS/RTMP/pipeline), dispara la cadena del orquestador y compara `render_events` contra el `expected` de cada fixture. **Si algún fixture rojea, el cambio rompió un contrato existente** — fix antes de mergear.
+
+**Si tu PR agrega o modifica gates/agentes/scoring**, también:
+
+- Actualizá [`apps/web/scripts/fixtures/orchestrator-cases.ts`](./apps/web/scripts/fixtures/orchestrator-cases.ts):
+  - Habilitá los fixtures `skip:true` cuyo `pending_reason` mencione tu task (ej. C-08a destraba F-02/F-03/F-05).
+  - Enriquecé el `expect` con los nuevos campos que tu cambio expone (ej. `gate_skips[]`, `bid_usdc_min`).
+  - Si tu cambio cubre un caso nuevo, agregá un fixture (F-07, F-08…) calibrado a un escenario del [`docs/PITCH.md`](./docs/PITCH.md).
+- Si C-14 (`/api/auctions/run`) lande, switcheá el trigger del runner de `managerTick()` directo a `fetch POST`.
+
+El harness es **el contrato del orquestador** — sin él no podemos saber si gates/agentes nuevos rompen flows que ya andaban sin levantar OBS+pipeline cada vez.
+
 ## Stack — pointer rápido
 
 Detalle completo en [§8 DESIGN.md](./DESIGN.md). En una línea:
@@ -137,6 +161,7 @@ Si tu trabajo es transversal, creá `feat/<short-desc>` desde `main`.
 pnpm dev                    # Next.js dev server
 pnpm typecheck              # tsc --noEmit
 pnpm lint
+pnpm sim:orch               # harness del orquestador (C-08test) — antes de mergear cambios a manager/gates/agentes
 
 # Contracts
 cd contracts && forge test
