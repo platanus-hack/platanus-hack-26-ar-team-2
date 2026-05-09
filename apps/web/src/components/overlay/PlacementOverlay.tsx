@@ -132,7 +132,14 @@ export default function PlacementOverlay({
   useEffect(() => {
     if (current && videoRef.current) {
       videoRef.current.load();
-      videoRef.current.play().catch(() => {});
+      // Browsers block autoplay of unmuted video. Try unmuted first,
+      // fall back to muted autoplay if rejected (OBS Browser Source allows both).
+      videoRef.current.play().catch(() => {
+        if (videoRef.current) {
+          videoRef.current.muted = true;
+          videoRef.current.play().catch(() => {});
+        }
+      });
     }
   }, [current]);
 
@@ -243,7 +250,8 @@ function FullscreenInner({
           ref={videoRef}
           src={placement.ad_url}
           className="w-full h-full object-cover"
-          muted={!audioEnabled}
+          autoPlay
+          muted
           playsInline
           onError={() => setErrored(true)}
           onEnded={onExpire}
@@ -294,7 +302,8 @@ function ZonedAd({
           // object-contain en lower-third / corner → el ad se ve completo,
           // sin crop. El brand color rellena los bordes.
           className="w-full h-full object-contain"
-          muted={!audioEnabled}
+          autoPlay
+          muted
           playsInline
           onError={() => setErrored(true)}
           onEnded={onExpire}
