@@ -15,6 +15,7 @@
     "smoke:mandates": "node --experimental-strip-types scripts/smoke-mandate-loader.mts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.40.1",
     "@privy-io/server-auth": "^1.32.5",
     "better-auth": "^1.6.9",
     "framer-motion": "^12.38.0",
