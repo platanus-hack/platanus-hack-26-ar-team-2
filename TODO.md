@@ -58,12 +58,12 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 - ⬜ **P0-17** `[INFRA]` Docker compose con `nginx-rtmp` (localhost:1935 RTMP + 8080 HTTP control + volumen para `record`)
 - ⬜ **P0-18** `[INFRA]` OBS publica al RTMP local con un test stream (verificar con `ffprobe rtmp://localhost/live/test`)
 - ⬜ **P0-19** `[INFRA]` Plugin OBS *Multiple RTMP Outputs* instalado para multi-stream local + Twitch
-- ⬜ **P0-20** `[INFRA]` Conseguir 50–100 USDC en Base (treasury del equipo) para fondear escrow + 8 brand wallets a $5 c/u
-- ✅ **P0-21** `[INFRA]` ~$1 ETH en Base para gas de las 9 wallets
+- ⬜ **P0-20** `[INFRA]` Conseguir ~$25-30 USDC en Base (treasury del equipo) para fondear las **4 brand wallets** a $5 c/u + buffer. La wallet del streamer-team no requiere USDC (solo recibe en `release()`); la platform owner tampoco (no firma `lock()`).
+- ✅ **P0-21** `[INFRA]` ~$1 ETH en Base para gas — alcanza de sobra para las 5 wallets que firman txs (4 brands + platform owner). La streamer-team wallet no firma nada, no necesita ETH.
 
 ### Diseño compartido
 
-- ✅ **P0-22** Definir brand mandates en YAML — drafts iniciales en `apps/web/src/lib/agents/brands/*.yaml`. **MVP scope reducido a 2 brands** (decisión 2026-05-09, ver DESIGN.md §17): **adidas** (premium episodic) + **mp** (`always_bid_floor: true` default bidder al floor §4). Los 6 brands restantes del draft inicial (nike, quilmes, steam, rappi, globant, cocacola) quedan como referencia para post-MVP — el código es brand-count-agnóstico.
+- ✅ **P0-22** Definir brand mandates en YAML — drafts iniciales en `apps/web/src/lib/agents/brands/*.yaml`. **MVP scope final: 4 brands fictional** (post-pivote a meta-streaming, ver `docs/PITCH.md` Bloque 2 + C-02e): **CafetITO** (premium episodic, mood `high_energy`), **TermoFlex** (`always_bid_floor: true` default bidder §4), **Pancho Rex** (niche lunch/late daypart), **MateBros** (community/`casual_chat`). Los YAMLs reales se renombran en C-02e. El código es brand-count-agnóstico.
 
 ✅ **Checkpoint 1 — sáb 08:00:** Phase 0 cerrada, todos arrancan tracks paralelos.
 
@@ -90,8 +90,8 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
   Si findings críticos → fix + `forge test` verde + re-audit. Si clean o nits → FF cierre de A-01 + A-02 + A-02b a `main`. **Mismo gate aplica a todo cambio futuro de `AddieEscrow.sol`.** — deps: A-02
 - ✅ **A-03** `contracts/script/Deploy.s.sol` + deploy a Base mainnet @ [`0x8300B9Bd1B6a18163EBd5fB9e0EFa1b7Fd99bCfE`](https://basescan.org/address/0x8300B9Bd1B6a18163EBd5fB9e0EFa1b7Fd99bCfE) (verified, owner `0x7e6685A241278d83068f8Cfb0Dd145F62cb17914`, USDC `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`)
 - ✅ **A-04** `[INFRA]` Anotar address del contrato deployed en `apps/web/src/lib/chain/escrow.ts` como const + verificar en basescan — deps: A-03
-- ⬜ **A-05** `scripts/seed-wallets.ts` — genera 9 Privy smart wallets (8 brand + 1 platform owner) y persiste addresses en `accounts` — deps: P0-11, P0-12, P0-04
-- ⬜ **A-06** `[INFRA]` Fondear las 8 brand wallets con $5 USDC y ~$0.10 ETH cada una — deps: A-05, P0-20, P0-21
+- ⬜ **A-05** `scripts/seed-wallets.ts` — genera **5 Privy smart wallets** (4 brands: cafetito/termoflex/pancho-rex/matebros + 1 streamer-team) y persiste addresses en `accounts`. La platform owner (`0x7e6685A241278d83068f8Cfb0Dd145F62cb17914`) ya existe — es quien deployó `AddieEscrow` y es `owner` inmutable; NO se genera vía Privy. — deps: P0-11, P0-12, P0-04
+- ⬜ **A-06** `[INFRA]` Fondear las **4 brand wallets** con $5 USDC y ~$0.10 ETH cada una. La streamer-team wallet no necesita fondos (solo recibe USDC en `release()`, no firma nada). — deps: A-05, P0-20, P0-21
 - ✅ **A-07** Cliente viem en `apps/web/src/lib/chain/viem.ts` (publicClient + walletClient factory por brand) — deps: A-04
 - ⬜ **A-08** Bindings escrow en `apps/web/src/lib/chain/escrow.ts` (`lockEscrow`, `releaseEscrow`, `refundEscrow`, watchers de eventos) — deps: A-07
 - ⬜ **A-09** Helper Privy server-side en `apps/web/src/lib/chain/privy.ts` (sign + send tx por brand id) — deps: A-05, A-07
