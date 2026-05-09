@@ -2,11 +2,26 @@
 # Lo consume gate1 al match contra event_filters de cada brand.
 # Ver docs/GATES.md §5.
 
-# Canal real del team — confirmado en P0-15 ✅ (TODO.md:52). Stream key conventional:
-# `team-stream`. Verificado HTTP 200 en /o/team-stream en prod (A-11). El env var
-# correspondiente en producción es TWITCH_CHANNEL=team-stream (apps/web/.env.example).
+# ─── Dos identificadores distintos (no confundir) ─────────────────────
+#
+# stream_id  = `team-stream`   ← interno de Addie. RTMP path / stream_key
+#                                  que OBS publica a nginx-rtmp y que el
+#                                  pipeline `on_publish` recibe como `name=`.
+#                                  Es también el filename de este YAML
+#                                  (loader resuelve por filename).
+#
+# streamer   = `jerebacher`    ← handle de Twitch real. El equipo reusa el
+#                                  canal personal de Jere para el demo.
+#                                  Lo consume tmi.js (chat IRC `#jerebacher`)
+#                                  y la Helix API para `viewer_count`/`game`.
+#                                  En prod va en env var TWITCH_CHANNEL o
+#                                  en `accounts.metadata.twitch_channel`
+#                                  (per-session lookup, ver poc/pipeline/README.md).
+#
+# Ambos quedan registrados acá para que el lookup runtime sea trivial.
+
 stream_id: team-stream
-streamer: "team-stream"
+streamer: "jerebacher"
 category: just_chatting                   # categoría amplia → más brands matchean
 game: null
 language: es-AR
@@ -40,8 +55,9 @@ rehearsed_triggers:
     expected_mood: casual_chat
 
 # Audience profile esperado para el demo de hackathon.
-# La audiencia EN TWITCH durante el pitch es minúscula — los jurados miran
-# físicamente, no por el stream. Realísticamente 2-10 viewers conectados.
+# La audiencia EN TWITCH (canal jerebacher) durante el pitch es minúscula —
+# los jurados miran físicamente, no por el stream. Realísticamente 2-10
+# viewers conectados (followers casuales de Jere + curiosos del hackathon).
 # Esto baseline calibra `matebros.max_viewers` (= 2): MateBros skipea cuando
 # hay >2 viewers, dando el SKIP literal "audiencia muy grande" del PITCH.
 audience:
