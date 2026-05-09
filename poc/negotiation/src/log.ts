@@ -87,9 +87,12 @@ export function actionTag(action: string): string {
   }
 }
 
-export function termsLine(terms: { bid_usdc: number; duration_s: number; zone: string } | undefined): string {
+export function termsLine(
+  terms: { bid_usdc: number; duration_s: number; zone: string; exclusivity_s?: number } | undefined,
+): string {
   if (!terms) return "";
-  return chalk.dim(`$${terms.bid_usdc.toFixed(2)} · ${terms.zone} · ${terms.duration_s}s`);
+  const excl = terms.exclusivity_s ? chalk.cyan(` · excl=${terms.exclusivity_s}s`) : "";
+  return chalk.dim(`$${terms.bid_usdc.toFixed(2)} · ${terms.zone} · ${terms.duration_s}s`) + excl;
 }
 
 async function typewrite(text: string, color: (s: string) => string) {
@@ -108,9 +111,13 @@ export async function turnLine(opts: {
   to: string;
   action: string;
   message: string;
-  terms?: { bid_usdc: number; duration_s: number; zone: string };
+  terms?: { bid_usdc: number; duration_s: number; zone: string; exclusivity_s?: number };
   /** Streamer-side: which playbook tactic was applied. */
   tactic?: string;
+  /** Concession-curve target the speaker was supposed to follow this round. */
+  curve_target_usdc?: number;
+  /** Code-side override that flipped the LLM's intended action. */
+  override?: { from_action: string; rule: string; reason: string };
 }) {
   const arrow = chalk.dim("→");
   const tag = actionTag(opts.action);
@@ -118,7 +125,19 @@ export async function turnLine(opts: {
   const toL = speakerLabel(opts.to);
   const tline = termsLine(opts.terms);
   const tactic = opts.tactic ? chalk.dim(`  [${opts.tactic}]`) : "";
-  console.log(`  ${ts()}  [${fromL} ${arrow} ${toL}]  ${tag}  ${tline}${tactic}`);
+  let curveTag = "";
+  if (opts.curve_target_usdc != null && opts.terms) {
+    const delta = opts.terms.bid_usdc - opts.curve_target_usdc;
+    const deltaPct = (delta / opts.curve_target_usdc) * 100;
+    const sign = delta >= 0 ? "+" : "";
+    curveTag = chalk.dim(`  [curve $${opts.curve_target_usdc.toFixed(2)} · Δ${sign}${deltaPct.toFixed(1)}%]`);
+  }
+  console.log(`  ${ts()}  [${fromL} ${arrow} ${toL}]  ${tag}  ${tline}${tactic}${curveTag}`);
+  if (opts.override) {
+    console.log(
+      `             ${chalk.bgRed.white(" GATE ")} ${chalk.red(`override ${opts.override.from_action}→${opts.action}`)} ${chalk.dim(`[${opts.override.rule}] ${opts.override.reason}`)}`,
+    );
+  }
   process.stdout.write(`             ${chalk.dim("│")}  `);
   await typewrite(`"${opts.message}"`, brandColor(opts.from));
   process.stdout.write("\n");
@@ -139,7 +158,7 @@ export function valuationLine(brandId: string, v: import("./types.js").Valuation
 }
 
 export function marketSignalsBlock(market: import("./valuation.js").MarketSignals) {
-  console.log(`  ${chalk.bold.white("Market signals")} ${chalk.dim("(shared baseline, mismo que ven todos los agents)")}`);
+  console.log(`  ${chalk.bold.white("Market signals")} ${chalk.dim("(shared baseline · mismo que ven todos los agents)")}`);
   console.log(
     `  ${pad("intensity", 10)} ${chalk.white(market.intensity_label)} ${chalk.dim(`(${market.moment_intensity}, CPM ×${market.intensity_multiplier})`)}`,
   );
@@ -149,10 +168,42 @@ export function marketSignalsBlock(market: import("./valuation.js").MarketSignal
     const cpm = market.effective_cpm_usdc[z as keyof typeof market.effective_cpm_usdc];
     const imp = market.expected_impressions[z as keyof typeof market.expected_impressions];
     const res = market.dynamic_reserve_usdc[z as keyof typeof market.dynamic_reserve_usdc];
+    const asp = market.streamer_aspiration_usdc[z as keyof typeof market.streamer_aspiration_usdc];
     console.log(
-      `  ${pad(z, 22)} fair=${chalk.white(`$${fv.toFixed(2)}`)} ${chalk.dim(`(eCPM=$${cpm}, imp=${imp})`)}  reserve=${chalk.yellow(`$${res.toFixed(2)}`)}`,
+      `  ${pad(z, 22)} fair=${chalk.white(`$${fv.toFixed(2)}`)} ${chalk.dim(`(eCPM=$${cpm}, imp=${imp})`)}  ${chalk.yellow(`reserve=$${res.toFixed(2)}`)}  ${chalk.cyan(`aspiration=$${asp.toFixed(2)}`)}`,
     );
   }
+}
+
+export function metricsBlock(opts: {
+  brands_evaluated: number;
+  brands_bid: number;
+  closure_rate: number;
+  avg_rounds_to_close: number;
+  total_llm_calls: number;
+  ac_overrides_fired: number;
+  walks_due_to_walk_away: number;
+  winner_pct_of_fair_value?: number;
+  total_revenue_usdc: number;
+}) {
+  const line = "─".repeat(64);
+  console.log("");
+  console.log(chalk.dim(line));
+  console.log(`  ${chalk.bold.white("ROUND METRICS")}`);
+  console.log(chalk.dim(line));
+  const row = (k: string, v: string) => console.log(`  ${chalk.gray(pad(k, 28))} ${chalk.white(v)}`);
+  row("brands evaluated", `${opts.brands_evaluated}`);
+  row("brands that bid", `${opts.brands_bid}`);
+  row("closure rate", `${(opts.closure_rate * 100).toFixed(0)}%  (${Math.round(opts.closure_rate * opts.brands_bid)}/${opts.brands_bid} closed-as-deal)`);
+  row("avg rounds to close", opts.avg_rounds_to_close.toFixed(2));
+  row("total LLM calls", `${opts.total_llm_calls}`);
+  row("AC_combi overrides fired", `${opts.ac_overrides_fired}${opts.ac_overrides_fired > 0 ? chalk.red(" ← gates caught LLM mistakes") : ""}`);
+  row("walks-on-mandate-cap", `${opts.walks_due_to_walk_away}`);
+  if (opts.winner_pct_of_fair_value != null) {
+    row("winner % of fair_value", `${(opts.winner_pct_of_fair_value * 100).toFixed(1)}%`);
+  }
+  row("total revenue this round", chalk.bold.green(`$${opts.total_revenue_usdc.toFixed(2)} USDC`));
+  console.log(chalk.dim(line));
 }
 
 export function strategyLine(text: string) {

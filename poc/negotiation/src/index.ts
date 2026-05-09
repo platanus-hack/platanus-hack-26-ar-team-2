@@ -81,8 +81,8 @@ async function main() {
 
   await log.phasePause();
 
-  // ---- PHASE 2: multi-turn negotiation with playbook + valuation anchoring ----
-  const closed = await runNegotiationRound(openings, market);
+  // ---- PHASE 2: multi-turn negotiation with playbook + curve + AC_combi gates ----
+  const { closed, metrics } = await runNegotiationRound(openings, market);
 
   // ---- PHASE 3: single-winner selection ----
   log.section("PHASE 3 · WINNER SELECTION  (single ad per moment — streamer picks ONE)");
@@ -108,8 +108,22 @@ async function main() {
     for (const r of decision.rejected) log.rejectedRow(r.brand_id, r.reason);
   }
 
-  console.log("");
-  log.info(`Revenue this round: $${decision.total_revenue_usdc.toFixed(2)} USDC`);
+  // ---- Metrics block ----
+  const winnerPctOfFairValue = decision.winner
+    ? decision.winner.terms.bid_usdc / market.fair_value_usdc[decision.winner.terms.zone]
+    : undefined;
+  log.metricsBlock({
+    brands_evaluated: BRANDS.length,
+    brands_bid: metrics.brands_bid,
+    closure_rate: metrics.closure_rate,
+    avg_rounds_to_close: metrics.avg_rounds_to_close,
+    total_llm_calls: metrics.total_llm_calls + BRANDS.length /* hunt calls */ + 1 /* picker */,
+    ac_overrides_fired: metrics.ac_overrides_fired,
+    walks_due_to_walk_away: metrics.walks_due_to_walk_away,
+    winner_pct_of_fair_value: winnerPctOfFairValue,
+    total_revenue_usdc: decision.total_revenue_usdc,
+  });
+
   log.info("(Settlement → AddieEscrow.lock() on Base — fuera del scope de este POC)");
   console.log("");
 }
