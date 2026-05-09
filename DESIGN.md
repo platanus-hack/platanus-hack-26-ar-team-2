@@ -187,7 +187,17 @@ T+5s     ⏰ Hard deadline → settlement step:
 
 **Standing offers.** En cualquier turno, lo último que dijo el brand-agent cuenta como su oferta vigente. Si se traba en regateo eterno o se queda sin turnos, su última oferta sigue en pie. Al deadline el streamer-agent agarra la mejor disponible — igual que un closing call de mercado real ("going once, going twice, sold").
 
-**Fill garantizado vía house bidder.** Uno de los 8 brand-agents (típicamente MercadoPago con su `persistent_logo` en corner) actúa como **floor bidder permanente**: para cualquier contexto que no sea brand-unsafe, ofrece exactamente el reserve del streamer. Eso garantiza que siempre haya al menos un deal cerrable. Los otros 7 cazan momentos épicos y desplazan al house cuando matchean. Es transparente — figura como tercera pata del *Know Your Agent* del mp (`always_bid_floor: true` en su mandate).
+### Un solo ad por momento
+
+En cualquier instante corre **EXACTAMENTE UN ad** en pantalla, sin importar la zona. Las zonas (`lower_third`, `bottom_right_corner`, `fullscreen_takeover`) son **formatos** del único slot — definen dónde aparece el ad y cuánto puede durar — no slots simultáneos. Cada subasta termina con UN único ganador a través de todas las zonas competidoras.
+
+Esto significa:
+- Entre momentos épicos detectados (o FULL BREAK manual), la pantalla está limpia, sin overlay.
+- Si un brand-agent bidea con `lower_third 6s` y otro con `bottom_right_corner 30s`, son **alternativas** del mismo slot — ganará una sola.
+- El streamer-agent elige el ganador comparando revenue absoluto + fit del momento + marcas preferidas.
+- Las zonas se mantienen en el modelo porque definen el formato visual del ad ganador (tamaño, posición, duración), pero nunca corren en paralelo.
+
+**Default bidder vía mp.** Uno de los 8 brand-agents (MercadoPago con su `persistent_logo`) actúa como **default bidder al floor**: para cualquier contexto que no sea brand-unsafe, ofrece exactamente el reserve mínimo del streamer. Garantiza que toda subasta tenga al menos UNA standing offer cerrable al deadline, incluso si los otros 7 brands pasan el momento. Si una marca premium bidea más alto, la desplaza naturalmente. Es transparente — figura como tercera pata del *Know Your Agent* del mp (`always_bid_floor: true` en su mandate).
 
 ### Soft hold ledger (off-chain)
 
@@ -201,27 +211,32 @@ Cada vez que un brand-agent emite o actualiza una standing offer, se crea/refres
 
 ### Settlement step (T+5s)
 
-1. Streamer-agent elige la mejor standing offer ≥ floor de su mandate.
-2. Si ninguna supera el floor, gana el house bidder (siempre tiene una standing offer exacta al floor → fill garantizado).
+1. Streamer-agent elige la mejor standing offer ≥ floor de su mandate **a través de todas las zonas competidoras** (lower_third, corner). Comparación: revenue absoluto + fit + marca preferida.
+2. Si ninguna supera el floor, gana el default bidder (mp tiene siempre una standing offer exacta al floor → fill garantizado).
 3. El hold del ganador se convierte en `escrow.lock()` on-chain real.
 4. Si el lock falla on-chain (defensivo), fallback al runner-up — también tiene hold activo.
 5. Holds de los perdedores se liberan; vuelven al `available_balance` del LLM en su próxima decisión.
 
 ### Garantías
 
-- ✅ **Siempre hay ganador** — house bidder + fallback al runner-up.
+- ✅ **Single-ad-per-moment** — UN único placement on-screen por subasta, nunca dos overlays compitiendo.
+- ✅ **Siempre hay ganador** — default bidder al floor garantiza que toda subasta cierra; runner-up cubre lock failures.
 - ✅ **Latencia predecible** — 5s exactos, sin diálogos eternos.
 - ✅ **Sin double-spend** — soft holds previenen sobre-comprometer balance entre subastas paralelas.
-- ✅ **Cero gaps en pantalla** — capa always-on (corner) sirve continuo mientras los premium slots resuelven.
 
-### Inventario en dos capas
+### Inventario: zonas como formatos del único slot
 
-| Capa | Slots | Comportamiento | Estado típico |
+Las zonas no son slots simultáneos — son **formatos** que definen dónde y cuánto dura el ad ganador.
+
+| Zona | Tamaño / posición | Duración típica | Cuándo dispara |
 |---|---|---|---|
-| **Always-on** | `bottom_right_corner` | Servido continuo por house bidder a floor price | Siempre lleno (logo persistente) |
-| **Episódico** | `lower_third`, `fullscreen_takeover` | Solo dispara en contextos épicos detectados por pipeline | Vacío la mayor parte del tiempo (la escasez los hace premium) |
+| `lower_third` | Banda inferior 1920×180 | 5-8s | Subasta automática en momentos épicos detectados por el pipeline |
+| `bottom_right_corner` | Logo 240×240 esquina | hasta 60s | Subasta automática también disponible; default bidder cubre el floor si nadie mejor bidea |
+| `fullscreen_takeover` | Pantalla completa 1920×1080 | 30s | **Solo manual** vía hotkey FULL BREAK del creator (Acto 4 demo) |
 
-Esto significa que **siempre hay algo on-screen y algo en basescan**, incluso si los slots premium están en gap entre momentos épicos.
+En subastas automáticas los brand-agents pueden ofertar en `lower_third` o `bottom_right_corner` — la elección de zona es parte de su standing offer. El streamer-agent elige UNA zona ganadora por subasta (puede preferir un `lower_third 6s` a $2.50 sobre un `corner 30s` a $1.20 si el momento es épico, o al revés en un momento calm). `fullscreen_takeover` queda fuera del bidding automático y solo se activa con hotkey, disparando una subasta dedicada.
+
+**Cadencia esperada en demo:** ~6 subastas en 5 min (una por momento épico) = ~6 placements = 12 txs on-chain (lock + release por placement).
 
 **Post-MVP:** reemplazar soft hold por **EIP-3009 `transferWithAuthorization`** (USDC nativo). Cada standing offer firmada como auth con `validBefore = T+10s`. Hold real on-chain, no centralizado, auditable. Ver §13.
 
@@ -615,11 +630,11 @@ main                         ← integraciones, mergeos en checkpoints
 #### 🤖 Dev 3 — AGENTS
 
 **Owns:**
-- 8 brand mandate templates (YAML), incluyendo `always_bid_floor: true` para mp (house bidder, §4)
+- 8 brand mandate templates (YAML), incluyendo `always_bid_floor: true` para mp (default bidder al floor, §4)
 - brand-agent runner (hunter logic — pickea ad variant + bid amount)
 - streamer-agent runner (defender logic — accept/counter/reject)
 - **Subasta con deadline duro (§4):** negotiation orchestrator multi-turno paralelo (3 turnos cap) + standing offers table actualizada turno a turno + **soft hold ledger off-chain** (10s expiry, expone `available_balance` corregido a cada LLM)
-- **Settlement engine (§4):** al deadline T+5s, streamer-agent cierra unilateralmente la mejor standing ≥ floor; fallback al house bidder si nadie pasa el floor; fallback al runner-up si lock on-chain falla
+- **Settlement engine (§4):** al deadline T+5s, streamer-agent cierra unilateralmente la mejor standing ≥ floor a través de TODAS las zonas competidoras (single-ad-per-moment); fallback al default bidder si nadie pasa el floor; fallback al runner-up si lock on-chain falla
 - Brand-safety listener (auto-pull + escrow.refund trigger)
 - QR generation server-side + tracking redirect (`/api/q/[placement]`)
 - **Audit metadata (§5):** persistir `agent_reasoning` (output del LLM) + `negotiation_transcript` (todos los turnos) en `placements` al settlement
@@ -821,9 +836,9 @@ Lo que **sí está en MVP**: audit completo (clip + reasoning + transcript) y so
 | QR | **Server-side dynamic con tracking_id por placement** |
 | On-chain txs por placement | **2** (lock + release). Demo de 5 min × 6 placements = 12 txs. |
 | Brand-safety | **Auto-pull con escrow.refund automático** |
-| **Auction mechanics** | **Standing offers + 5s hard deadline + house bidder al floor → fill garantizado, cero gaps en pantalla** |
+| **Auction mechanics** | **Standing offers + 5s hard deadline + default bidder al floor (mp) → fill garantizado por subasta** |
 | **Holds durante negociación** | **Soft hold ledger off-chain (10s expiry). Post-MVP: EIP-3009 on-chain.** |
-| **Inventario** | **Dos capas: always-on (corner, house bidder) + episódico (lower_third / takeover)** |
+| **Inventario** | **Single-ad-per-moment. Zonas (lower_third / corner / takeover) son FORMATOS del único slot, no slots simultáneos. Entre subastas la pantalla está limpia.** |
 | **Audit por placement** | **Clip 30s + context snapshot + agent reasoning + transcript negociación, todo guardado y exportable a la marca** |
 | **Approve del creator per placement** | **Post-MVP §14. MVP confía en mandate firmado + brand-safety auto-pull.** |
 | **Hosting de los agents** | **MVP: 9 agents corren en infra de Addie. Post-MVP §14: marcas/streamers pueden traer su propio agent (BYO).** |

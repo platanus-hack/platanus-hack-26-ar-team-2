@@ -20,7 +20,7 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 
 | Dev | Task ID | Scope | Started |
 |---|---|---|---|
-| _(libre)_ | | | |
+| Andy | POC-NEG | Multi-agent negotiation POC bajo `poc/negotiation/` (foundation para C-08..C-13: valuation CPM-based, concession curves Faratin, AC_combi gate, BATNA, multi-issue exclusivity) | 2026-05-09 |
 
 ---
 
@@ -60,7 +60,7 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 
 ### Diseño compartido
 
-- ⬜ **P0-22** Definir 8 brand mandates en YAML (adidas, nike, quilmes, mp, steam, rappi, globant, cocacola) — drafts iniciales en `apps/web/src/lib/agents/brands/*.yaml`. **mp con `always_bid_floor: true`** (house bidder §4)
+- ⬜ **P0-22** Definir 8 brand mandates en YAML (adidas, nike, quilmes, mp, steam, rappi, globant, cocacola) — drafts iniciales en `apps/web/src/lib/agents/brands/*.yaml`. **mp con `always_bid_floor: true`** (default bidder al floor §4)
 
 ✅ **Checkpoint 1 — sáb 08:00:** Phase 0 cerrada, todos arrancan tracks paralelos.
 
@@ -109,8 +109,8 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 - ⬜ **C-09** streamer-agent runner (`apps/web/src/lib/agents/streamer/`): recibe ofertas, evalúa contra mandate del creator, contraoferta o accept — deps: C-01, P0-07
 - ⬜ **C-10** Negotiation orchestrator (`apps/web/src/lib/agents/negotiation/`): subasta multi-turno paralela, 3 turnos cap, **5s hard deadline**, standing offers actualizadas turno a turno — deps: C-08, C-09
 - ⬜ **C-11** Soft hold ledger off-chain en memoria (`apps/web/src/lib/agents/negotiation/holds.ts`): refresca holds cada turno, expone `available_balance = on_chain - Σ(holds_propios)` al LLM — deps: C-10, A-08
-- ⬜ **C-12** Settlement engine: al T+5s pickea mejor standing ≥ floor, fallback a house bidder si nadie pasa el floor, fallback a runner-up si lock falla — deps: C-10, C-11, A-08
-- ⬜ **C-13** House bidder forced para mp (`always_bid_floor: true`): siempre emite floor offer si el contexto no es brand-unsafe — deps: C-08
+- ⬜ **C-12** Settlement engine: al T+5s pickea **single winner** mejor standing ≥ floor a través de TODAS las zonas competidoras (single-ad-per-moment §4), fallback a default bidder si nadie pasa el floor, fallback a runner-up si lock falla — deps: C-10, C-11, A-08
+- ⬜ **C-13** Default bidder al floor para mp (`always_bid_floor: true`): siempre emite floor offer si el contexto no es brand-unsafe; garantiza fill cuando ningún brand premium bidea — deps: C-08
 - ⬜ **C-14** Endpoint `POST /api/auctions/run` que dispara la subasta cuando llega un epic moment + emite evento de placement con `{ad_url, qr_url, duration_ms, zone, placement_id}` — deps: C-10, C-12
 - ⬜ **C-15** Brand-safety listener (`apps/web/src/lib/agents/safety/`) que monitorea audio + chat durante el render y dispara `escrow.refund` si hay keyword pull — deps: C-14, A-08, B-04, B-06
 - ⬜ **C-16** Persistir audit metadata al settlement: `agent_reasoning` (output LLM ganador) + `negotiation_transcript` (todos los turnos) + `winning_offer` en `placements` — deps: C-14, C-05
