@@ -22,7 +22,7 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 
 | Dev | Task ID | Scope | Started |
 |---|---|---|---|
-| Jere | C-02 | 8 mandate templates YAML (brands/*.yaml) + loader TypeScript | 2026-05-09 |
+| Franco | C-02 + C-02b/c/d/e (bundle) | 4 brand YAMLs (cafetito/termoflex/pancho-rex/matebros) + loader TS + gate-ladder schema (event_filters/dayparts/ideal_contexts + new max_viewers) + streams/demo.yaml + types extension. Calibrado a PITCH Bloque 3 (demo 12:00 ART). Lock-stealing C-02 ex-Jere (coordinado con él). | 2026-05-09 |
 | Andy | C-08m | Manager-worker en `apps/manager-worker/` — subscribe a `context_chunks` via Supabase Realtime postgres_changes, semantic Stage1 filter (audio_intent/mentions/viewers_delta) + Stage2 Claude Haiku con scores moment_quality/brand_match, POST a `/api/creators/<id>/render` con message text (placeholder hasta C-14). DRY_RUN flag para correr sin ANTHROPIC_API_KEY. + migración `0009_realtime_context_chunks.sql` (ADD context_chunks A LA publication supabase_realtime). | 2026-05-09 |
 | Jere | D-15, D-14, D-13, D-12, D-20, D-16 | format helpers + brand registry + PlacementOverlay SSE wire + fallback CSS + wallet display + toast feedback | 2026-05-09 |
 
