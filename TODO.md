@@ -4,15 +4,17 @@ Lista viva de tareas para llegar al demo del **2026-05-10 12:00**. Referencia ma
 
 ## Cómo se usa este archivo
 
-1. **Antes de programar:** firmá tu claim en la tabla *Currently working on* abajo con tu nombre, ID de tarea, scope corto y timestamp.
+1. **Antes de programar:** firmá tu claim en la tabla *Currently working on* abajo con tu nombre, ID de tarea, scope corto y timestamp. Push del claim a `main` = lock adquirido. Detalles en [`CLAUDE.md` § Flow de claim](./CLAUDE.md#flow-de-claim-cada-vez-que-arranc%C3%A1s-algo-nuevo).
 2. **Mientras laburás:** cambiá el estado de la tarea a 🟡.
-3. **Al terminar:** marcá ✅ y eliminá tu fila del WIP.
+3. **Al terminar:** marcá ✅, eliminá tu fila del WIP, y **FF-mergeá tu track branch a `main`** — no esperes al checkpoint. Detalles en [`CLAUDE.md` § Flow de cierre](./CLAUDE.md#flow-de-cierre-cada-vez-que-termin%C3%A1s-un-todo).
 4. **Si te trabás:** marcá 🚧 con una línea de qué falta.
 
 Las **tracks A/B/C/D del §10 DESIGN.md son guía**, no obligatorias. Si terminás antes lo tuyo, agarrá la siguiente tarea libre del board y respetá las dependencias.
 
 Convención de estado: ⬜ no empezada · 🟡 en progreso · ✅ hecha · 🚧 bloqueada
 Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas **apenas las necesite** la siguiente tarea del flujo, no antes.
+
+> **Merge cadence:** cada TODO ✅ entra a `main` por FF apenas está listo. Los checkpoints (T+2h, T+12h, T+18h, T+22h) son anchors de fase / sync ritual, **no** gates de merge.
 
 ---
 
@@ -132,7 +134,7 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 - ⬜ **D-11** Correr el script de pre-gen el sábado de noche (~1.5 hs en background, paralelo con cualquier track) — deps: D-10
 - ⬜ **D-12** CSS fallback render (banda negra + logo + colores corporativos) si un ad no tiene `asset_url` — deps: D-02
 
-✅ **Checkpoint 2 — sáb 18:00:** tracks individuales mergeados a `main`.
+✅ **Checkpoint 2 — sáb 18:00:** sync ritual — verificar que todos los tracks A/B/C/D arrancaron y que los TODOs cerrados ya están en `main`. Identificar bloqueos antes de Phase 2.
 
 ---
 
@@ -150,7 +152,7 @@ Pares trabajando juntos para conectar cabos.
 - ⬜ **I-08** `scripts/smoke-e2e.ts` que dispara epic moment fake → verifica las 2 txs en basescan — deps: I-01
 - ⬜ **I-09** Ensayo técnico interno (sin pitch, solo mecánica) — deps: I-01..I-06
 
-✅ **Checkpoint 3 — dom 00:00 (medianoche):** end-to-end completo, merge final a `main`.
+✅ **Checkpoint 3 — dom 00:00 (medianoche):** sync ritual — happy path end-to-end ya en `main` (I-01 ✅), brand-safety integrado, audit clip e2e funcionando.
 
 ---
 
