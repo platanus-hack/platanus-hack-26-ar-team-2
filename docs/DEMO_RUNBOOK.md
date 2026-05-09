@@ -46,6 +46,50 @@ Coreografía operativa del pitch en vivo. **3 minutos · meta-streaming.** Plata
 
 ---
 
+## On-chain timing — qué esperar en el TxFeed durante el demo
+
+**2 txs por placement.** Una al principio (`lock`), otra al final (`release` o `refund`). Ambas visibles en el TxFeed del dashboard con link a BaseScan, casi en tiempo real con los eventos de viem.
+
+### Tiempos reales en Base mainnet
+
+| Etapa | Tiempo |
+|---|---|
+| Block time de Base | ~2s |
+| Confirmar 1 tx (submit → "Success") | ~2-3s (lo vimos en el deploy: ~3s) |
+| Visibilidad en BaseScan | instantánea apenas el block sella |
+| Gas por tx | ~$0.0005-$0.005 (deploy de AddieEscrow nos costó $0.006 — un `lock` es mucho más liviano) |
+
+### Línea de tiempo end-to-end de un placement
+
+```
+T = 0s     trigger word detectada / context tick → manager dispara auction
+T = 5s     subasta cierra → settlement engine elige ganador
+T = 5-7s   lock() confirma on-chain → evento Locked → TxFeed muestra "Locked $X → escrow"
+T = 7s     ad arranca a renderear en overlay (lower-third / corner / takeover)
+T = 13s    ad termina (típico 6s de render)
+T = 13-15s release() confirma on-chain → evento Released → TxFeed muestra "Released $X → creator"
+T = 15s    counter del streamer-team sube en el dock; basescan muestra ambas txs
+```
+
+**Total visible**: ~4 segundos de latencia on-chain repartidos en las 2 txs (lock al principio, release al final). El resto son los 5s de subasta + ~6s de render del ad.
+
+### Efecto visual durante el pitch
+
+1. Speaker dice trigger word → 5s después aparece el banner del ad sobre la cámara.
+2. ~2s después del banner, el TxFeed muestra **"Locked $X → escrow"** con tx hash linkeado a BaseScan.
+3. El ad termina (~6s después) → 2s después aparece **"Released $X → creator"** y el counter del streamer-team sube.
+4. Cada line item del TxFeed linkea a BaseScan — el operador puede hacer click si el jurado quiere ver detalle.
+
+**Si dispara brand-safety pull** (PD-03), `refund()` reemplaza al `release()` con mismo timing (~2s confirm). El TxFeed muestra **"Refunded $X → brand"** en rojo en vez del Released en verde, y el counter del streamer NO sube.
+
+### Implicaciones para el guion
+
+- En el Bloque 3, después de "y todo eso ya está on-chain" (T=1:42), **al menos el `Locked` ya está confirmado** — el tx hash es real y clickeable, no un placeholder.
+- Para que el `Released` también esté visible cuando el speaker cierra el bloque (T=2:18), el primer placement debe haber renderado completo y soltado el release. Con render de 6s + 2s confirm, el primer release está visible ~T=1:35 — sobra tiempo.
+- **Confirmar antes del demo** que el render del ad no es más largo que ~8s; arriba de eso, el `Released` puede no estar confirmado al final del Bloque 3 y queda raro el counter desactualizado.
+
+---
+
 ## Pre-flight (T-30 min)
 
 - [ ] AddieEscrow desplegado en Base mainnet, address en BaseScan tab abierta.
@@ -57,6 +101,7 @@ Coreografía operativa del pitch en vivo. **3 minutos · meta-streaming.** Plata
 - [ ] **Viewer-bot Twitch conectado y posteando 2-3 msgs/s.** Sin esto `chat_velocity` queda en cero.
 - [ ] **Botón debug "Trigger context tick"** del operador dashboard testeado y funcionando.
 - [ ] Trigger words ensayadas (ÉPICO, CLUTCH, TRANQUI, FOGÓN) con timing exacto — al menos 2 ensayos completos hechos.
+- [ ] **Render del ad ≤8s** confirmado (lower_third 5-8s típico). Arriba de eso el `Released` puede no estar confirmado al cerrar el Bloque 3 y queda raro el counter desactualizado. Ver sección "On-chain timing".
 - [ ] Wallets fondeadas: streamer-team con 0 USDC para que el counter suba desde 0; las 4 brand wallets con $50+ cada una en escrow.
 - [ ] Hotspot 4G activo y conectado a Laptop A como red alternativa.
 - [ ] Backup VOD del último ensayo en `~/Desktop/addie-backup.mp4` listo para drag-and-drop a OBS.
@@ -173,6 +218,7 @@ Coreografía operativa del pitch en vivo. **3 minutos · meta-streaming.** Plata
 | "¿Cómo se evita el ad-fraud / brand safety?" | "El streamer firma keywords bloqueadas. La marca firma las suyas. Si durante el render aparece un keyword bloqueado, refund automático vía escrow. El agent no decide eso — el código lo decide." |
 | "¿Cuál es el moat?" | "El matcher (escalera de gates), los datasets de fit (qué brands calzan en qué moments), y la red — más streamers atraen más marcas, más marcas mejoran el matching para todos los streamers." |
 | "¿No es raro que ustedes sean el streamer del demo?" | "Es deliberado. El sistema es brand-count-agnostic y streamer-agnostic. Cualquier creator que firme un mandate puede correr esto. El demo lo prueba: si funciona con nosotros hablando ad-hoc, funciona con un creator profesional con guion preparado." |
+| "¿Cuánto tarda en confirmarse cada tx?" | "Block time de Base es ~2s. Cada tx (lock al inicio, release al final del render) confirma en ~2-3s. La latencia on-chain total por placement son ~4s repartidos en las 2 txs. Gas por tx: ~$0.0005-$0.005. El TxFeed las muestra en tiempo real con link a BaseScan." |
 
 ---
 
