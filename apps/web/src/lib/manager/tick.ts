@@ -16,7 +16,19 @@ import { pool } from "@/lib/pg";
 
 import { stage1Filter } from "./intensity";
 import { makeClaudePicker, makeStubPicker, type Picker } from "./pickBrand";
-import type { ContextChunk, TickResult } from "./types";
+import type { ChunkMeta, ContextChunk, TickResult } from "./types";
+
+function toChunkMeta(chunk: ContextChunk): ChunkMeta {
+  return {
+    id: chunk.id,
+    ts_start: chunk.ts_start,
+    age_s: Math.round((Date.now() - new Date(chunk.ts_start).getTime()) / 1000),
+    audio_intent: chunk.audio_intent,
+    audio_summary_preview: (chunk.audio_summary ?? "").slice(0, 140),
+    audio_mentions: chunk.audio_mentions ?? [],
+    viewers_delta_30s: chunk.viewers_delta_30s,
+  };
+}
 
 export type ManagerConfig = {
   streamKey: string;
@@ -65,7 +77,34 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
       [config.streamKey],
     );
     const chunk = chunkRes.rows[0];
-    if (!chunk) return { decision: "no_chunks", stream_key: config.streamKey };
+    if (!chunk) {
+      console.log(
+        JSON.stringify({
+          tag: "manager:no_chunks",
+          stream_key: config.streamKey,
+          hint: "verify pipeline is writing context_chunks for this stream_key",
+        }),
+      );
+      return { decision: "no_chunks", stream_key: config.streamKey };
+    }
+
+    // Visibility: log the chunk we're about to evaluate, so it's obvious
+    // which DB row drives each decision (and whether it's stale).
+    const ageS = Math.round((Date.now() - new Date(chunk.ts_start).getTime()) / 1000);
+    console.log(
+      JSON.stringify({
+        tag: "manager:chunk_loaded",
+        stream_key: config.streamKey,
+        chunk_id: chunk.id,
+        chunk_ts_start: chunk.ts_start,
+        chunk_age_s: ageS,
+        audio_intent: chunk.audio_intent,
+        audio_mentions: chunk.audio_mentions ?? [],
+        audio_summary_preview: (chunk.audio_summary ?? "").slice(0, 140),
+        viewers_delta_30s: chunk.viewers_delta_30s,
+        mood_tags: chunk.mood_tags ?? [],
+      }),
+    );
 
     // 2. Last emit timestamp (cooldown anchor)
     const lastEmitRes = await client.query<{ created_at: string }>(
@@ -83,9 +122,12 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
           decision: "cooldown",
           stream_key: config.streamKey,
           ms_remaining: config.cooldownMs - sinceEmit,
+          chunk: toChunkMeta(chunk),
         };
       }
     }
+
+    const meta = toChunkMeta(chunk);
 
     // 3. Stage 1
     const s1 = stage1Filter(chunk);
@@ -93,7 +135,7 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
       return {
         decision: "skip:stage1",
         stream_key: config.streamKey,
-        chunk_id: chunk.id,
+        chunk: meta,
         reason: s1.reason,
       };
     }
@@ -113,36 +155,16 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
     const pick = await picker(chunk);
 
     if (!pick.should_emit || !pick.brand_id) {
-      return {
-        decision: "skip:llm_no_match",
-        stream_key: config.streamKey,
-        chunk_id: chunk.id,
-        pick,
-      };
+      return { decision: "skip:llm_no_match", stream_key: config.streamKey, chunk: meta, pick };
     }
     if (pick.moment_quality < config.momentQualityMin) {
-      return {
-        decision: "skip:moment_quality",
-        stream_key: config.streamKey,
-        chunk_id: chunk.id,
-        pick,
-      };
+      return { decision: "skip:moment_quality", stream_key: config.streamKey, chunk: meta, pick };
     }
     if (pick.brand_match < config.brandMatchMin) {
-      return {
-        decision: "skip:brand_match",
-        stream_key: config.streamKey,
-        chunk_id: chunk.id,
-        pick,
-      };
+      return { decision: "skip:brand_match", stream_key: config.streamKey, chunk: meta, pick };
     }
     if (!pick.message) {
-      return {
-        decision: "skip:empty_message",
-        stream_key: config.streamKey,
-        chunk_id: chunk.id,
-        pick,
-      };
+      return { decision: "skip:empty_message", stream_key: config.streamKey, chunk: meta, pick };
     }
 
     // 5. Emit — same shape as POST /api/creators/[id]/render writes.
@@ -157,13 +179,7 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
       `${config.creatorId}:${event_id}`,
     ]);
 
-    return {
-      decision: "emit",
-      stream_key: config.streamKey,
-      chunk_id: chunk.id,
-      pick,
-      event_id,
-    };
+    return { decision: "emit", stream_key: config.streamKey, chunk: meta, pick, event_id };
   } finally {
     client.release();
   }

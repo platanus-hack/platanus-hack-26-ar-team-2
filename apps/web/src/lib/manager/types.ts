@@ -63,26 +63,45 @@ export type BrandPick = {
   message: string | null;
 };
 
+/**
+ * Compact chunk fingerprint included in every TickResult that touched a chunk.
+ * Lets curl callers see which DB row drove the decision without opening the DB.
+ */
+export type ChunkMeta = {
+  id: string;
+  ts_start: string;
+  age_s: number;
+  audio_intent: ContextChunk["audio_intent"];
+  audio_summary_preview: string;
+  audio_mentions: string[];
+  viewers_delta_30s: number | null;
+};
+
 /** Discriminated union the cron route returns as JSON for observability. */
 export type TickResult =
   | { decision: "no_chunks"; stream_key: string }
-  | { decision: "cooldown"; stream_key: string; ms_remaining: number }
+  | {
+      decision: "cooldown";
+      stream_key: string;
+      ms_remaining: number;
+      chunk: ChunkMeta;
+    }
   | {
       decision: "skip:stage1";
       stream_key: string;
-      chunk_id: string;
+      chunk: ChunkMeta;
       reason: string;
     }
   | {
       decision: "skip:llm_no_match" | "skip:moment_quality" | "skip:brand_match" | "skip:empty_message";
       stream_key: string;
-      chunk_id: string;
+      chunk: ChunkMeta;
       pick: BrandPick;
     }
   | {
       decision: "emit";
       stream_key: string;
-      chunk_id: string;
+      chunk: ChunkMeta;
       pick: BrandPick;
       event_id: string;
     }
