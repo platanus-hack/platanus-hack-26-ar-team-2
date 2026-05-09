@@ -18,6 +18,7 @@
     "smoke:mandates": "node --experimental-strip-types scripts/smoke-mandate-loader.mts",
     "smoke:gate3": "node --env-file=.env.local --import tsx scripts/smoke-gate3.ts",
     "smoke:hunt": "node --env-file=.env.local --import tsx scripts/smoke-hunt.ts",
+    "smoke:streamer": "node --experimental-strip-types scripts/smoke-streamer.mts",
     "sim:orch": "node --env-file=.env.local --import tsx scripts/sim-orchestrator.ts"
   },
   "dependencies": {
