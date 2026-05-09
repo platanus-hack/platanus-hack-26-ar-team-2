@@ -11,6 +11,8 @@ brand_voice: "épico, segunda persona, energía alta, deportivo"
 color: "#6f4e37"
 tagline: "Que tu reflejo gane el clutch."
 tracking_url: "https://cafetito.demo/addie"
+description: "Café premium argentino. Mostrá este ad cuando el speaker mencione café, cafetito, espresso, o cuando hable de momentos épicos, clutchs, comebacks técnicos o breakthroughs en vivo con energía alta."
+match_keywords: ["café", "cafe", "cafetito", "cargado", "espresso"]
 
 # ─── BrandMandate (legal/financial → mandates.payload jsonb) ─────────
 daily_cap_usdc: 50

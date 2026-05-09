@@ -1,124 +1,63 @@
-// 4 brands ficticias del demo (post-pivote a meta-streaming, ver docs/PITCH.md).
-// Espejo plano de los YAMLs en src/lib/agents/brands/*.yaml — intencional para
-// los consumers (UI client components, manager pickBrand, overlay color lookup)
-// que no pueden cargar YAMLs en runtime. Cuando edites un YAML, espejá acá.
+// Client-safe brand registry for overlay/UI components that cannot use fs.
+// The agent (pickBrand/tick) reads from YAML files directly via the loader.
+// This file provides color/name/targeting lookups for client components.
 
 export type Brand = {
   id: string;
   display_name: string;
   brand_color: string;
-  logo_url: string;
   default_persona: string;
-  /** Heurística del stub picker (MANAGER_DRY_RUN=true) + signal opcional para Haiku. */
-  match_keywords: string[];
-  daily_cap_usdc: number;
-  min_bid_usdc: number;
-  max_bid_usdc: number;
-  always_bid_floor: boolean;
-  tracking_url: string;
   allowed_zones: string[];
   preferred_zones: string[];
   target_moods: string[];
-  safety_keywords: string[];
-  /** Pre-uploaded ad asset URL (Vercel Blob). If set, overlay renders video/image instead of text. */
-  ad_asset_url?: string;
-  /** Asset type for the overlay renderer. */
-  ad_asset_type?: "video" | "image";
-  /** Default zone for this brand's ad. */
-  ad_zone?: string;
-  /** Default duration in ms for this brand's ad. */
-  ad_duration_ms?: number;
 };
 
+// Client registry — keep in sync with apps/web/src/lib/agents/brands/*.yaml
 export const BRANDS: readonly Brand[] = [
   {
     id: "cafetito",
     display_name: "☕ CafetITO",
     brand_color: "#6f4e37",
-    logo_url: "",
-    default_persona: "Café premium argentino. Voz épica, segunda persona, deportiva. Entra en clutchs, comebacks, breakthroughs técnicos vivos en cámara.",
-    match_keywords: ["café", "cafe", "cafetito", "cargado", "espresso"],
-    daily_cap_usdc: 50,
-    min_bid_usdc: 0.50,
-    max_bid_usdc: 5.00,
-    always_bid_floor: false,
-    tracking_url: "https://cafetito.demo/addie",
+    default_persona: "Café premium argentino — energía para momentos épicos.",
     allowed_zones: ["lower_third", "bottom_right_corner"],
     preferred_zones: ["lower_third"],
-    target_moods: ["high_energy", "celebration", "victory", "clutch", "comeback"],
-    safety_keywords: ["muerte", "violencia", "droga", "suicidio"],
+    target_moods: ["high_energy", "celebration", "clutch"],
   },
   {
     id: "termoflex",
     display_name: "🧊 TermoFlex",
     brand_color: "#3b7a98",
-    logo_url: "",
-    default_persona: "Termo cotidiano. Default bidder al floor — siempre presente, no pisa, no sube. Voz calma, casual argentina, como un mate compartido.",
-    match_keywords: ["termo", "termito", "agua caliente"],
-    daily_cap_usdc: 100,
-    min_bid_usdc: 0.20,
-    max_bid_usdc: 2.00,
-    always_bid_floor: true,
-    tracking_url: "https://termoflex.demo/addie",
+    default_persona: "Tu termo inteligente para el mate perfecto.",
     allowed_zones: ["lower_third", "bottom_right_corner"],
-    preferred_zones: ["bottom_right_corner"],
-    target_moods: ["any"],
-    safety_keywords: ["estafa", "fraude", "droga", "muerte", "violencia"],
+    preferred_zones: ["lower_third"],
+    target_moods: ["calm", "chat_active", "social"],
   },
   {
     id: "pancho-rex",
     display_name: "🌭 Pancho Rex",
     brand_color: "#d2691e",
-    logo_url: "",
-    default_persona: "Pancho late-night. Voz humorística, charlatán argentino, hambriento. Solo entra en momentos relajados, almuerzo o late-night — NO en clutchs ni alta energía.",
-    match_keywords: ["pancho", "choripán", "hambre", "comer", "almuerzo", "cena"],
-    daily_cap_usdc: 35,
-    min_bid_usdc: 0.25,
-    max_bid_usdc: 2.50,
-    always_bid_floor: false,
-    tracking_url: "https://panchorex.demo/addie",
-    allowed_zones: ["lower_third", "bottom_right_corner"],
-    preferred_zones: ["bottom_right_corner"],
-    target_moods: ["calm", "chat_active", "idle", "social", "late_night", "hambre"],
-    safety_keywords: ["droga", "violencia"],
+    default_persona: "Los mejores panchos del stream. Hambre = Pancho Rex.",
+    allowed_zones: ["lower_third", "bottom_right_corner", "fullscreen_takeover"],
+    preferred_zones: ["lower_third"],
+    target_moods: ["high_energy", "social", "celebration"],
   },
   {
     id: "platanus",
     display_name: "🍌 Platanus",
     brand_color: "#f5c400",
-    logo_url: "",
-    default_persona: "Platanus Hack. La hackathon donde las mejores ideas se construyen en 24hs. Voz enérgica, comunitaria, builder culture.",
-    match_keywords: ["banana", "platanus", "hackathon", "hack"],
-    daily_cap_usdc: 50,
-    min_bid_usdc: 0.50,
-    max_bid_usdc: 5.00,
-    always_bid_floor: false,
-    tracking_url: "https://platanus.demo/addie",
+    default_persona: "Platanus Hack — builder culture, 24hs de código.",
     allowed_zones: ["lower_third", "bottom_right_corner", "fullscreen_takeover"],
     preferred_zones: ["lower_third"],
-    target_moods: ["high_energy", "celebration", "community"],
-    safety_keywords: ["droga", "violencia"],
-    ad_asset_url: "https://tcbljbmedl5ntsz1.public.blob.vercel-storage.com/audit-clips/platanus.mp4",
-    ad_asset_type: "video",
-    ad_zone: "lower_third",
-    ad_duration_ms: 8000,
+    target_moods: ["high_energy", "celebration", "community", "social"],
   },
   {
     id: "matebros",
     display_name: "🧉 MateBros",
     brand_color: "#5d8a3a",
-    logo_url: "",
-    default_persona: "Yerba comunitaria. Voz cálida, fogón, primera persona del plural. Entra en festejos grupales, charlas relajadas. NO en clutchs individuales ni audiencias masivas — es ronda, no estadio.",
-    match_keywords: ["mate", "yerba", "ronda", "fogón", "fogon", "equipo"],
-    daily_cap_usdc: 40,
-    min_bid_usdc: 0.30,
-    max_bid_usdc: 3.50,
-    always_bid_floor: false,
-    tracking_url: "https://matebros.demo/addie",
+    default_persona: "Yerba premium para la ronda infinita.",
     allowed_zones: ["lower_third", "bottom_right_corner"],
-    preferred_zones: ["bottom_right_corner"],
-    target_moods: ["casual_chat", "social", "chat_active", "celebration", "community", "fogón"],
-    safety_keywords: ["menor", "droga", "violencia"],
+    preferred_zones: ["lower_third"],
+    target_moods: ["calm", "social", "chat_active"],
   },
 ];
 

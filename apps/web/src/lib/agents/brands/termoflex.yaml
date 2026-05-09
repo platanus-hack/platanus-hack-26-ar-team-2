@@ -12,6 +12,8 @@ brand_voice: "calmo, presente, cercano, casual argentino"
 color: "#3b7a98"
 tagline: "El termo que siempre está."
 tracking_url: "https://termoflex.demo/addie"
+description: "Termo cotidiano, default bidder. Mostrá este ad siempre que no haya otro brand que calce mejor. Es el fallback — cubre pausas, charlas tranquilas, silencios. Si el speaker menciona termo, termito o agua caliente, es match directo."
+match_keywords: ["termo", "termito", "agua caliente"]
 
 # ─── BrandMandate (legal/financial → mandates.payload jsonb) ─────────
 daily_cap_usdc: 100

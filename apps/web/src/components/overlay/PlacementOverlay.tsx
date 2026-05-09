@@ -190,10 +190,7 @@ function PlacementSlot({
         animate="animate"
         exit="exit"
         transition={ANIM_TRANSITION}
-        className="absolute inset-0 flex items-center justify-center"
-        // 4% padding alrededor → el stream del creator queda visible como
-        // un "frame" alrededor del ad. Premium spot pero no aburrido.
-        style={{ padding: "4vh 4vw" }}
+        className="absolute inset-0"
       >
         <FullscreenInner placement={placement} videoRef={videoRef} onExpire={onExpire} />
       </motion.div>
@@ -236,12 +233,8 @@ function FullscreenInner({
 
   return (
     <div
-      className="relative w-full h-full max-w-[1700px] max-h-[940px] rounded-2xl overflow-hidden shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)]"
-      style={{
-        // Border 4px del color del brand → "presentado por X" visual.
-        boxShadow: `0 0 0 4px ${accent}`,
-        background: "#000",
-      }}
+      className="relative w-full h-full overflow-hidden"
+      style={{ background: "#000" }}
     >
       {noUrl || errored ? (
         <FallbackAd placement={placement} className="w-full h-full" />

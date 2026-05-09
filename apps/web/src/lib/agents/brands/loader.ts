@@ -48,6 +48,17 @@ export type LoadedBrand = {
   prompt: BrandPrompt | null;
   ext: MandateExtensions;
   ad_variants: AdVariant[];
+  /** Agent-facing description for Claude to compare against audio. */
+  description: string;
+  /** Hint keywords for stub picker + Claude signal. */
+  match_keywords: string[];
+  /** Pre-uploaded ad asset metadata. */
+  ad: {
+    asset_url?: string;
+    asset_type?: "video" | "image";
+    zone?: string;
+    duration_ms?: number;
+  };
   /** UI/log helpers — surfaced to dashboard widgets, not persisted. */
   display: {
     color?: string;
@@ -67,6 +78,17 @@ type RawBrandYaml = {
   color?: string;
   tagline?: string;
   tracking_url: string;
+
+  /** Agent-facing description: Claude uses this to decide if the audio matches this brand. */
+  description?: string;
+  /** Hint keywords for stub picker + Claude signal. */
+  match_keywords?: string[];
+
+  // Pre-uploaded ad asset (overlay renders video/image instead of text)
+  ad_asset_url?: string;
+  ad_asset_type?: "video" | "image";
+  ad_zone?: string;
+  ad_duration_ms?: number;
 
   // BrandMandate fields
   daily_cap_usdc: number;
@@ -193,6 +215,14 @@ function mapBrandYaml(slug: string, raw: RawBrandYaml): LoadedBrand {
     prompt,
     ext,
     ad_variants: raw.ad_variants ?? [],
+    description: raw.description ?? raw.brand_voice ?? "",
+    match_keywords: raw.match_keywords ?? [],
+    ad: {
+      asset_url: raw.ad_asset_url,
+      asset_type: raw.ad_asset_type,
+      zone: raw.ad_zone,
+      duration_ms: raw.ad_duration_ms,
+    },
     display: {
       color: raw.color,
       tagline: raw.tagline,

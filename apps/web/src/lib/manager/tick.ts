@@ -10,9 +10,8 @@
  */
 
 import { pool } from "@/lib/pg";
-import { getBrand } from "@/lib/brands";
 
-import { makeClaudePicker, makeStubPicker, type Picker } from "./pickBrand";
+import { getLoadedBrands, makeClaudePicker, makeStubPicker, type Picker } from "./pickBrand";
 import type { ChunkMeta, ContextChunk, TickResult } from "./types";
 
 function toChunkMeta(chunk: ContextChunk): ChunkMeta {
@@ -63,7 +62,11 @@ export function configFromEnv(streamKey: string): ManagerConfig {
 }
 
 export async function managerTick(config: ManagerConfig): Promise<TickResult> {
+  const t0 = Date.now();
+  const elapsed = () => Date.now() - t0;
+
   const client = await pool().connect();
+  const tPool = elapsed();
   try {
     // 1. Latest chunk
     const chunkRes = await client.query<ContextChunk>(
@@ -73,6 +76,7 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
         limit 1`,
       [config.streamKey],
     );
+    const tChunkQuery = elapsed();
     const chunk = chunkRes.rows[0];
     if (!chunk) {
       console.log(
@@ -80,15 +84,13 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
           tag: "manager:no_chunks",
           stream_key: config.streamKey,
           hint: "verify pipeline is writing context_chunks for this stream_key",
+          timing_ms: { pool: tPool, chunk_query: tChunkQuery - tPool, total: elapsed() },
         }),
       );
       return { decision: "no_chunks", stream_key: config.streamKey };
     }
 
-    // 1b. Skip if we already processed this exact chunk (avoid duplicate emits
-    // when the cron fires faster than the pipeline writes new chunks).
-    // Raw firehose events store JSON with chunk.id — check if we already
-    // emitted a raw event for this chunk.
+    // 1b. Skip if we already processed this exact chunk
     const alreadyProcessed = await client.query<{ id: string }>(
       `select id from render_events
         where creator_id = $1 and kind = 'raw'
@@ -96,7 +98,16 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
         limit 1`,
       [config.creatorId, String(chunk.id)],
     );
+    const tDedupQuery = elapsed();
     if (alreadyProcessed.rows.length > 0) {
+      console.log(
+        JSON.stringify({
+          tag: "manager:skip_already_processed",
+          stream_key: config.streamKey,
+          chunk_id: chunk.id,
+          timing_ms: { pool: tPool, chunk_query: tChunkQuery - tPool, dedup_query: tDedupQuery - tChunkQuery, total: elapsed() },
+        }),
+      );
       return {
         decision: "skip:already_processed",
         stream_key: config.streamKey,
@@ -104,8 +115,6 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
       };
     }
 
-    // Visibility: log the chunk we're about to evaluate, so it's obvious
-    // which DB row drives each decision (and whether it's stale).
     const ageS = Math.round((Date.now() - new Date(chunk.ts_start).getTime()) / 1000);
     console.log(
       JSON.stringify({
@@ -122,10 +131,7 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
       }),
     );
 
-    // EVERY tick → emit a `raw` render_event with the full chunk JSON.
-    // This is the firehose the iframe at /o/<creator_id> shows as live debug.
-    // Independent of Stage1/2 — brand emits below are still gated normally.
-    // We keep the chunk shape compact (drop noisy/duplicated fields).
+    // Emit raw firehose event
     const rawPayload = {
       type: "raw_chunk",
       tick_at: new Date().toISOString(),
@@ -162,6 +168,7 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
     await client.query("select pg_notify('render_events', $1)", [
       `${config.creatorId}:${rawInsert.rows[0]!.id}`,
     ]);
+    const tRawEmit = elapsed();
 
     const meta = toChunkMeta(chunk);
 
@@ -178,22 +185,26 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
         })();
 
     const pick = await picker(chunk);
+    const tPicker = elapsed();
 
     // Always emit: brand display_name if Claude matched, "..." otherwise.
     const message = pick.message ?? "...";
 
     // If the matched brand has a pre-uploaded ad asset, emit a full placement
     // payload so the overlay renders the video/image instead of just text.
-    const matchedBrand = pick.brand_id ? getBrand(pick.brand_id) : undefined;
-    const hasAsset = matchedBrand?.ad_asset_url;
+    const brands = getLoadedBrands();
+    const matchedBrand = pick.brand_id
+      ? brands.find((b) => b.slug === pick.brand_id)
+      : undefined;
+    const hasAsset = matchedBrand?.ad.asset_url;
 
     const payload = hasAsset
       ? {
-          asset_url: matchedBrand.ad_asset_url,
-          asset_type: matchedBrand.ad_asset_type ?? "video",
-          zone_id: matchedBrand.ad_zone ?? matchedBrand.preferred_zones[0] ?? "lower_third",
-          duration_ms: matchedBrand.ad_duration_ms ?? 8000,
-          brand_id: matchedBrand.id,
+          asset_url: matchedBrand.ad.asset_url,
+          asset_type: matchedBrand.ad.asset_type ?? "video",
+          zone_id: matchedBrand.ad.zone ?? "fullscreen_takeover",
+          duration_ms: matchedBrand.ad.duration_ms ?? 8000,
+          brand_id: matchedBrand.slug,
           audio: true,
         }
       : null;
@@ -206,8 +217,6 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
     );
     const event_id = insert.rows[0]!.id;
 
-    // Include full SSE event JSON in the notification for real-time delivery
-    // (avoids DB re-fetch in the SSE handler). Format: <creator_id>:<event_id>:<json>
     const sseEvent = {
       id: event_id,
       creator_id: config.creatorId,
@@ -219,6 +228,29 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
     await client.query("select pg_notify('render_events', $1)", [
       `${config.creatorId}:${event_id}:${JSON.stringify(sseEvent)}`,
     ]);
+    const tBrandEmit = elapsed();
+
+    const timing = {
+      pool_ms: tPool,
+      chunk_query_ms: tChunkQuery - tPool,
+      dedup_query_ms: tDedupQuery - tChunkQuery,
+      raw_emit_ms: tRawEmit - tDedupQuery,
+      picker_ms: tPicker - tRawEmit,
+      brand_emit_ms: tBrandEmit - tPicker,
+      total_ms: tBrandEmit,
+    };
+    console.log(
+      JSON.stringify({
+        tag: "manager:tick_timing",
+        stream_key: config.streamKey,
+        chunk_id: chunk.id,
+        decision: "emit",
+        brand_id: pick.brand_id ?? null,
+        has_asset: !!hasAsset,
+        dry_run: config.dryRun,
+        timing,
+      }),
+    );
 
     return { decision: "emit", stream_key: config.streamKey, chunk: meta, pick, event_id };
   } finally {

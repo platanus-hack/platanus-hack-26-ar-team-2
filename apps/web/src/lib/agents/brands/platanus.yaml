@@ -8,6 +8,12 @@ brand_voice: "enérgico, comunitario, builder culture, tech"
 color: "#f5c400"
 tagline: "Build it in 24hs."
 tracking_url: "https://platanus.demo/addie"
+description: "Platanus Hack — la hackathon donde las mejores ideas se construyen en 24hs. Mostrá este ad cuando el speaker diga banana, platanus, hackathon, o hack. Builder culture, energía comunitaria."
+match_keywords: ["banana", "platanus", "hackathon", "hack"]
+ad_asset_url: "https://tcbljbmedl5ntsz1.public.blob.vercel-storage.com/audit-clips/platanus.mp4"
+ad_asset_type: "video"
+ad_zone: "lower_third"
+ad_duration_ms: 8000
 
 # ─── BrandMandate (legal/financial → mandates.payload jsonb) ─────────
 daily_cap_usdc: 50

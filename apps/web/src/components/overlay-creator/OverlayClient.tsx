@@ -110,10 +110,7 @@ export default function OverlayClient({ creator_id }: { creator_id: string }) {
             ad_url: current!.asset_url!,
             qr_url: current!.qr_url ?? "",
             duration_ms: current!.duration_ms ?? 8000,
-            // Server normaliza a zone_id (snake) pero aceptamos zone (legacy)
-            // por si llega algo viejo en flight.
-            zone_id: resolveZoneId(current!.zone_id ?? current!.zone),
-            position: current!.position,
+            zone_id: "fullscreen_takeover",
             max_duration_ms: current!.max_duration_ms,
             audio: current!.audio,
             brand_id: current!.brand_id,
