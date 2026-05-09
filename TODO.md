@@ -24,6 +24,7 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 |---|---|---|---|
 | Lucas | POC-PIPE | Pipeline POC standalone bajo `poc/pipeline/` (foundation para B-01..B-07: docker-compose nginx-rtmp + webhooks on_publish/on_publish_done + ffmpeg audio/frames + tmi.js chat + context tick en terminal) | 2026-05-09 |
 | Andy | DESIGN-AGENTS | DESIGN.md §4: tres agentes (Manager + Brand×8 + Streamer) + process topology + event flow Supabase Realtime + nuevos task IDs B-07a (salience) + C-08m (manager-worker) + reword C-14 | 2026-05-09 |
+| Jere | C-02 | 8 mandate templates YAML (brands/*.yaml) + loader TypeScript | 2026-05-09 |
 
 ---
 
@@ -117,7 +118,7 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 ### Track C · Agents (sugerido: Andy)
 
 - ✅ **C-01** Tipos comunes (`Mandate`, `BrandAgentDecision`, `NegotiationTurn`, `StandingOffer`, `SoftHold`) en `apps/web/src/lib/agents/types.ts`
-- ⬜ **C-02** 8 mandate templates YAML en `apps/web/src/lib/agents/brands/*.yaml` + loader — deps: P0-22, C-01
+- 🟡 **C-02** 8 mandate templates YAML en `apps/web/src/lib/agents/brands/*.yaml` + loader — deps: P0-22, C-01
 - ✅ **C-03** Migración `0002_inventory.sql` (zonas, floors, max_duration por creator) — deps: P0-04
 - ✅ **C-04** Migración `0003_ads.sql` (tabla `ads` ver §5 DESIGN.md) — deps: P0-04
 - ✅ **C-05** Migración `0004_placements.sql` (tabla `placements` con audit fields: `clip_url`, `context_snapshot`, `agent_reasoning`, `negotiation_transcript`, `lock/release/refund_tx_hash`) — deps: P0-04
