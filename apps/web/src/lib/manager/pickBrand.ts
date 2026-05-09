@@ -112,23 +112,31 @@ export function makeClaudePicker(apiKey: string, model: string): Picker {
   let clientPromise: Promise<Anthropic> | null = null;
 
   return async function pickBrand(chunk) {
+    const t0 = Date.now();
+
     if (!clientPromise) {
       clientPromise = import("@anthropic-ai/sdk").then(
         (m) => new m.default({ apiKey }),
       );
     }
     const client = await clientPromise;
+    const tSdkInit = Date.now() - t0;
+
     const brands = getLoadedBrands();
     const userPrompt = renderPrompt(chunk, brands);
+    const systemPrompt = buildSystemPrompt(brands);
+    const tool = buildTool(brands);
+    const tPromptBuild = Date.now() - t0;
 
     const response = await client.messages.create({
       model,
       max_tokens: 600,
-      system: buildSystemPrompt(brands),
-      tools: [buildTool(brands)],
+      system: systemPrompt,
+      tools: [tool],
       tool_choice: { type: "tool", name: TOOL_NAME },
       messages: [{ role: "user", content: userPrompt }],
     });
+    const tApiCall = Date.now() - t0;
 
     const toolUse = response.content.find(
       (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
@@ -136,7 +144,7 @@ export function makeClaudePicker(apiKey: string, model: string): Picker {
     if (!toolUse) throw new Error("Claude did not call the tool");
 
     const out = toolUse.input as BrandPick;
-    return {
+    const result = {
       should_emit: Boolean(out.should_emit),
       brand_id: out.brand_id ?? null,
       moment_quality: Number(out.moment_quality ?? 0),
@@ -144,6 +152,29 @@ export function makeClaudePicker(apiKey: string, model: string): Picker {
       reason: String(out.reason ?? ""),
       message: out.message ?? null,
     };
+    const tTotal = Date.now() - t0;
+
+    console.log(
+      JSON.stringify({
+        tag: "picker:ai_timing",
+        model,
+        chunk_id: chunk.id,
+        stream_key: chunk.stream_key,
+        sdk_init_ms: tSdkInit,
+        prompt_build_ms: tPromptBuild - tSdkInit,
+        api_call_ms: tApiCall - tPromptBuild,
+        parse_ms: tTotal - tApiCall,
+        total_ms: tTotal,
+        input_tokens: response.usage?.input_tokens ?? null,
+        output_tokens: response.usage?.output_tokens ?? null,
+        brand_id: result.brand_id,
+        should_emit: result.should_emit,
+        brand_match: result.brand_match,
+        reason: result.reason,
+      }),
+    );
+
+    return result;
   };
 }
 
