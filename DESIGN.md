@@ -39,7 +39,7 @@ Dos agents AI negocian en tiempo real durante un stream en vivo. El brand-agent 
 │  CAPA 2 · CONTEXT EXTRACTION                                        │
 │  ───────────────────────────────────────────────────────────        │
 │  ffmpeg pipe                                                        │
-│    ├─ audio @16kHz ──► Deepgram Nova ──► transcript rolling 30s     │
+│    ├─ audio @16kHz ──► ElevenLabs Scribe v2 realtime ──► transcript rolling 30s │
 │    └─ frames @1fps ──► Gemini 2.5 Flash ──► frame summary + tags   │
 │  tmi.js IRC ──► Twitch chat velocity + sentiment + recent keywords  │
 │                                                                     │
@@ -119,7 +119,7 @@ Dos agents AI negocian en tiempo real durante un stream en vivo. El brand-agent 
 T+0.0s    Coscu mete gol en FIFA
 ─────────────────────────────────────────────────────────────────────
 T+0.5s    OBS encode → RTMP llega a nginx-rtmp
-T+1.2s    Deepgram transcribe "GOLAZO"
+T+1.2s    ElevenLabs Scribe v2 realtime transcribe "GOLAZO"
 T+1.3s    Gemini Flash describe frame: "FIFA replay celebration"
 T+1.5s    tmi.js detecta chat velocity 12→180 msg/s
 T+1.5s    Context broadcast a brand-agents
@@ -487,7 +487,7 @@ Para combinaciones que no quedaron generadas a tiempo: **CSS fallback** — band
 | Web3 client | viem | Type-safe Ethereum |
 | Stream ingest | nginx-rtmp Docker localhost | Latencia <1s |
 | Multi-streaming | OBS plugin "Multiple RTMP Outputs" | Stream simultáneo a Twitch + nuestro RTMP |
-| Audio STT | Deepgram Nova streaming | <500ms latency, $0.0043/min |
+| Audio STT | ElevenLabs Scribe v2 realtime (WS) | <500ms latency, misma cuenta que Creative + TTS — una sola API key |
 | Vision tagging | Gemini 2.5 Flash multimodal | Free tier 1M tokens/día |
 | Brand-agent + streamer-agent LLM | Anthropic Claude 4.6 Sonnet | Mejor razonamiento de negociación |
 | Twitch chat | tmi.js IRC | Anonymous read, real-time, free |
@@ -535,7 +535,7 @@ addie/                                  ← repo platanus-hack-26-ar-team-2
 │       │       │   └── types.ts
 │       │       ├── pipeline/
 │       │       │   ├── rtmp.ts         ← orchestrator
-│       │       │   ├── audio.ts        ← Deepgram client
+│       │       │   ├── audio.ts        ← ElevenLabs Scribe v2 realtime client
 │       │       │   ├── vision.ts       ← Gemini Flash client
 │       │       │   ├── chat-twitch.ts  ← tmi.js
 │       │       │   └── context.ts      ← buffer + Realtime push
@@ -613,7 +613,7 @@ main                         ← integraciones, mergeos en checkpoints
 **Owns:**
 - Docker nginx-rtmp localhost
 - ffmpeg pipes (audio + frames)
-- Deepgram WebSocket client
+- ElevenLabs Scribe v2 realtime WebSocket client
 - Gemini Flash multimodal client
 - tmi.js Twitch chat
 - Context buffer + Supabase Realtime push
@@ -676,7 +676,7 @@ SÁBADO
 ─────────────────────────────────────────────────────────────────────
 T+0h   06:00   Phase 0 — Setup compartido
                 • Repo + Next.js scaffold
-                • API keys (Anthropic, Gemini, Deepgram, ElevenLabs, Privy, Supabase, Alchemy)
+                • API keys (Anthropic, Gemini, ElevenLabs [STT + Creative + TTS], Privy, Supabase, Alchemy)
                 • Supabase project + schema
                 • Foundry init
                 • Docker nginx-rtmp probado
@@ -764,7 +764,7 @@ Pantalla técnica con `curl` mostrando endpoint de auctions + AddieEscrow.sol ex
 | Pre-gen de ads no termina a tiempo | CSS fallback automático para combinaciones faltantes. Demo no se rompe. |
 | Negociación no cierra | Cap 3 turnos + timeout 5s + fallback a mejor offer parcial. |
 | Streamer no produce momento épico | Hotkey "FORCE EVENT" en dock dispara epic_moment manual. |
-| Deepgram WS cae | Reconnect + skip step si falla. Agents bidean solo con chat + frame. |
+| ElevenLabs Scribe WS cae | Reconnect + skip step si falla. Agents bidean solo con chat + frame. |
 | Gemini Flash rate-limit | Pre-cargar quota + Claude Vision como fallback. |
 | Tx on-chain se atora | Base es rápido (~2s). Si tarda >5s, mostrar "pending" y seguir. |
 | Smart wallet sin gas | Pre-fondear con $0.10 ETH cada una. |

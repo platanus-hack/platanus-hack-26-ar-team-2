@@ -44,8 +44,8 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 
 - ⬜ **P0-07** `[INFRA]` Cuenta Anthropic + key Claude 4.6 Sonnet → `ANTHROPIC_API_KEY`
 - ⬜ **P0-08** `[INFRA]` Google AI Studio + key Gemini 2.5 Flash → `GEMINI_API_KEY`
-- ⬜ **P0-09** `[INFRA]` Deepgram + key streaming Nova → `DEEPGRAM_API_KEY`
-- ⬜ **P0-10** `[INFRA]` ElevenLabs + key Creative → `ELEVENLABS_API_KEY` (necesario para pre-gen ads §6)
+- ❌ **P0-09** ~~Deepgram + key streaming Nova~~ — **deprecado** ([commit 992e5a1](../../commit/992e5a1)). El POC usa ElevenLabs Scribe v2 realtime, que va con la misma key del P0-10.
+- ⬜ **P0-10** `[INFRA]` ElevenLabs + key → `ELEVENLABS_API_KEY` (cubre **Scribe v2 realtime para STT** §3 + Creative para pre-gen ads §6 + TTS §6 — una sola cuenta)
 - ⬜ **P0-11** `[INFRA]` App Privy con embedded smart wallets en Base → `PRIVY_APP_ID`, `PRIVY_APP_SECRET`
 - ⬜ **P0-12** `[INFRA]` Proyecto Supabase + URL + service-role + anon key
 - 🟡 **P0-13** `[INFRA]` App Alchemy en Base mainnet → `ALCHEMY_RPC_URL`
@@ -102,7 +102,7 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 - ⬜ **B-01** `infra/docker-compose.yml` con nginx-rtmp + puertos + volume para `record` — deps: P0-17
 - ⬜ **B-02** `infra/nginx-rtmp.conf` con `application live` + webhooks `on_publish` / `on_publish_done` apuntando a `apps/web/src/app/api/stream/*` (usar `host.docker.internal:3000` desde Docker en Mac) — deps: B-01
 - ⬜ **B-03** Endpoint `POST /api/stream/on-publish` que crea fila en `streams` y arranca el orchestrator del pipeline — deps: B-02, P0-04
-- ⬜ **B-04** Audio pipe: `ffmpeg` child_process → 16kHz PCM stream → Deepgram WS, transcript rolling 30s en buffer — deps: B-03, P0-09
+- ⬜ **B-04** Audio pipe: `ffmpeg` child_process → 16kHz PCM mono → ElevenLabs **Scribe v2 realtime** WS (VAD auto-commit, lang `es`), transcript rolling 30s + partial actual en buffer. **POC funcionando en [`poc/pipeline/src/transcribe.ts`](./poc/pipeline/src/transcribe.ts)** ([commit 992e5a1](../../commit/992e5a1)) — falta portear a `apps/web/src/lib/pipeline/audio.ts`. — deps: B-03, P0-10
 - ⬜ **B-05** Vision pipe: `ffmpeg` frames @1fps → Gemini Flash multimodal (frame summary + tags) cada 1s — deps: B-03, P0-08
 - ⬜ **B-06** Twitch chat: tmi.js client conectado al canal de demo, calcula `chat_velocity`, `sentiment`, `recent_keywords` — deps: P0-15
 - ⬜ **B-07** Context buffer combinador (`apps/web/src/lib/pipeline/context.ts`): merge `audio_30s + frame + chat_vel + viewers + sentiment` y broadcast cada 1s a Supabase Realtime channel — deps: B-04, B-05, B-06, P0-12
