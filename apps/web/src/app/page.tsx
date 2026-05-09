@@ -1,65 +1,85 @@
-import Image from "next/image";
+import Link from "next/link";
+
+const PAGES = [
+  {
+    href: "/demo-display?demo=1",
+    label: "Demo Display",
+    description: "Bid leaderboard · negotiation chat · tx feed",
+    tag: "DEMO",
+    tagColor: "bg-[#6366f1]/20 text-[#6366f1] border-[#6366f1]/30",
+  },
+  {
+    href: "/dock?demo=1",
+    label: "Streamer Dock",
+    description: "Balance · recent placements · FORCE EVENT / FULL BREAK",
+    tag: "OBS",
+    tagColor: "bg-[#22d3ee]/20 text-[#22d3ee] border-[#22d3ee]/30",
+  },
+  {
+    href: "/overlay/test-stream",
+    label: "Overlay",
+    description: "Browser Source transparente para OBS",
+    tag: "OBS",
+    tagColor: "bg-[#22d3ee]/20 text-[#22d3ee] border-[#22d3ee]/30",
+  },
+  {
+    href: "/settings/preferences",
+    label: "Preferences",
+    description: "Brands aprobadas · brand-safety keywords",
+    tag: "SETTINGS",
+    tagColor: "bg-[#9090a8]/20 text-[#9090a8] border-[#9090a8]/30",
+  },
+  {
+    href: "/settings/inventory",
+    label: "Inventory",
+    description: "Zonas · floors · max duration",
+    tag: "SETTINGS",
+    tagColor: "bg-[#9090a8]/20 text-[#9090a8] border-[#9090a8]/30",
+  },
+];
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <main className="min-h-screen bg-[#0a0a0f] text-[#f0f0f5] flex flex-col items-center justify-center p-8">
+      <div className="w-full max-w-lg">
+        {/* Logo / wordmark */}
+        <div className="mb-10">
+          <h1 className="text-4xl font-bold tracking-tight text-[#f0f0f5]">
+            Addie
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="text-[#9090a8] mt-1 text-sm">
+            Agentic ad-tech para streams en vivo · Base · USDC
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+
+        {/* Nav cards */}
+        <nav className="flex flex-col gap-2">
+          {PAGES.map((p) => (
+            <Link
+              key={p.href}
+              href={p.href}
+              className="group flex items-center justify-between rounded-xl border border-[#2a2a38] bg-[#111118] px-4 py-3.5 hover:border-[#6366f1]/50 hover:bg-[#1a1a28] transition-all"
+            >
+              <div>
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="font-medium text-[#f0f0f5] group-hover:text-white">
+                    {p.label}
+                  </span>
+                  <span className={`text-[10px] border rounded px-1.5 py-0.5 font-medium ${p.tagColor}`}>
+                    {p.tag}
+                  </span>
+                </div>
+                <p className="text-xs text-[#55556a]">{p.description}</p>
+              </div>
+              <span className="text-[#2a2a38] group-hover:text-[#6366f1] transition-colors text-lg">→</span>
+            </Link>
+          ))}
+        </nav>
+
+        <p className="text-center text-xs text-[#2a2a38] mt-8">
+          Platanus Hack BSAS 2026 · Track 🤑 Agentic Money
+        </p>
+      </div>
+    </main>
   );
 }
