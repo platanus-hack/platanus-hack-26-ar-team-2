@@ -97,11 +97,11 @@ export default function PreferencesClient({ initial }: { initial?: Partial<Prefe
     <div className="flex flex-col gap-8">
 
       {/* ── Approved brands ── */}
-      <section className="rounded-xl border border-[#2a2a38] bg-[#111118] overflow-hidden">
-        <div className="px-5 py-4 border-b border-[#2a2a38] flex items-center justify-between">
+      <section className="rounded-xl border border-[var(--line)] bg-[var(--card)] overflow-hidden">
+        <div className="px-5 py-4 border-b border-[var(--line)] flex items-center justify-between">
           <div>
-            <h2 className="text-sm font-semibold text-[#f0f0f5]">Approved brands</h2>
-            <p className="text-xs text-[#55556a] mt-0.5">Only approved brands can bid on your stream.</p>
+            <h2 className="text-sm font-semibold text-[var(--text)]">Approved brands</h2>
+            <p className="text-xs text-[var(--text-3)] mt-0.5">Only approved brands can bid on your stream.</p>
           </div>
           <span className={`text-xs font-medium px-2 py-1 rounded-full ${
             approvedCount === ALL_BRANDS.length
@@ -122,13 +122,13 @@ export default function PreferencesClient({ initial }: { initial?: Partial<Prefe
                 onClick={() => dispatch({ type: "TOGGLE_BRAND", id: brand.id })}
                 className={`relative flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium border transition-all text-left ${
                   on
-                    ? "border-[#6366f1]/60 bg-[#6366f1]/10 text-[#f0f0f5]"
-                    : "border-[#1e1e2a] bg-[#0d0d14] text-[#55556a] hover:border-[#2a2a38] hover:text-[#9090a8]"
+                    ? "border-[#6366f1]/60 bg-[#6366f1]/10 text-[var(--text)]"
+                    : "border-[var(--line-2)] bg-[var(--page-2)] text-[var(--text-3)] hover:border-[var(--line)] hover:text-[var(--text-2)]"
                 }`}
               >
                 <span
                   className="w-2 h-2 rounded-full shrink-0 transition-colors"
-                  style={{ background: on ? brand.color : "#2a2a38" }}
+                  style={{ background: on ? brand.color : "var(--line)" }}
                 />
                 <span className="truncate">{brand.label}</span>
                 {on && (
@@ -141,14 +141,14 @@ export default function PreferencesClient({ initial }: { initial?: Partial<Prefe
         <div className="px-5 pb-3 flex gap-2">
           <button
             onClick={() => ALL_BRANDS.forEach((b) => !state.approvedBrands.has(b.id) && dispatch({ type: "TOGGLE_BRAND", id: b.id }))}
-            className="text-xs text-[#55556a] hover:text-[#9090a8] transition-colors"
+            className="text-xs text-[var(--text-3)] hover:text-[var(--text-2)] transition-colors"
           >
             Select all
           </button>
-          <span className="text-[#2a2a38]">·</span>
+          <span className="text-[var(--line)]">·</span>
           <button
             onClick={() => ALL_BRANDS.forEach((b) => state.approvedBrands.has(b.id) && dispatch({ type: "TOGGLE_BRAND", id: b.id }))}
-            className="text-xs text-[#55556a] hover:text-[#9090a8] transition-colors"
+            className="text-xs text-[var(--text-3)] hover:text-[var(--text-2)] transition-colors"
           >
             Clear all
           </button>
@@ -156,10 +156,10 @@ export default function PreferencesClient({ initial }: { initial?: Partial<Prefe
       </section>
 
       {/* ── Brand-safety keywords ── */}
-      <section className="rounded-xl border border-[#2a2a38] bg-[#111118] overflow-hidden">
-        <div className="px-5 py-4 border-b border-[#2a2a38]">
-          <h2 className="text-sm font-semibold text-[#f0f0f5]">Brand-safety keywords</h2>
-          <p className="text-xs text-[#55556a] mt-0.5">
+      <section className="rounded-xl border border-[var(--line)] bg-[var(--card)] overflow-hidden">
+        <div className="px-5 py-4 border-b border-[var(--line)]">
+          <h2 className="text-sm font-semibold text-[var(--text)]">Brand-safety keywords</h2>
+          <p className="text-xs text-[var(--text-3)] mt-0.5">
             Any match in audio or chat triggers an automatic escrow refund mid-placement.
           </p>
         </div>
@@ -172,19 +172,19 @@ export default function PreferencesClient({ initial }: { initial?: Partial<Prefe
               onChange={(e) => setKwDraft(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && addKeyword()}
               placeholder="Add a keyword…"
-              className="flex-1 rounded-lg bg-[#0d0d14] border border-[#2a2a38] px-3 py-2 text-sm text-[#f0f0f5] placeholder:text-[#3a3a4a] focus:outline-none focus:border-[#6366f1] transition-colors"
+              className="flex-1 rounded-lg bg-[var(--page-2)] border border-[var(--line)] px-3 py-2 text-sm text-[var(--text)] placeholder:text-[var(--text-4)] focus:outline-none focus:border-[#6366f1] transition-colors"
             />
             <button
               onClick={addKeyword}
               disabled={!kwDraft.trim()}
-              className="px-4 py-2 rounded-lg bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-30 disabled:cursor-not-allowed text-sm font-medium transition-colors"
+              className="px-4 py-2 rounded-lg bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-30 disabled:cursor-not-allowed text-sm font-medium text-white transition-colors"
             >
               Add
             </button>
           </div>
 
           {state.keywords.length === 0 ? (
-            <p className="text-xs text-[#3a3a4a] italic">No keywords — all brand-safe content is allowed.</p>
+            <p className="text-xs text-[var(--text-4)] italic">No keywords — all brand-safe content is allowed.</p>
           ) : (
             <div className="flex flex-wrap gap-1.5">
               {state.keywords.map((kw) => (
@@ -212,7 +212,7 @@ export default function PreferencesClient({ initial }: { initial?: Partial<Prefe
         <button
           onClick={save}
           disabled={state.saving || state.saved}
-          className="px-5 py-2 rounded-lg bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-40 disabled:cursor-not-allowed text-sm font-semibold transition-colors"
+          className="px-5 py-2 rounded-lg bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-40 disabled:cursor-not-allowed text-sm font-semibold text-white transition-colors"
         >
           {state.saving ? "Saving…" : state.saved ? "Saved" : "Save changes"}
         </button>

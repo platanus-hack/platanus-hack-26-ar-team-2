@@ -3,10 +3,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useReducer, useRef } from "react";
 
-// ------------------------------------------------------------------
-// Types
-// ------------------------------------------------------------------
-
 export type AuctionStatus = "idle" | "running" | "settled";
 
 export interface BidEntry {
@@ -41,10 +37,6 @@ export interface DemoDisplayHooks {
   onMessage?: (handler: (m: NegotiationMessage) => void) => () => void;
   onTx?: (handler: (t: TxEntry) => void) => () => void;
 }
-
-// ------------------------------------------------------------------
-// State
-// ------------------------------------------------------------------
 
 interface State {
   status: AuctionStatus;
@@ -87,18 +79,8 @@ const BRAND_COLORS: Record<string, string> = {
   cocacola: "#f40009",
 };
 
-// ------------------------------------------------------------------
-// Component
-// ------------------------------------------------------------------
-
 export default function DemoDisplay({ hooks }: { hooks?: DemoDisplayHooks }) {
-  const [state, dispatch] = useReducer(reducer, {
-    status: "idle",
-    bids: [],
-    messages: [],
-    txs: [],
-  });
-
+  const [state, dispatch] = useReducer(reducer, { status: "idle", bids: [], messages: [], txs: [] });
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -119,12 +101,12 @@ export default function DemoDisplay({ hooks }: { hooks?: DemoDisplayHooks }) {
   }, [hooks]);
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] text-[#f0f0f5] flex flex-col font-sans">
+    <div className="min-h-screen bg-[var(--page)] text-[var(--text)] flex flex-col font-sans">
       {/* Header */}
-      <header className="flex items-center justify-between px-6 py-3 border-b border-[#2a2a38]">
+      <header className="flex items-center justify-between px-6 py-3 border-b border-[var(--line)] bg-[var(--page-2)]">
         <div className="flex items-center gap-3">
           <span className="text-lg font-bold tracking-tight">Addie</span>
-          <span className="text-xs text-[#55556a]">Demo Display</span>
+          <span className="text-xs text-[var(--text-3)]">Demo Display</span>
         </div>
         <AuctionBadge status={state.status} />
       </header>
@@ -132,20 +114,16 @@ export default function DemoDisplay({ hooks }: { hooks?: DemoDisplayHooks }) {
       {/* Main grid */}
       <div className="flex-1 grid grid-cols-[1fr_1.4fr] gap-0 overflow-hidden">
         {/* Left: Bid leaderboard */}
-        <section className="border-r border-[#2a2a38] flex flex-col">
-          <div className="px-4 py-3 border-b border-[#2a2a38]">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-[#9090a8]">
-              Live bids
-            </h2>
+        <section className="border-r border-[var(--line)] flex flex-col">
+          <div className="px-4 py-3 border-b border-[var(--line)] bg-[var(--card)]">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-2)]">Live bids</h2>
           </div>
           <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2">
             <AnimatePresence>
               {state.bids.length === 0 ? (
-                <p className="text-xs text-[#55556a] p-2">Waiting for auction…</p>
+                <p className="text-xs text-[var(--text-3)] p-2">Waiting for auction…</p>
               ) : (
-                state.bids.map((bid, i) => (
-                  <BidRow key={bid.brand_id} bid={bid} rank={i + 1} />
-                ))
+                state.bids.map((bid, i) => <BidRow key={bid.brand_id} bid={bid} rank={i + 1} />)
               )}
             </AnimatePresence>
           </div>
@@ -153,19 +131,15 @@ export default function DemoDisplay({ hooks }: { hooks?: DemoDisplayHooks }) {
 
         {/* Right: Negotiation chat */}
         <section className="flex flex-col">
-          <div className="px-4 py-3 border-b border-[#2a2a38]">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-[#9090a8]">
-              Negotiation
-            </h2>
+          <div className="px-4 py-3 border-b border-[var(--line)] bg-[var(--card)]">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-2)]">Negotiation</h2>
           </div>
           <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
             <AnimatePresence initial={false}>
               {state.messages.length === 0 ? (
-                <p className="text-xs text-[#55556a]">No auction running yet…</p>
+                <p className="text-xs text-[var(--text-3)]">No auction running yet…</p>
               ) : (
-                state.messages.map((msg) => (
-                  <ChatBubble key={msg.id} msg={msg} />
-                ))
+                state.messages.map((msg) => <ChatBubble key={msg.id} msg={msg} />)
               )}
             </AnimatePresence>
             <div ref={chatEndRef} />
@@ -174,13 +148,11 @@ export default function DemoDisplay({ hooks }: { hooks?: DemoDisplayHooks }) {
       </div>
 
       {/* Bottom: TX feed */}
-      <section className="border-t border-[#2a2a38] px-4 py-2 flex gap-4 overflow-x-auto min-h-[52px] items-center">
-        <span className="text-[10px] uppercase tracking-wider text-[#55556a] shrink-0">
-          On-chain
-        </span>
+      <section className="border-t border-[var(--line)] bg-[var(--card)] px-4 py-2 flex gap-4 overflow-x-auto min-h-[52px] items-center">
+        <span className="text-[10px] uppercase tracking-wider text-[var(--text-3)] shrink-0">On-chain</span>
         <AnimatePresence>
           {state.txs.length === 0 ? (
-            <span className="text-xs text-[#2a2a38]">No transactions yet</span>
+            <span className="text-xs text-[var(--text-5)]">No transactions yet</span>
           ) : (
             state.txs.map((tx) => <TxChip key={tx.id} tx={tx} />)
           )}
@@ -189,10 +161,6 @@ export default function DemoDisplay({ hooks }: { hooks?: DemoDisplayHooks }) {
     </div>
   );
 }
-
-// ------------------------------------------------------------------
-// Sub-components
-// ------------------------------------------------------------------
 
 function AuctionBadge({ status }: { status: AuctionStatus }) {
   if (status === "running") {
@@ -212,8 +180,8 @@ function AuctionBadge({ status }: { status: AuctionStatus }) {
     );
   }
   return (
-    <span className="flex items-center gap-1.5 text-xs text-[#55556a]">
-      <span className="w-2 h-2 rounded-full bg-[#2a2a38]" />
+    <span className="flex items-center gap-1.5 text-xs text-[var(--text-3)]">
+      <span className="w-2 h-2 rounded-full bg-[var(--line)]" />
       IDLE
     </span>
   );
@@ -222,10 +190,10 @@ function AuctionBadge({ status }: { status: AuctionStatus }) {
 function BidRow({ bid, rank }: { bid: BidEntry; rank: number }) {
   const color = BRAND_COLORS[bid.brand_id] ?? "#9090a8";
   const statusStyle = {
-    won: "border-[#22c55e]/40 bg-[#22c55e]/5",
-    lost: "border-[#2a2a38] opacity-50",
+    won:      "border-[#22c55e]/40 bg-[#22c55e]/5",
+    lost:     "border-[var(--line)] opacity-50",
     refunded: "border-[#ef4444]/40 bg-[#ef4444]/5",
-    bidding: "border-[#6366f1]/40 bg-[#6366f1]/5",
+    bidding:  "border-[#6366f1]/40 bg-[#6366f1]/5",
   }[bid.status];
 
   return (
@@ -237,19 +205,19 @@ function BidRow({ bid, rank }: { bid: BidEntry; rank: number }) {
       className={`flex items-center justify-between rounded-lg border px-3 py-2.5 ${statusStyle}`}
     >
       <div className="flex items-center gap-2.5">
-        <span className="text-xs text-[#55556a] w-4 text-right">{rank}</span>
+        <span className="text-xs text-[var(--text-3)] w-4 text-right">{rank}</span>
         <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: color }} />
         <div>
-          <p className="text-sm font-medium">{bid.brand_label}</p>
-          <p className="text-[10px] text-[#55556a]">{bid.zone}</p>
+          <p className="text-sm font-medium text-[var(--text)]">{bid.brand_label}</p>
+          <p className="text-[10px] text-[var(--text-3)]">{bid.zone}</p>
         </div>
       </div>
       <div className="text-right">
         <p className="text-sm font-bold text-[#22d3ee]">${bid.bid_usdc.toFixed(2)}</p>
         <p className={`text-[10px] font-medium ${
-          bid.status === "won" ? "text-[#22c55e]" :
+          bid.status === "won"      ? "text-[#22c55e]" :
           bid.status === "refunded" ? "text-[#ef4444]" :
-          bid.status === "bidding" ? "text-[#6366f1]" : "text-[#55556a]"
+          bid.status === "bidding"  ? "text-[#6366f1]" : "text-[var(--text-3)]"
         }`}>
           {bid.status}
         </p>
@@ -269,13 +237,13 @@ function ChatBubble({ msg }: { msg: NegotiationMessage }) {
       exit={{ opacity: 0 }}
       className={`flex flex-col gap-1 ${isBrand ? "items-start" : "items-end"}`}
     >
-      <span className="text-[10px] text-[#55556a] px-1">
+      <span className="text-[10px] text-[var(--text-3)] px-1">
         {isBrand ? msg.brand_label ?? "Brand" : "Streamer-agent"}
       </span>
       <div
         className={`max-w-[85%] rounded-xl px-3 py-2 text-sm leading-relaxed ${
           isBrand
-            ? "bg-[#1a1a24] border border-[#2a2a38] rounded-tl-sm"
+            ? "bg-[var(--card-2)] border border-[var(--line)] rounded-tl-sm"
             : "bg-[#6366f1]/15 border border-[#6366f1]/30 rounded-tr-sm"
         }`}
         style={isBrand ? { borderLeftColor: color, borderLeftWidth: 2 } : {}}
@@ -288,12 +256,10 @@ function ChatBubble({ msg }: { msg: NegotiationMessage }) {
 
 function TxChip({ tx }: { tx: TxEntry }) {
   const styles = {
-    lock: { icon: "🔒", color: "text-[#f59e0b]", bg: "bg-[#f59e0b]/10 border-[#f59e0b]/20" },
+    lock:    { icon: "🔒", color: "text-[#f59e0b]", bg: "bg-[#f59e0b]/10 border-[#f59e0b]/20" },
     release: { icon: "✅", color: "text-[#22c55e]", bg: "bg-[#22c55e]/10 border-[#22c55e]/20" },
-    refund: { icon: "↩️", color: "text-[#ef4444]", bg: "bg-[#ef4444]/10 border-[#ef4444]/20" },
+    refund:  { icon: "↩️", color: "text-[#ef4444]", bg: "bg-[#ef4444]/10 border-[#ef4444]/20" },
   }[tx.type];
-
-  const short = `${tx.tx_hash.slice(0, 6)}…${tx.tx_hash.slice(-4)}`;
 
   return (
     <motion.div
@@ -304,8 +270,8 @@ function TxChip({ tx }: { tx: TxEntry }) {
     >
       <span>{styles.icon}</span>
       <span className={`font-medium ${styles.color}`}>{tx.brand}</span>
-      <span className="text-[#f0f0f5]">${tx.amount_usdc.toFixed(2)}</span>
-      <span className="text-[#55556a] font-mono">{short}</span>
+      <span className="text-[var(--text)]">${tx.amount_usdc.toFixed(2)}</span>
+      <span className="text-[var(--text-3)] font-mono">{`${tx.tx_hash.slice(0, 6)}…${tx.tx_hash.slice(-4)}`}</span>
     </motion.div>
   );
 }

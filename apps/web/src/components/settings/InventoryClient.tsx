@@ -82,7 +82,7 @@ export default function InventoryClient({ initial }: { initial?: InventoryData }
 
   return (
     <div className="flex flex-col gap-6">
-      <p className="text-xs text-[#55556a]">
+      <p className="text-xs text-[var(--text-3)]">
         Floor prices are visible to brand-agents. They cannot win below your floor.
       </p>
 
@@ -96,7 +96,7 @@ export default function InventoryClient({ initial }: { initial?: InventoryData }
         <button
           onClick={save}
           disabled={state.saving || !state.dirty}
-          className="px-5 py-2 rounded-lg bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-40 disabled:cursor-not-allowed text-sm font-semibold transition-colors"
+          className="px-5 py-2 rounded-lg bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-40 disabled:cursor-not-allowed text-sm font-semibold text-white transition-colors"
         >
           {state.saving ? "Saving…" : "Save changes"}
         </button>
@@ -112,33 +112,30 @@ function ZoneCard({ zone, dispatch }: { zone: Zone; dispatch: React.Dispatch<Act
   const durRef = useRef<HTMLInputElement>(null);
 
   return (
-    <div className="rounded-xl border border-[#2a2a38] bg-[#111118] overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#2a2a38]">
+    <div className="rounded-xl border border-[var(--line)] bg-[var(--card)] overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-3.5 border-b border-[var(--line)]">
         <div className="flex items-center gap-3">
-          <span className="text-[#55556a] text-xs font-mono">{ZONE_ICONS[zone.zone_id]}</span>
+          <span className="text-[var(--text-3)] text-xs font-mono">{ZONE_ICONS[zone.zone_id]}</span>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-[#f0f0f5]">{zone.label}</span>
+              <span className="text-sm font-semibold text-[var(--text)]">{zone.label}</span>
               {zone.manual_only && (
                 <span className="text-[10px] bg-[#f59e0b]/10 text-[#f59e0b] border border-[#f59e0b]/25 rounded px-1.5 py-0.5 font-medium">
                   manual only
                 </span>
               )}
             </div>
-            <p className="text-xs text-[#55556a] mt-0.5">{zone.description}</p>
+            <p className="text-xs text-[var(--text-3)] mt-0.5">{zone.description}</p>
           </div>
         </div>
-        <span className="text-[10px] font-mono text-[#3a3a4a] shrink-0 ml-4">{zone.dimensions}</span>
+        <span className="text-[10px] font-mono text-[var(--text-4)] shrink-0 ml-4">{zone.dimensions}</span>
       </div>
 
-      {/* Controls */}
-      <div className="grid grid-cols-2 gap-px bg-[#1e1e2a]">
-        {/* Floor */}
-        <label className="bg-[#111118] px-5 py-3 flex flex-col gap-1.5">
-          <span className="text-[10px] uppercase tracking-wider text-[#55556a] font-medium">Floor price</span>
+      <div className="grid grid-cols-2 gap-px bg-[var(--card-3)]">
+        <label className="bg-[var(--card)] px-5 py-3 flex flex-col gap-1.5">
+          <span className="text-[10px] uppercase tracking-wider text-[var(--text-3)] font-medium">Floor price</span>
           <div className="flex items-center gap-1.5">
-            <span className="text-[#55556a] text-sm">$</span>
+            <span className="text-[var(--text-3)] text-sm">$</span>
             <input
               ref={floorRef}
               type="number"
@@ -151,13 +148,12 @@ function ZoneCard({ zone, dispatch }: { zone: Zone; dispatch: React.Dispatch<Act
               }}
               className="w-20 bg-transparent text-base font-semibold text-[#22d3ee] focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
             />
-            <span className="text-xs text-[#3a3a4a]">USDC</span>
+            <span className="text-xs text-[var(--text-4)]">USDC</span>
           </div>
         </label>
 
-        {/* Duration */}
-        <label className="bg-[#111118] px-5 py-3 flex flex-col gap-1.5">
-          <span className="text-[10px] uppercase tracking-wider text-[#55556a] font-medium">Max duration</span>
+        <label className="bg-[var(--card)] px-5 py-3 flex flex-col gap-1.5">
+          <span className="text-[10px] uppercase tracking-wider text-[var(--text-3)] font-medium">Max duration</span>
           <div className="flex items-center gap-1.5">
             <input
               ref={durRef}
@@ -170,9 +166,9 @@ function ZoneCard({ zone, dispatch }: { zone: Zone; dispatch: React.Dispatch<Act
                 const v = parseInt(e.target.value, 10);
                 if (!isNaN(v) && v >= 1) dispatch({ type: "SET_DURATION", zone_id: zone.zone_id, value: v });
               }}
-              className="w-16 bg-transparent text-base font-semibold text-[#f0f0f5] focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+              className="w-16 bg-transparent text-base font-semibold text-[var(--text)] focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
             />
-            <span className="text-xs text-[#3a3a4a]">sec</span>
+            <span className="text-xs text-[var(--text-4)]">sec</span>
           </div>
         </label>
       </div>

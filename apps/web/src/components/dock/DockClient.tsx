@@ -2,10 +2,6 @@
 
 import { useCallback, useEffect, useReducer, useRef } from "react";
 
-// ------------------------------------------------------------------
-// Types
-// ------------------------------------------------------------------
-
 export type PlacementStatus = "locked" | "released" | "refunded";
 
 export interface RecentPlacement {
@@ -62,22 +58,11 @@ const INITIAL: DockState = {
   lastAction: null,
 };
 
-// ------------------------------------------------------------------
-// Hooks for external wiring (A-08, B-07, C-14)
-// ------------------------------------------------------------------
-
 export interface DockHooks {
-  /** Called by A-08 integration to push live balance updates */
   onBalance?: (handler: (usdc: number) => void) => () => void;
-  /** Called by C-14/Supabase Realtime to push new placements */
   onPlacement?: (handler: (p: RecentPlacement) => void) => () => void;
-  /** Called by A-08 to update placement status */
   onStatusChange?: (handler: (id: string, s: PlacementStatus) => void) => () => void;
 }
-
-// ------------------------------------------------------------------
-// Component
-// ------------------------------------------------------------------
 
 export default function DockClient({ hooks }: { hooks?: DockHooks }) {
   const [state, dispatch] = useReducer(reducer, INITIAL);
@@ -89,28 +74,17 @@ export default function DockClient({ hooks }: { hooks?: DockHooks }) {
     lastActionTimer.current = setTimeout(() => dispatch({ type: "SET_LAST_ACTION", msg: "" }), 3000);
   }, []);
 
-  // Wire external hooks
   useEffect(() => {
     const cleanups: (() => void)[] = [];
-    if (hooks?.onBalance) {
-      cleanups.push(
-        hooks.onBalance((balance) => dispatch({ type: "SET_BALANCE", balance }))
-      );
-    }
-    if (hooks?.onPlacement) {
-      cleanups.push(
-        hooks.onPlacement((p) => dispatch({ type: "ADD_PLACEMENT", placement: p }))
-      );
-    }
-    if (hooks?.onStatusChange) {
-      cleanups.push(
-        hooks.onStatusChange((id, s) => dispatch({ type: "UPDATE_STATUS", placement_id: id, status: s }))
-      );
-    }
+    if (hooks?.onBalance)
+      cleanups.push(hooks.onBalance((balance) => dispatch({ type: "SET_BALANCE", balance })));
+    if (hooks?.onPlacement)
+      cleanups.push(hooks.onPlacement((p) => dispatch({ type: "ADD_PLACEMENT", placement: p })));
+    if (hooks?.onStatusChange)
+      cleanups.push(hooks.onStatusChange((id, s) => dispatch({ type: "UPDATE_STATUS", placement_id: id, status: s })));
     return () => cleanups.forEach((f) => f());
   }, [hooks]);
 
-  // Keyboard shortcuts: F = FORCE EVENT, B = FULL BREAK
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -157,17 +131,17 @@ export default function DockClient({ hooks }: { hooks?: DockHooks }) {
   }
 
   return (
-    <div className="flex flex-col gap-3 p-3 min-w-[260px] max-w-[380px] font-sans text-sm select-none">
+    <div className="flex flex-col gap-3 p-3 min-w-[260px] max-w-[380px] font-sans text-sm select-none bg-[var(--page)] text-[var(--text)]">
       {/* Balance */}
-      <section className="rounded-lg bg-[#111118] border border-[#2a2a38] p-3">
-        <p className="text-[#9090a8] text-xs uppercase tracking-wider mb-1">Creator balance</p>
+      <section className="rounded-lg bg-[var(--card)] border border-[var(--line)] p-3">
+        <p className="text-[var(--text-2)] text-xs uppercase tracking-wider mb-1">Creator balance</p>
         {state.balanceUsdc !== null ? (
           <p className="text-2xl font-bold text-[#22d3ee]">
             ${state.balanceUsdc.toFixed(2)}{" "}
             <span className="text-xs font-normal text-[#2775ca]">USDC</span>
           </p>
         ) : (
-          <p className="text-[#55556a] text-sm">Connecting…</p>
+          <p className="text-[var(--text-3)] text-sm">Connecting…</p>
         )}
       </section>
 
@@ -176,7 +150,7 @@ export default function DockClient({ hooks }: { hooks?: DockHooks }) {
         <button
           onClick={triggerForceEvent}
           disabled={state.forceEventPending}
-          className="w-full rounded-lg py-2.5 px-3 font-semibold bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-between"
+          className="w-full rounded-lg py-2.5 px-3 font-semibold bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-between text-white"
         >
           <span>⚡ FORCE EVENT</span>
           <kbd className="text-[10px] bg-[#4f46e5] rounded px-1.5 py-0.5 opacity-70">F</kbd>
@@ -184,7 +158,7 @@ export default function DockClient({ hooks }: { hooks?: DockHooks }) {
         <button
           onClick={triggerFullBreak}
           disabled={state.fullBreakPending}
-          className="w-full rounded-lg py-2.5 px-3 font-semibold bg-[#ef4444] hover:bg-[#dc2626] disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-between"
+          className="w-full rounded-lg py-2.5 px-3 font-semibold bg-[#ef4444] hover:bg-[#dc2626] disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-between text-white"
         >
           <span>🎬 FULL BREAK</span>
           <kbd className="text-[10px] bg-[#dc2626] rounded px-1.5 py-0.5 opacity-70">B</kbd>
@@ -197,10 +171,10 @@ export default function DockClient({ hooks }: { hooks?: DockHooks }) {
       )}
 
       {/* Recent placements */}
-      <section className="rounded-lg bg-[#111118] border border-[#2a2a38] p-3">
-        <p className="text-[#9090a8] text-xs uppercase tracking-wider mb-2">Recent placements</p>
+      <section className="rounded-lg bg-[var(--card)] border border-[var(--line)] p-3">
+        <p className="text-[var(--text-2)] text-xs uppercase tracking-wider mb-2">Recent placements</p>
         {state.placements.length === 0 ? (
-          <p className="text-[#55556a] text-xs">No placements yet</p>
+          <p className="text-[var(--text-3)] text-xs">No placements yet</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {state.placements.map((p) => (
@@ -213,38 +187,27 @@ export default function DockClient({ hooks }: { hooks?: DockHooks }) {
   );
 }
 
-// ------------------------------------------------------------------
-// Sub-components
-// ------------------------------------------------------------------
-
 const STATUS_STYLES: Record<PlacementStatus, string> = {
   locked: "bg-[#f59e0b]/20 text-[#f59e0b]",
   released: "bg-[#22c55e]/20 text-[#22c55e]",
   refunded: "bg-[#ef4444]/20 text-[#ef4444]",
 };
 
-const STATUS_LABELS: Record<PlacementStatus, string> = {
-  locked: "locked",
-  released: "released",
-  refunded: "refunded",
-};
-
 function PlacementRow({ placement: p }: { placement: RecentPlacement }) {
-  const ago = formatAgo(p.ts);
   return (
     <li className="flex items-start justify-between gap-2 text-xs">
       <div className="flex flex-col min-w-0">
-        <span className="font-medium truncate text-[#f0f0f5]">
+        <span className="font-medium truncate text-[var(--text)]">
           {p.brand} · {p.ad_label}
         </span>
-        <span className="text-[#55556a]">
-          {p.zone} · {ago}
+        <span className="text-[var(--text-3)]">
+          {p.zone} · {formatAgo(p.ts)}
         </span>
       </div>
       <div className="flex flex-col items-end gap-1 shrink-0">
         <span className="text-[#22d3ee] font-semibold">${p.amount_usdc.toFixed(2)}</span>
         <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${STATUS_STYLES[p.status]}`}>
-          {STATUS_LABELS[p.status]}
+          {p.status}
         </span>
       </div>
     </li>

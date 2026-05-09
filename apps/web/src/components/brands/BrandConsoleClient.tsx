@@ -1,8 +1,7 @@
 "use client";
 
 import { useReducer, useState, useRef, useCallback } from "react";
-
-// ─── Static brand registry (mirrors YAML + PreferencesClient) ────────
+import ThemeToggle from "@/components/ThemeToggle";
 
 export interface BrandMeta {
   id: string;
@@ -104,10 +103,10 @@ const BRAND_REGISTRY: Record<string, BrandMeta> = {
 };
 
 const AD_VARIANTS = [
-  { name: "epic_goal_lower", zone: "lower_third", duration_ms: 6000, mood_tags: ["high_energy", "celebration", "victory"] },
+  { name: "epic_goal_lower",  zone: "lower_third",         duration_ms: 6000,  mood_tags: ["high_energy", "celebration", "victory"] },
   { name: "premium_takeover", zone: "fullscreen_takeover", duration_ms: 30000, mood_tags: ["storytelling", "brand_moment"] },
-  { name: "persistent_logo", zone: "bottom_right_corner", duration_ms: 60000, mood_tags: ["any"] },
-  { name: "calm_chat_lower", zone: "lower_third", duration_ms: 5000, mood_tags: ["calm", "chat_active"] },
+  { name: "persistent_logo",  zone: "bottom_right_corner", duration_ms: 60000, mood_tags: ["any"] },
+  { name: "calm_chat_lower",  zone: "lower_third",         duration_ms: 5000,  mood_tags: ["calm", "chat_active"] },
 ];
 
 const ZONE_LABELS: Record<string, string> = {
@@ -117,12 +116,11 @@ const ZONE_LABELS: Record<string, string> = {
 };
 
 const ZONE_COLORS: Record<string, string> = {
-  lower_third: "bg-[#6366f1]/15 text-[#6366f1] border-[#6366f1]/30",
+  lower_third:         "bg-[#6366f1]/15 text-[#6366f1] border-[#6366f1]/30",
   bottom_right_corner: "bg-[#22d3ee]/15 text-[#22d3ee] border-[#22d3ee]/30",
   fullscreen_takeover: "bg-[#f59e0b]/15 text-[#f59e0b] border-[#f59e0b]/30",
 };
 
-// Mock stats per brand (until C-05 placements table is wired)
 const MOCK_STATS: Record<string, { impressions: number; spend_usdc: number; win_rate: number; placements: number }> = {
   adidas:   { impressions: 1240, spend_usdc: 18.50, win_rate: 0.62, placements: 7 },
   nike:     { impressions: 980,  spend_usdc: 22.00, win_rate: 0.58, placements: 5 },
@@ -184,9 +182,9 @@ export default function BrandConsoleClient({ brandId }: { brandId: string }) {
 
   if (!brand) {
     return (
-      <div className="min-h-screen bg-[#0a0a0f] text-[#f0f0f5] flex items-center justify-center p-8">
+      <div className="min-h-screen bg-[var(--page)] text-[var(--text)] flex items-center justify-center p-8">
         <div className="text-center">
-          <p className="text-[#55556a] text-sm">Brand not found: <code className="text-[#ef4444]">{brandId}</code></p>
+          <p className="text-[var(--text-3)] text-sm">Brand not found: <code className="text-[#ef4444]">{brandId}</code></p>
           <a href="/" className="mt-4 inline-block text-xs text-[#6366f1] hover:underline">← Back to Addie</a>
         </div>
       </div>
@@ -196,39 +194,29 @@ export default function BrandConsoleClient({ brandId }: { brandId: string }) {
   const stats = MOCK_STATS[brandId] ?? { impressions: 0, spend_usdc: 0, win_rate: 0, placements: 0 };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] text-[#f0f0f5]">
+    <div className="min-h-screen bg-[var(--page)] text-[var(--text)]">
       {/* ── Header ── */}
-      <div className="border-b border-[#1e1e2a] bg-[#0d0d14]">
+      <div className="border-b border-[var(--line)] bg-[var(--page-2)]">
         <div className="max-w-3xl mx-auto px-6 py-5">
-          <a href="/" className="text-[#55556a] hover:text-[#9090a8] text-xs transition-colors">← Addie</a>
+          <div className="flex items-center justify-between">
+            <a href="/" className="text-[var(--text-3)] hover:text-[var(--text-2)] text-xs transition-colors">← Addie</a>
+            <ThemeToggle />
+          </div>
           <div className="flex items-center gap-3 mt-3">
-            <span
-              className="w-4 h-4 rounded-full shrink-0"
-              style={{ background: brand.color }}
-            />
-            <h1 className="text-xl font-bold text-[#f0f0f5]">{brand.label}</h1>
+            <span className="w-4 h-4 rounded-full shrink-0" style={{ background: brand.color }} />
+            <h1 className="text-xl font-bold text-[var(--text)]">{brand.label}</h1>
             {brand.always_bid_floor && (
               <span className="text-[10px] bg-[#22d3ee]/15 text-[#22d3ee] border border-[#22d3ee]/30 rounded px-1.5 py-0.5 font-medium">
                 DEFAULT BIDDER
               </span>
             )}
           </div>
-          <p className="text-xs text-[#55556a] mt-1 ml-7">{brand.persona_slug}</p>
+          <p className="text-xs text-[var(--text-3)] mt-1 ml-7">{brand.persona_slug}</p>
 
-          {/* Balance strip */}
           <div className="ml-7 mt-3 flex items-center gap-6">
-            <div>
-              <span className="text-[10px] uppercase tracking-wider text-[#55556a] font-medium">Balance</span>
-              <p className="text-base font-semibold text-[#22c55e] font-mono">$5.00 <span className="text-xs font-normal text-[#55556a]">USDC</span></p>
-            </div>
-            <div>
-              <span className="text-[10px] uppercase tracking-wider text-[#55556a] font-medium">Spent today</span>
-              <p className="text-base font-semibold text-[#f0f0f5] font-mono">${stats.spend_usdc.toFixed(2)} <span className="text-xs font-normal text-[#55556a]">USDC</span></p>
-            </div>
-            <div>
-              <span className="text-[10px] uppercase tracking-wider text-[#55556a] font-medium">Daily cap</span>
-              <p className="text-base font-semibold text-[#f0f0f5] font-mono">${brand.daily_cap_usdc.toFixed(2)} <span className="text-xs font-normal text-[#55556a]">USDC</span></p>
-            </div>
+            <BalanceItem label="Balance" value="$5.00" sub="USDC" valueClass="text-[#22c55e]" />
+            <BalanceItem label="Spent today" value={`$${stats.spend_usdc.toFixed(2)}`} sub="USDC" />
+            <BalanceItem label="Daily cap" value={`$${brand.daily_cap_usdc.toFixed(2)}`} sub="USDC" />
           </div>
         </div>
 
@@ -239,10 +227,10 @@ export default function BrandConsoleClient({ brandId }: { brandId: string }) {
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors capitalize ${
+                className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === tab
-                    ? "border-[#6366f1] text-[#f0f0f5]"
-                    : "border-transparent text-[#55556a] hover:text-[#9090a8]"
+                    ? "border-[#6366f1] text-[var(--text)]"
+                    : "border-transparent text-[var(--text-3)] hover:text-[var(--text-2)]"
                 }`}
               >
                 {tab === "library" ? "Ad Library" : tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -262,6 +250,18 @@ export default function BrandConsoleClient({ brandId }: { brandId: string }) {
   );
 }
 
+function BalanceItem({ label, value, sub, valueClass = "text-[var(--text)]" }: { label: string; value: string; sub?: string; valueClass?: string }) {
+  return (
+    <div>
+      <span className="text-[10px] uppercase tracking-wider text-[var(--text-3)] font-medium">{label}</span>
+      <p className={`text-base font-semibold font-mono ${valueClass}`}>
+        {value}
+        {sub && <span className="text-xs font-normal text-[var(--text-3)] ml-1">{sub}</span>}
+      </p>
+    </div>
+  );
+}
+
 // ─── Overview tab ─────────────────────────────────────────────────────
 
 function OverviewTab({
@@ -273,49 +273,45 @@ function OverviewTab({
 }) {
   return (
     <div className="flex flex-col gap-6">
-      {/* Stat cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard label="Placements" value={String(stats.placements)} />
+        <StatCard label="Placements"  value={String(stats.placements)} />
         <StatCard label="Impressions" value={stats.impressions.toLocaleString()} />
         <StatCard label="Total spend" value={`$${stats.spend_usdc.toFixed(2)}`} sub="USDC" />
-        <StatCard label="Win rate" value={`${Math.round(stats.win_rate * 100)}%`} />
+        <StatCard label="Win rate"    value={`${Math.round(stats.win_rate * 100)}%`} />
       </div>
 
-      {/* Targeting summary */}
-      <section className="rounded-xl border border-[#2a2a38] bg-[#111118] overflow-hidden">
-        <div className="px-5 py-4 border-b border-[#2a2a38]">
-          <h2 className="text-sm font-semibold text-[#f0f0f5]">Targeting</h2>
+      <section className="rounded-xl border border-[var(--line)] bg-[var(--card)] overflow-hidden">
+        <div className="px-5 py-4 border-b border-[var(--line)]">
+          <h2 className="text-sm font-semibold text-[var(--text)]">Targeting</h2>
         </div>
         <div className="p-5 grid grid-cols-2 gap-6">
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-[#55556a] font-medium mb-2">Allowed zones</p>
+            <p className="text-[10px] uppercase tracking-wider text-[var(--text-3)] font-medium mb-2">Allowed zones</p>
             <div className="flex flex-wrap gap-1.5">
               {brand.allowed_zones.map((z) => (
-                <span key={z} className={`text-[10px] border rounded px-2 py-0.5 font-medium ${ZONE_COLORS[z] ?? "bg-[#2a2a38] text-[#9090a8]"}`}>
+                <span key={z} className={`text-[10px] border rounded px-2 py-0.5 font-medium ${ZONE_COLORS[z] ?? "bg-[var(--card-2)] text-[var(--text-2)]"}`}>
                   {ZONE_LABELS[z] ?? z}
                 </span>
               ))}
             </div>
           </div>
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-[#55556a] font-medium mb-2">Target moods</p>
+            <p className="text-[10px] uppercase tracking-wider text-[var(--text-3)] font-medium mb-2">Target moods</p>
             <div className="flex flex-wrap gap-1.5">
               {brand.target_moods.slice(0, 5).map((m) => (
-                <span key={m} className="text-[10px] bg-[#1e1e2a] text-[#9090a8] rounded px-2 py-0.5 font-mono">
-                  {m}
-                </span>
+                <span key={m} className="text-[10px] bg-[var(--card-2)] text-[var(--text-2)] rounded px-2 py-0.5 font-mono">{m}</span>
               ))}
               {brand.target_moods.length > 5 && (
-                <span className="text-[10px] text-[#55556a]">+{brand.target_moods.length - 5} more</span>
+                <span className="text-[10px] text-[var(--text-3)]">+{brand.target_moods.length - 5} more</span>
               )}
             </div>
           </div>
         </div>
         <div className="px-5 pb-5">
-          <p className="text-[10px] uppercase tracking-wider text-[#55556a] font-medium mb-2">Preferred zones</p>
+          <p className="text-[10px] uppercase tracking-wider text-[var(--text-3)] font-medium mb-2">Preferred zones</p>
           <div className="flex flex-wrap gap-1.5">
             {brand.preferred_zones.map((z) => (
-              <span key={z} className={`text-[10px] border rounded px-2 py-0.5 font-medium ${ZONE_COLORS[z] ?? "bg-[#2a2a38] text-[#9090a8]"}`}>
+              <span key={z} className={`text-[10px] border rounded px-2 py-0.5 font-medium ${ZONE_COLORS[z] ?? ""}`}>
                 {ZONE_LABELS[z] ?? z} ★
               </span>
             ))}
@@ -323,23 +319,20 @@ function OverviewTab({
         </div>
       </section>
 
-      {/* Safety keywords */}
-      <section className="rounded-xl border border-[#2a2a38] bg-[#111118] overflow-hidden">
-        <div className="px-5 py-4 border-b border-[#2a2a38]">
-          <h2 className="text-sm font-semibold text-[#f0f0f5]">Brand-safety keywords</h2>
-          <p className="text-xs text-[#55556a] mt-0.5">Triggers automatic escrow refund mid-placement.</p>
+      <section className="rounded-xl border border-[var(--line)] bg-[var(--card)] overflow-hidden">
+        <div className="px-5 py-4 border-b border-[var(--line)]">
+          <h2 className="text-sm font-semibold text-[var(--text)]">Brand-safety keywords</h2>
+          <p className="text-xs text-[var(--text-3)] mt-0.5">Triggers automatic escrow refund mid-placement.</p>
         </div>
         <div className="px-5 py-4 flex flex-wrap gap-1.5">
           {brand.safety_keywords.map((kw) => (
-            <span key={kw} className="text-[10px] bg-[#ef4444]/10 border border-[#ef4444]/25 text-[#ef4444] rounded px-2 py-0.5 font-mono">
-              {kw}
-            </span>
+            <span key={kw} className="text-[10px] bg-[#ef4444]/10 border border-[#ef4444]/25 text-[#ef4444] rounded px-2 py-0.5 font-mono">{kw}</span>
           ))}
         </div>
       </section>
 
-      <p className="text-xs text-[#3a3a4a]">
-        Stats are mock data — live figures come once C-05 (placements table) + D-08 (audit log) are wired.
+      <p className="text-xs text-[var(--text-5)]">
+        Stats are mock data — live figures come once C-05 (placements table) + D-08 are wired.
       </p>
     </div>
   );
@@ -347,11 +340,11 @@ function OverviewTab({
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="rounded-xl border border-[#2a2a38] bg-[#111118] px-4 py-3.5">
-      <p className="text-[10px] uppercase tracking-wider text-[#55556a] font-medium mb-1">{label}</p>
-      <p className="text-xl font-bold text-[#f0f0f5] font-mono leading-none">
+    <div className="rounded-xl border border-[var(--line)] bg-[var(--card)] px-4 py-3.5">
+      <p className="text-[10px] uppercase tracking-wider text-[var(--text-3)] font-medium mb-1">{label}</p>
+      <p className="text-xl font-bold text-[var(--text)] font-mono leading-none">
         {value}
-        {sub && <span className="text-xs font-normal text-[#55556a] ml-1">{sub}</span>}
+        {sub && <span className="text-xs font-normal text-[var(--text-3)] ml-1">{sub}</span>}
       </p>
     </div>
   );
@@ -362,11 +355,9 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
 function LibraryTab({ brand }: { brand: BrandMeta }) {
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-xs text-[#55556a]">
+      <p className="text-xs text-[var(--text-3)]">
         4 variants pre-generated per brand. Assets seeded by D-10 (ElevenLabs Creative + Vercel Blob).
-        Upload custom ads via D-07 once wired.
       </p>
-
       <div className="flex flex-col gap-3">
         {AD_VARIANTS.map((ad) => {
           const zoneOk = brand.allowed_zones.includes(ad.zone);
@@ -374,48 +365,39 @@ function LibraryTab({ brand }: { brand: BrandMeta }) {
           return (
             <div
               key={ad.name}
-              className={`rounded-xl border bg-[#111118] overflow-hidden ${
-                zoneOk ? "border-[#2a2a38]" : "border-[#1e1e2a] opacity-50"
-              }`}
+              className={`rounded-xl border bg-[var(--card)] overflow-hidden ${zoneOk ? "border-[var(--line)]" : "border-[var(--line-2)] opacity-50"}`}
             >
               <div className="flex items-center gap-4 px-5 py-4">
-                {/* Thumbnail placeholder */}
                 <div
-                  className="w-16 h-10 rounded-lg shrink-0 flex items-center justify-center text-[10px] font-mono text-[#3a3a4a] border border-[#2a2a38]"
+                  className="w-16 h-10 rounded-lg shrink-0 flex items-center justify-center text-[10px] font-mono text-[var(--text-4)] border"
                   style={{
-                    background: zoneOk ? `${brand.color}18` : "#111118",
-                    borderColor: zoneOk ? `${brand.color}30` : "#1e1e2a",
+                    background: zoneOk ? `${brand.color}18` : "var(--card-2)",
+                    borderColor: zoneOk ? `${brand.color}30` : "var(--line-2)",
                   }}
                 >
                   {zoneOk ? "PRE-GEN" : "N/A"}
                 </div>
-
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-[#f0f0f5] font-mono">{ad.name}</span>
+                    <span className="text-sm font-medium text-[var(--text)] font-mono">{ad.name}</span>
                     <span className={`text-[10px] border rounded px-1.5 py-0.5 font-medium ${ZONE_COLORS[ad.zone] ?? ""}`}>
                       {ZONE_LABELS[ad.zone]}
                     </span>
-                    {preferred && (
-                      <span className="text-[10px] bg-[#22c55e]/10 text-[#22c55e] border border-[#22c55e]/25 rounded px-1.5 py-0.5">preferred</span>
-                    )}
-                    {!zoneOk && (
-                      <span className="text-[10px] bg-[#ef4444]/10 text-[#ef4444] border border-[#ef4444]/25 rounded px-1.5 py-0.5">zone excluded</span>
-                    )}
+                    {preferred && <span className="text-[10px] bg-[#22c55e]/10 text-[#22c55e] border border-[#22c55e]/25 rounded px-1.5 py-0.5">preferred</span>}
+                    {!zoneOk && <span className="text-[10px] bg-[#ef4444]/10 text-[#ef4444] border border-[#ef4444]/25 rounded px-1.5 py-0.5">zone excluded</span>}
                   </div>
                   <div className="flex items-center gap-3 mt-1">
-                    <span className="text-xs text-[#55556a]">{(ad.duration_ms / 1000).toFixed(0)}s</span>
+                    <span className="text-xs text-[var(--text-3)]">{(ad.duration_ms / 1000).toFixed(0)}s</span>
                     <div className="flex gap-1">
                       {ad.mood_tags.map((t) => (
-                        <span key={t} className="text-[10px] font-mono text-[#3a3a4a] bg-[#1e1e2a] rounded px-1.5 py-0.5">{t}</span>
+                        <span key={t} className="text-[10px] font-mono text-[var(--text-4)] bg-[var(--card-2)] rounded px-1.5 py-0.5">{t}</span>
                       ))}
                     </div>
                   </div>
                 </div>
-
                 <div className="shrink-0 text-right">
-                  <span className="text-xs text-[#3a3a4a]">asset_url</span>
-                  <p className="text-[10px] text-[#55556a]">pending D-10</p>
+                  <span className="text-xs text-[var(--text-4)]">asset_url</span>
+                  <p className="text-[10px] text-[var(--text-3)]">pending D-10</p>
                 </div>
               </div>
             </div>
@@ -470,51 +452,35 @@ function MandateTab({ brand }: { brand: BrandMeta }) {
     }
   }
 
+  const invalid = state.min_bid_usdc > state.max_bid_usdc;
+
   return (
     <div className="flex flex-col gap-6">
-      <p className="text-xs text-[#55556a]">
+      <p className="text-xs text-[var(--text-3)]">
         Mandate constrains the brand-agent autonomy. Changes take effect on the next auction round.
       </p>
 
       {/* Budget */}
-      <section className="rounded-xl border border-[#2a2a38] bg-[#111118] overflow-hidden">
-        <div className="px-5 py-4 border-b border-[#2a2a38]">
-          <h2 className="text-sm font-semibold text-[#f0f0f5]">Budget constraints</h2>
+      <section className="rounded-xl border border-[var(--line)] bg-[var(--card)] overflow-hidden">
+        <div className="px-5 py-4 border-b border-[var(--line)]">
+          <h2 className="text-sm font-semibold text-[var(--text)]">Budget constraints</h2>
           {brand.always_bid_floor && (
             <p className="text-xs text-[#22d3ee] mt-0.5">Default bidder — always bids exactly min_bid at floor.</p>
           )}
         </div>
-        <div className="grid grid-cols-3 gap-px bg-[#1e1e2a]">
-          <BudgetField
-            label="Daily cap"
-            value={state.daily_cap_usdc}
-            onChange={(v) => dispatch({ type: "SET_DAILY_CAP", value: v })}
-          />
-          <BudgetField
-            label="Min bid"
-            value={state.min_bid_usdc}
-            onChange={(v) => dispatch({ type: "SET_MIN_BID", value: v })}
-            step={0.05}
-          />
-          <BudgetField
-            label="Max bid"
-            value={state.max_bid_usdc}
-            onChange={(v) => dispatch({ type: "SET_MAX_BID", value: v })}
-            step={0.25}
-          />
+        <div className="grid grid-cols-3 gap-px bg-[var(--card-3)]">
+          <BudgetField label="Daily cap" value={state.daily_cap_usdc} onChange={(v) => dispatch({ type: "SET_DAILY_CAP", value: v })} />
+          <BudgetField label="Min bid"   value={state.min_bid_usdc}   onChange={(v) => dispatch({ type: "SET_MIN_BID",   value: v })} step={0.05} />
+          <BudgetField label="Max bid"   value={state.max_bid_usdc}   onChange={(v) => dispatch({ type: "SET_MAX_BID",   value: v })} step={0.25} />
         </div>
-        {state.min_bid_usdc > state.max_bid_usdc && (
-          <p className="px-5 py-2 text-xs text-[#ef4444]">min_bid cannot exceed max_bid</p>
-        )}
+        {invalid && <p className="px-5 py-2 text-xs text-[#ef4444]">min_bid cannot exceed max_bid</p>}
       </section>
 
       {/* Safety keywords */}
-      <section className="rounded-xl border border-[#2a2a38] bg-[#111118] overflow-hidden">
-        <div className="px-5 py-4 border-b border-[#2a2a38]">
-          <h2 className="text-sm font-semibold text-[#f0f0f5]">Brand-safety keywords</h2>
-          <p className="text-xs text-[#55556a] mt-0.5">
-            Detected in audio or chat → automatic escrow refund.
-          </p>
+      <section className="rounded-xl border border-[var(--line)] bg-[var(--card)] overflow-hidden">
+        <div className="px-5 py-4 border-b border-[var(--line)]">
+          <h2 className="text-sm font-semibold text-[var(--text)]">Brand-safety keywords</h2>
+          <p className="text-xs text-[var(--text-3)] mt-0.5">Detected in audio or chat → automatic escrow refund.</p>
         </div>
         <div className="p-4 flex flex-col gap-3">
           <div className="flex gap-2">
@@ -525,33 +491,24 @@ function MandateTab({ brand }: { brand: BrandMeta }) {
               onChange={(e) => setKwDraft(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && addKw()}
               placeholder="Add keyword…"
-              className="flex-1 rounded-lg bg-[#0d0d14] border border-[#2a2a38] px-3 py-2 text-sm text-[#f0f0f5] placeholder:text-[#3a3a4a] focus:outline-none focus:border-[#6366f1] transition-colors"
+              className="flex-1 rounded-lg bg-[var(--page-2)] border border-[var(--line)] px-3 py-2 text-sm text-[var(--text)] placeholder:text-[var(--text-4)] focus:outline-none focus:border-[#6366f1] transition-colors"
             />
             <button
               onClick={addKw}
               disabled={!kwDraft.trim()}
-              className="px-4 py-2 rounded-lg bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-30 disabled:cursor-not-allowed text-sm font-medium transition-colors"
+              className="px-4 py-2 rounded-lg bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-30 disabled:cursor-not-allowed text-sm font-medium text-white transition-colors"
             >
               Add
             </button>
           </div>
           {state.safety_keywords.length === 0 ? (
-            <p className="text-xs text-[#3a3a4a] italic">No keywords set.</p>
+            <p className="text-xs text-[var(--text-4)] italic">No keywords set.</p>
           ) : (
             <div className="flex flex-wrap gap-1.5">
               {state.safety_keywords.map((kw) => (
-                <span
-                  key={kw}
-                  className="inline-flex items-center gap-1 rounded-md bg-[#ef4444]/10 border border-[#ef4444]/25 text-[#ef4444] text-xs px-2.5 py-1 font-mono"
-                >
+                <span key={kw} className="inline-flex items-center gap-1 rounded-md bg-[#ef4444]/10 border border-[#ef4444]/25 text-[#ef4444] text-xs px-2.5 py-1 font-mono">
                   {kw}
-                  <button
-                    onClick={() => dispatch({ type: "REMOVE_KW", kw })}
-                    className="ml-0.5 text-[#ef4444]/60 hover:text-[#ef4444] transition-colors leading-none"
-                    aria-label={`Remove ${kw}`}
-                  >
-                    ×
-                  </button>
+                  <button onClick={() => dispatch({ type: "REMOVE_KW", kw })} className="ml-0.5 text-[#ef4444]/60 hover:text-[#ef4444] transition-colors leading-none" aria-label={`Remove ${kw}`}>×</button>
                 </span>
               ))}
             </div>
@@ -563,8 +520,8 @@ function MandateTab({ brand }: { brand: BrandMeta }) {
       <div className="flex items-center gap-3">
         <button
           onClick={save}
-          disabled={state.saving || !state.dirty || state.min_bid_usdc > state.max_bid_usdc}
-          className="px-5 py-2 rounded-lg bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-40 disabled:cursor-not-allowed text-sm font-semibold transition-colors"
+          disabled={state.saving || !state.dirty || invalid}
+          className="px-5 py-2 rounded-lg bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-40 disabled:cursor-not-allowed text-sm font-semibold text-white transition-colors"
         >
           {state.saving ? "Saving…" : "Save changes"}
         </button>
@@ -575,22 +532,12 @@ function MandateTab({ brand }: { brand: BrandMeta }) {
   );
 }
 
-function BudgetField({
-  label,
-  value,
-  onChange,
-  step = 1,
-}: {
-  label: string;
-  value: number;
-  onChange: (v: number) => void;
-  step?: number;
-}) {
+function BudgetField({ label, value, onChange, step = 1 }: { label: string; value: number; onChange: (v: number) => void; step?: number }) {
   return (
-    <label className="bg-[#111118] px-5 py-3 flex flex-col gap-1.5">
-      <span className="text-[10px] uppercase tracking-wider text-[#55556a] font-medium">{label}</span>
+    <label className="bg-[var(--card)] px-5 py-3 flex flex-col gap-1.5">
+      <span className="text-[10px] uppercase tracking-wider text-[var(--text-3)] font-medium">{label}</span>
       <div className="flex items-center gap-1.5">
-        <span className="text-[#55556a] text-sm">$</span>
+        <span className="text-[var(--text-3)] text-sm">$</span>
         <input
           type="number"
           min={0}
@@ -602,7 +549,7 @@ function BudgetField({
           }}
           className="w-20 bg-transparent text-base font-semibold text-[#22d3ee] focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
         />
-        <span className="text-xs text-[#3a3a4a]">USDC</span>
+        <span className="text-xs text-[var(--text-4)]">USDC</span>
       </div>
     </label>
   );

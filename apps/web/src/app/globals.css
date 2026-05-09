@@ -1,49 +1,91 @@
 @import "tailwindcss";
 
+/* ── Design tokens ──────────────────────────────────────────────────── */
+
 :root {
-  --background: #0a0a0f;
-  --foreground: #f0f0f5;
+  /* Backgrounds */
+  --page:     #0a0a0f;
+  --page-2:   #0d0d14;
+  --card:     #111118;
+  --card-2:   #1a1a28;
+  --card-3:   #1e1e2a;
 
-  /* Brand */
-  --color-primary: #6366f1;
-  --color-primary-hover: #4f46e5;
-  --color-accent: #22d3ee;
-  --color-success: #22c55e;
-  --color-warning: #f59e0b;
-  --color-danger: #ef4444;
-  --color-usdc: #2775ca;
-
-  /* Surfaces */
-  --color-surface: #111118;
-  --color-surface-alt: #1a1a24;
-  --color-border: #2a2a38;
+  /* Borders / dividers */
+  --line:     #2a2a38;
+  --line-2:   #1e1e2a;
 
   /* Text */
-  --color-text-primary: #f0f0f5;
-  --color-text-secondary: #9090a8;
-  --color-text-muted: #55556a;
+  --text:     #f0f0f5;
+  --text-2:   #9090a8;
+  --text-3:   #55556a;
+  --text-4:   #3a3a4a;
+  --text-5:   #2a2a38;
+
+  /* Brand (same in both themes) */
+  --p:        #6366f1;
+  --p-h:      #4f46e5;
+  --a:        #22d3ee;
+  --ok:       #22c55e;
+  --warn:     #f59e0b;
+  --err:      #ef4444;
+  --usdc:     #2775ca;
 }
+
+[data-theme="light"] {
+  --page:     #f5f5ff;
+  --page-2:   #ededf8;
+  --card:     #ffffff;
+  --card-2:   #f0f0f8;
+  --card-3:   #e8e8f2;
+  --line:     #d8d8ea;
+  --line-2:   #e8e8f4;
+  --text:     #0a0a1a;
+  --text-2:   #4a4a6a;
+  --text-3:   #68688a;
+  --text-4:   #8a8aaa;
+  --text-5:   #b0b0cc;
+}
+
+/* ── Tailwind theme registration ────────────────────────────────────── */
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-primary: var(--color-primary);
-  --color-accent: var(--color-accent);
-  --color-success: var(--color-success);
-  --color-warning: var(--color-warning);
-  --color-danger: var(--color-danger);
-  --color-usdc: var(--color-usdc);
-  --color-surface: var(--color-surface);
-  --color-surface-alt: var(--color-surface-alt);
-  --color-border: var(--color-border);
-  --color-text-primary: var(--color-text-primary);
-  --color-text-secondary: var(--color-text-secondary);
-  --color-text-muted: var(--color-text-muted);
+  --color-page:    var(--page);
+  --color-page2:   var(--page-2);
+  --color-card:    var(--card);
+  --color-card2:   var(--card-2);
+  --color-card3:   var(--card-3);
+  --color-line:    var(--line);
+  --color-line2:   var(--line-2);
+  --color-text:    var(--text);
+  --color-text2:   var(--text-2);
+  --color-text3:   var(--text-3);
+  --color-text4:   var(--text-4);
+  --color-text5:   var(--text-5);
+  --color-primary: var(--p);
+  --color-accent:  var(--a);
+  --color-ok:      var(--ok);
+  --color-warn:    var(--warn);
+  --color-err:     var(--err);
+  --color-usdc:    var(--usdc);
 }
 
+/* ── Base styles ────────────────────────────────────────────────────── */
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: system-ui, -apple-system, sans-serif;
+  background: var(--page);
+  color: var(--text);
+  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
+  transition: background 0.2s, color 0.2s;
+}
+
+/* Smooth theme transitions on key properties */
+*, *::before, *::after {
+  transition-property: background-color, border-color, color;
+  transition-duration: 0.15s;
+  transition-timing-function: ease;
+}
+/* Don't animate layout-affecting props or animated elements */
+.no-transition, [data-framer-motion] {
+  transition: none !important;
 }
