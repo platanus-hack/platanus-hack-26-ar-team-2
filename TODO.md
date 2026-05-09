@@ -24,6 +24,7 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 |---|---|---|---|
 | Andy | P0-04 + C-01 | Initial DB migration (`supabase/migrations/0001_init.sql` accounts/streams/mandates) + agent types (`apps/web/src/lib/agents/types.ts` Mandate, BrandAgentDecision, NegotiationTurn, StandingOffer, SoftHold) | 2026-05-09 |
 | Lucas | POC-PIPE | Pipeline POC standalone bajo `poc/pipeline/` (foundation para B-01..B-07: docker-compose nginx-rtmp + webhooks on_publish/on_publish_done + ffmpeg audio/frames + tmi.js chat + context tick en terminal) | 2026-05-09 |
+| Franco | A-02b | `/security-review` gate sobre `AddieEscrow.sol` (track/a-onchain) + FF cierre A-01..A-02b a `main` si clean | 2026-05-09 |
 
 ---
 
@@ -75,7 +76,7 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 
 - ✅ **A-01** `contracts/src/AddieEscrow.sol` (~80 LoC) con `lock(placementId, payee, amount)`, `release(placementId)`, `refund(placementId)` + eventos `Locked`/`Released`/`Refunded` — deps: P0-03
 - ✅ **A-02** Tests Foundry happy path + reverts en `contracts/test/AddieEscrow.t.sol` — deps: A-01
-- ⬜ **A-02b** Audit gate de `AddieEscrow.sol` antes de FF a `main` y de A-03: correr `/security-review` sobre el diff de `track/a-onchain` (cubre reentrancy, owner gating, state machine, unchecked calls). Si los findings son críticos → fix + `forge test` verde + re-audit; si clean o sólo nits → FF cierre de A-01 + A-02 a `main`. Mismo gate aplica a cambios futuros del contrato. — deps: A-02
+- 🟡 **A-02b** Audit gate de `AddieEscrow.sol` antes de FF a `main` y de A-03: correr `/security-review` sobre el diff de `track/a-onchain` (cubre reentrancy, owner gating, state machine, unchecked calls). Si los findings son críticos → fix + `forge test` verde + re-audit; si clean o sólo nits → FF cierre de A-01 + A-02 a `main`. Mismo gate aplica a cambios futuros del contrato. — deps: A-02
 - ⬜ **A-03** `contracts/script/Deploy.s.sol` + deploy a Base mainnet — deps: A-02b, P0-13, P0-21
 - ⬜ **A-04** `[INFRA]` Anotar address del contrato deployed en `apps/web/src/lib/chain/escrow.ts` como const + verificar en basescan — deps: A-03
 - ⬜ **A-05** `scripts/seed-wallets.ts` — genera 9 Privy smart wallets (8 brand + 1 platform owner) y persiste addresses en `accounts` — deps: P0-11, P0-12, P0-04
