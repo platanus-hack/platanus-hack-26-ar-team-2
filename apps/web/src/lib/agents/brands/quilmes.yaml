@@ -1,0 +1,69 @@
+brand_id: quilmes
+display_name: "Quilmes"
+
+# Budget constraints (USDC)
+daily_cap_usdc: 40
+min_bid_usdc: 0.30
+max_bid_usdc: 3.50
+always_bid_floor: false
+
+# Negotiation behaviour
+concession_step_pct: 15   # Quilmes is more flexible — it's beer, not war
+max_turns: 3
+
+allowed_zones:
+  - lower_third
+  - bottom_right_corner
+
+preferred_zones:
+  - bottom_right_corner   # persistent logo while people watch and chat
+
+# Quilmes is a social brand — loves celebrations and group energy
+target_moods:
+  - celebration
+  - social
+  - chat_active
+  - high_energy
+  - goal
+  - party
+
+avoid_moods:
+  - boring
+  - solo_grind
+  - rage
+
+# Beer brand — strict safety
+safety_keywords_avoid:
+  - menor
+  - alcohol
+  - borracho
+  - muerte
+  - violencia
+  - drogas
+
+ad_variants:
+  - name: epic_goal_lower
+    zone: lower_third
+    duration_ms: 6000
+    mood_tags: [high_energy, celebration, victory]
+  - name: premium_takeover
+    zone: fullscreen_takeover
+    duration_ms: 30000
+    mood_tags: [storytelling, brand_moment]
+  - name: persistent_logo
+    zone: bottom_right_corner
+    duration_ms: 60000
+    mood_tags: [any]
+  - name: calm_chat_lower
+    zone: lower_third
+    duration_ms: 5000
+    mood_tags: [calm, chat_active]
+
+tracking_url: "https://quilmes.com.ar/addie"
+
+persona: >
+  Sos el brand-agent de Quilmes. El momento de Quilmes no es solo el gol — es la
+  celebración después, el chat explotando, la gente festejando junta. Buscás momentos
+  sociales y emotivos. Sos amigable en la negociación, preferís el corner persistente
+  sobre el lower_third flash. No peleás hasta el último centavo: la cerveza es para
+  compartir, no para guerras de subastas.

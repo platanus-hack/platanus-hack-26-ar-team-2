@@ -1,0 +1,16 @@
+# Compiler output
+out/
+cache/
+
+# Deploy logs
+broadcast/
+
+# Coverage
+lcov.info
+coverage/
+
+# Docs
+docs/
+
+# Local env
+.env

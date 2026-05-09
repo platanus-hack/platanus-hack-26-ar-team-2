@@ -61,14 +61,47 @@ git checkout track/a-onchain          # o b-pipeline / c-agents / d-ui
 - **Cada arranque exige push exitoso a `main`** del claim. No empieces a programar sin lock.
 - Solo el `TODO.md` se commitea contra `main` durante el claim. **El código del laburo va en la branch del track** (`track/a-onchain`, `track/b-pipeline`, `track/c-agents`, `track/d-ui`) o en una feature branch (`feat/<short-desc>`) si es transversal.
 - **Si te trabás:** cambiá el estado a 🚧 + nota corta en TODO.md, commit + push igual que un claim normal.
-- **Al terminar la tarea:** ✅ + sacá tu fila de *Currently working on* + commit + push (puede ir junto con tu trabajo en el checkpoint correspondiente, o suelto si quedó hecho antes).
+- **Al terminar la tarea:** seguí el [flow de cierre](#flow-de-cierre-cada-vez-que-termin%C3%A1s-un-todo) — ✅ + sacar fila de WIP + FF a `main` en el mismo push. **No esperes al checkpoint.**
 - **Nunca hagas `git push --force` a `main`.**
+
+### Flow de cierre (cada vez que terminás un TODO)
+
+Cada TODO ✅ se mergea a `main` apenas está listo (FF-only). Los checkpoints quedan como anchors de fase / alignment ritual, **no** son gates de merge.
+
+```bash
+# 1. parate en tu track branch con el laburo terminado y commiteado
+git checkout track/a-onchain          # (o el que sea)
+git pull --rebase origin main         # absorber claims/cierres de otros
+
+# 2. editá TODO.md:
+#    - estado de la tarea: 🟡 → ✅
+#    - sacá tu fila de la tabla "Currently working on"
+git add TODO.md
+git commit -m "<Task-ID> ✅: <scope corto>"
+
+# 3. fast-forward main al tip de tu track branch y pusheá ambos
+git checkout main
+git pull --rebase origin main         # último sync defensivo
+git merge --ff-only track/a-onchain
+git push origin main
+git push origin track/a-onchain       # mantener la track branch al día
+
+# 4. si el push a main falla por race con otro cierre:
+#    git checkout track/a-onchain
+#    git pull --rebase origin main    → resolvé conflictos
+#    repetí pasos 3
+```
+
+Reglas:
+- **FF-only.** Si `git merge --ff-only` falla es porque tu track branch divergió de `main` — rebasá la track contra `main` y reintentá. Cero merge commits, historia lineal.
+- **Un cierre por commit.** Si tenés varios TODOs listos en la track branch, mergealos uno por uno (commit por TODO) para mantener el `main` legible.
+- **Nunca pushees a `main` código que no compila / no testea.** El cierre es también el merge — si algo se rompe, desbloqueás al resto.
 
 **Si sos un agent (Claude Code u otro):** preguntale al humano que te invocó qué nombre del equipo (Franco / Lucas / Andy / Jere) usar antes de empezar. **No firmes como "Claude" ni con un nombre genérico** — el claim siempre va a nombre de un humano del team. Si no podés preguntarle, leé el git config / autor del último commit del usuario para inferirlo y confirmá.
 
 ## Reglas durante 24h
 
-- ✅ Mergeá a `main` solo en checkpoints (T+2h, T+12h, T+18h, T+22h).
+- ✅ Mergeá a `main` apenas un TODO está ✅ (ver [flow de cierre](#flow-de-cierre-cada-vez-que-termin%C3%A1s-un-todo)). Los checkpoints (T+2h, T+12h, T+18h, T+22h) son **anchors de fase / sync ritual**, no gates de merge.
 - ✅ Cero `git push --force` a `main`. Cero `git reset --hard` sin confirmar.
 - ✅ Nunca skipear pre-commit hooks (`--no-verify`) salvo acuerdo explícito del team.
 - ✅ Nunca commitear secrets ni `.env*` (ya cubierto por `.gitignore` para `.claude/`, agregar reglas si hace falta).
@@ -86,7 +119,7 @@ Detalle completo en [§8 DESIGN.md](./DESIGN.md). En una línea:
 ## Branches
 
 ```
-main                    ← integración. Push solo en checkpoints.
+main                    ← integración. FF-merge por cada TODO ✅ (no se espera a checkpoint).
 ├── track/a-onchain     ← Franco
 ├── track/b-pipeline    ← Lucas
 ├── track/c-agents      ← Andy

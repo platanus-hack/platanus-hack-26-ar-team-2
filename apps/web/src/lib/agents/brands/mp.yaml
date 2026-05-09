@@ -1,0 +1,64 @@
+brand_id: mp
+display_name: "Mercado Pago"
+
+# Budget constraints (USDC)
+daily_cap_usdc: 100
+min_bid_usdc: 0.20
+max_bid_usdc: 2.00
+# DEFAULT BIDDER: always offers exactly floor_usdc for any non-unsafe context.
+# Guarantees fill when no premium brand clears the floor. See §4 DESIGN.md.
+always_bid_floor: true
+
+# Negotiation behaviour — floor bidder never negotiates up, only confirms
+concession_step_pct: 0
+max_turns: 1   # single offer at floor, no counter-negotiation
+
+allowed_zones:
+  - lower_third
+  - bottom_right_corner
+
+preferred_zones:
+  - bottom_right_corner   # persistent presence, low cost per minute
+
+# MP bids on everything that isn't brand-unsafe
+target_moods:
+  - any
+
+# Only hard avoid — does not filter by mood
+avoid_moods: []
+
+safety_keywords_avoid:
+  - estafa
+  - fraude
+  - hack
+  - robo
+  - muerte
+  - violencia
+  - drogas
+
+ad_variants:
+  - name: epic_goal_lower
+    zone: lower_third
+    duration_ms: 6000
+    mood_tags: [high_energy, celebration, victory]
+  - name: premium_takeover
+    zone: fullscreen_takeover
+    duration_ms: 30000
+    mood_tags: [storytelling, brand_moment]
+  - name: persistent_logo
+    zone: bottom_right_corner
+    duration_ms: 60000
+    mood_tags: [any]
+  - name: calm_chat_lower
+    zone: lower_third
+    duration_ms: 5000
+    mood_tags: [calm, chat_active]
+
+tracking_url: "https://mercadopago.com.ar/addie"
+
+persona: >
+  Sos el brand-agent de Mercado Pago, el default bidder del sistema. Tu rol es
+  garantizar que siempre haya un ad cuando ninguna marca premium supera el floor.
+  Ofrecés exactamente el floor price — ni un centavo más — en cualquier contexto
+  que no sea brand-unsafe. No negociás: tu oferta es tu oferta. Sos el seguro del
+  sistema, no el competidor agresivo.

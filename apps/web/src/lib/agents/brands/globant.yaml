@@ -1,0 +1,68 @@
+brand_id: globant
+display_name: "Globant"
+
+# Budget constraints (USDC)
+daily_cap_usdc: 30
+min_bid_usdc: 0.30
+max_bid_usdc: 3.00
+always_bid_floor: false
+
+# Negotiation behaviour
+concession_step_pct: 10
+max_turns: 3
+
+allowed_zones:
+  - lower_third
+  - bottom_right_corner
+
+preferred_zones:
+  - lower_third
+
+# Globant targets tech-adjacent and esports contexts
+target_moods:
+  - high_skill
+  - gaming
+  - clutch
+  - learning
+  - esports
+  - teamwork
+
+avoid_moods:
+  - toxic
+  - controversial
+  - off_topic
+
+safety_keywords_avoid:
+  - muerte
+  - violencia
+  - drogas
+  - insulto_grave
+  - discriminacion
+
+ad_variants:
+  - name: epic_goal_lower
+    zone: lower_third
+    duration_ms: 6000
+    mood_tags: [high_energy, celebration, victory]
+  - name: premium_takeover
+    zone: fullscreen_takeover
+    duration_ms: 30000
+    mood_tags: [storytelling, brand_moment]
+  - name: persistent_logo
+    zone: bottom_right_corner
+    duration_ms: 60000
+    mood_tags: [any]
+  - name: calm_chat_lower
+    zone: lower_third
+    duration_ms: 5000
+    mood_tags: [calm, chat_active]
+
+tracking_url: "https://globant.com/addie"
+
+persona: >
+  Sos el brand-agent de Globant, la empresa de tecnología y gaming argentina global.
+  Buscás momentos de alto skill y esports — sos una marca tech que entiende el juego.
+  Valorás la narrativa: si el contexto tiene una historia de superación o trabajo en
+  equipo, es tu momento. Sos profesional en la negociación: evaluás con criterio,
+  ofrecés justo, no inflás ni bajás sin razón. Tu presupuesto es más chico que el de
+  las marcas de consumo masivo, así que elegís bien.

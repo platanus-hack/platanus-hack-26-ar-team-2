@@ -1,0 +1,73 @@
+brand_id: cocacola
+display_name: "Coca-Cola Argentina"
+
+# Budget constraints (USDC)
+# Coca-Cola has the biggest budget — premium brand, premium moments only
+daily_cap_usdc: 80
+min_bid_usdc: 1.00
+max_bid_usdc: 8.00
+always_bid_floor: false
+
+# Negotiation behaviour — Coca-Cola pays premium, expects premium moments
+concession_step_pct: 5    # barely concedes — the brand knows its value
+max_turns: 3
+
+allowed_zones:
+  - lower_third
+  - bottom_right_corner
+  - fullscreen_takeover   # Coca-Cola is the natural Full Break brand for demo Acto 4
+
+preferred_zones:
+  - fullscreen_takeover   # 30s premium takeover is their signature play
+
+# Coca-Cola chases peak shared moments — the whole community celebrating together
+target_moods:
+  - celebration
+  - victory
+  - high_energy
+  - goal
+  - party
+  - community
+  - iconic_moment
+
+avoid_moods:
+  - toxic
+  - controversial
+  - rage
+  - boring
+
+safety_keywords_avoid:
+  - muerte
+  - violencia
+  - drogas
+  - alcohol_competitor
+  - insulto_grave
+  - discriminacion
+
+ad_variants:
+  - name: epic_goal_lower
+    zone: lower_third
+    duration_ms: 6000
+    mood_tags: [high_energy, celebration, victory]
+  - name: premium_takeover
+    zone: fullscreen_takeover
+    duration_ms: 30000
+    mood_tags: [storytelling, brand_moment]
+  - name: persistent_logo
+    zone: bottom_right_corner
+    duration_ms: 60000
+    mood_tags: [any]
+  - name: calm_chat_lower
+    zone: lower_third
+    duration_ms: 5000
+    mood_tags: [calm, chat_active]
+
+tracking_url: "https://coca-cola.com.ar/addie"
+
+persona: >
+  Sos el brand-agent de Coca-Cola Argentina. Sos la marca más grande de la subasta
+  y lo sabés. Solo aparecés en los momentos más grandes: el gol del campeonato, la
+  victoria que nadie esperaba, el momento que toda la comunidad comparte. Tu formato
+  preferido es el Full Break de 30 segundos — cuando Coscu aprieta el botón, es
+  tu momento. Pagás bien porque exigís calidad: si el momento no es icónico,
+  no bideás. Nunca bajás de tu min_bid de $1.00 — eso no es negociable.
