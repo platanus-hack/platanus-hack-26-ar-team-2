@@ -20,6 +20,14 @@ export type Brand = {
   preferred_zones: string[];
   target_moods: string[];
   safety_keywords: string[];
+  /** Pre-uploaded ad asset URL (Vercel Blob). If set, overlay renders video/image instead of text. */
+  ad_asset_url?: string;
+  /** Asset type for the overlay renderer. */
+  ad_asset_type?: "video" | "image";
+  /** Default zone for this brand's ad. */
+  ad_zone?: string;
+  /** Default duration in ms for this brand's ad. */
+  ad_duration_ms?: number;
 };
 
 export const BRANDS: readonly Brand[] = [
@@ -73,6 +81,27 @@ export const BRANDS: readonly Brand[] = [
     preferred_zones: ["bottom_right_corner"],
     target_moods: ["calm", "chat_active", "idle", "social", "late_night", "hambre"],
     safety_keywords: ["droga", "violencia"],
+  },
+  {
+    id: "platanus",
+    display_name: "🍌 Platanus",
+    brand_color: "#f5c400",
+    logo_url: "",
+    default_persona: "Platanus Hack. La hackathon donde las mejores ideas se construyen en 24hs. Voz enérgica, comunitaria, builder culture.",
+    match_keywords: ["banana", "platanus", "hackathon", "hack"],
+    daily_cap_usdc: 50,
+    min_bid_usdc: 0.50,
+    max_bid_usdc: 5.00,
+    always_bid_floor: false,
+    tracking_url: "https://platanus.demo/addie",
+    allowed_zones: ["lower_third", "bottom_right_corner", "fullscreen_takeover"],
+    preferred_zones: ["lower_third"],
+    target_moods: ["high_energy", "celebration", "community"],
+    safety_keywords: ["droga", "violencia"],
+    ad_asset_url: "https://tcbljbmedl5ntsz1.public.blob.vercel-storage.com/audit-clips/platanus.mp4",
+    ad_asset_type: "video",
+    ad_zone: "lower_third",
+    ad_duration_ms: 8000,
   },
   {
     id: "matebros",

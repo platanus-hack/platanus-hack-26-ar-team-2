@@ -10,6 +10,7 @@
  */
 
 import { pool } from "@/lib/pg";
+import { getBrand } from "@/lib/brands";
 
 import { makeClaudePicker, makeStubPicker, type Picker } from "./pickBrand";
 import type { ChunkMeta, ContextChunk, TickResult } from "./types";
@@ -181,15 +182,42 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
     // Always emit: brand display_name if Claude matched, "..." otherwise.
     const message = pick.message ?? "...";
 
-    const insert = await client.query<{ id: string }>(
-      `insert into render_events (creator_id, message, kind)
-       values ($1, $2, 'brand')
-       returning id`,
-      [config.creatorId, message.slice(0, 280)],
+    // If the matched brand has a pre-uploaded ad asset, emit a full placement
+    // payload so the overlay renders the video/image instead of just text.
+    const matchedBrand = pick.brand_id ? getBrand(pick.brand_id) : undefined;
+    const hasAsset = matchedBrand?.ad_asset_url;
+
+    const payload = hasAsset
+      ? {
+          asset_url: matchedBrand.ad_asset_url,
+          asset_type: matchedBrand.ad_asset_type ?? "video",
+          zone_id: matchedBrand.ad_zone ?? matchedBrand.preferred_zones[0] ?? "lower_third",
+          duration_ms: matchedBrand.ad_duration_ms ?? 8000,
+          brand_id: matchedBrand.id,
+          audio: true,
+        }
+      : null;
+
+    const insert = await client.query<{ id: string; created_at: string }>(
+      `insert into render_events (creator_id, message, kind, payload)
+       values ($1, $2, 'brand', $3)
+       returning id, created_at`,
+      [config.creatorId, message.slice(0, 280), payload ? JSON.stringify(payload) : null],
     );
     const event_id = insert.rows[0]!.id;
+
+    // Include full SSE event JSON in the notification for real-time delivery
+    // (avoids DB re-fetch in the SSE handler). Format: <creator_id>:<event_id>:<json>
+    const sseEvent = {
+      id: event_id,
+      creator_id: config.creatorId,
+      created_at: insert.rows[0]!.created_at,
+      kind: "brand",
+      message,
+      ...(payload ?? {}),
+    };
     await client.query("select pg_notify('render_events', $1)", [
-      `${config.creatorId}:${event_id}`,
+      `${config.creatorId}:${event_id}:${JSON.stringify(sseEvent)}`,
     ]);
 
     return { decision: "emit", stream_key: config.streamKey, chunk: meta, pick, event_id };

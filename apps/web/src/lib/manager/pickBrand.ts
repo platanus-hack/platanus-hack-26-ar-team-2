@@ -40,7 +40,7 @@ const TOOL: Anthropic.Tool = {
       should_emit: { type: "boolean", description: "true si el audio se relaciona con alguna brand, false si no." },
       brand_id: {
         type: ["string", "null"],
-        description: "El brand_id exacto del registry (cafetito/termoflex/pancho-rex/matebros), o null si no hay match.",
+        description: "El brand_id exacto del registry (cafetito/termoflex/pancho-rex/matebros/platanus), o null si no hay match.",
       },
       moment_quality: { type: "number", description: "0..1 — qué tan auctionable es el momento por sí solo." },
       brand_match: { type: "number", description: "0..1 — qué tan bien la brand elegida calza con este momento." },
