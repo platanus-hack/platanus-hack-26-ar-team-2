@@ -10,12 +10,14 @@
     "rtmp:down": "docker compose down",
     "rtmp:logs": "docker compose logs -f rtmp",
     "smoke": "tsx scripts/smoke.ts",
-    "smoke:summary": "tsx scripts/smoke-summary.ts"
+    "smoke:summary": "tsx scripts/smoke-summary.ts",
+    "smoke:clip": "tsx scripts/smoke-clip.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.71",
     "@elevenlabs/elevenlabs-js": "^2.46.0",
     "@supabase/supabase-js": "^2.105.4",
+    "@vercel/blob": "^2.3.3",
     "ai": "^6.0.177",
     "chalk": "^5.3.0",
     "dotenv": "^16.4.5",
