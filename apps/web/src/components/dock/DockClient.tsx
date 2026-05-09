@@ -38,6 +38,7 @@ function reducer(state: DockState, action: Action): DockState {
     case "SET_BALANCE":
       return { ...state, balanceUsdc: action.balance };
     case "ADD_PLACEMENT":
+      if (state.placements.some((p) => p.placement_id === action.placement.placement_id)) return state;
       return { ...state, placements: [action.placement, ...state.placements].slice(0, 8) };
     case "UPDATE_STATUS":
       return {
