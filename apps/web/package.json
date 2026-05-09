@@ -2,7 +2,7 @@
   "name": "web",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "pnpm@11.0.9",
+  "packageManager": "pnpm@10.20.0+sha512.cf9998222162dd85864d0a8102e7892e7ba4ceadebbf5a31f9c2fce48dfce317a9c53b9f6464d1ef9042cba2e02ae02a9f7c143a2b438cd93c91840f0192b9dd",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -29,7 +29,13 @@
     "viem": "^2.48.11"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["bufferutil", "esbuild", "sharp", "unrs-resolver", "utf-8-validate"]
+    "onlyBuiltDependencies": [
+      "bufferutil",
+      "esbuild",
+      "sharp",
+      "unrs-resolver",
+      "utf-8-validate"
+    ]
   },
   "devDependencies": {
     "@supabase/supabase-js": "^2.105.4",
