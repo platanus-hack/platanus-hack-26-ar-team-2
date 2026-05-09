@@ -23,6 +23,8 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 | Dev | Task ID | Scope | Started |
 |---|---|---|---|
 | Jere | C-02 | 8 mandate templates YAML (brands/*.yaml) + loader TypeScript | 2026-05-09 |
+| Andy | C-08m | Manager-worker en `apps/manager-worker/` — subscribe a `context_chunks` via Supabase Realtime postgres_changes, semantic Stage1 filter (audio_intent/mentions/viewers_delta) + Stage2 Claude Haiku con scores moment_quality/brand_match, POST a `/api/creators/<id>/render` con message text (placeholder hasta C-14). DRY_RUN flag para correr sin ANTHROPIC_API_KEY. + migración `0009_realtime_context_chunks.sql` (ADD context_chunks A LA publication supabase_realtime). | 2026-05-09 |
+| Jere | D-15, D-14, D-13, D-12, D-20, D-16 | format helpers + brand registry + PlacementOverlay SSE wire + fallback CSS + wallet display + toast feedback | 2026-05-09 |
 
 ---
 
@@ -168,7 +170,15 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 - ⬜ **D-09a** **Gate-skip didactic feed** en `/demo-display`: panel lateral que se subscribe al topic `auction:<auction_id>:gate-skip` y muestra cada decisión MATCH/SKIP de cada brand con su `human_message` en es-AR ("☕ CafetITO → SKIP gate1: este momento no es para mí, hoy no hay clutch"). Color por brand, ícono por gate (gate1 ⛔ / gate2 🧭 / gate3 🤔 / gate4 ✅). Esencial para que el jurado entienda visualmente el matcher win-win — ver `docs/DEMO_RUNBOOK.md` Acto 3 + `docs/PITCH.md` Bloque 4. — deps: D-09, C-08a, C-08b, C-08c, C-08d
 - ⬜ **D-10** `scripts/pregen-brand-ads.ts` — genera 32 ads (8 brands × 4 variants) con ElevenLabs Creative + insert en `ads` — deps: P0-10, C-04, P0-14
 - ⬜ **D-11** Correr el script de pre-gen el sábado de noche (~1.5 hs en background, paralelo con cualquier track) — deps: D-10
-- ⬜ **D-12** CSS fallback render (banda negra + logo + colores corporativos) si un ad no tiene `asset_url` — deps: D-02
+- 🟡 **D-12** CSS fallback render (banda negra + logo + colores corporativos) si un ad no tiene `asset_url` — deps: D-13, D-14
+- 🟡 **D-13** Wire `PlacementOverlay` vía SSE: extender POST `/render` + SSE passthrough + `OverlayClient` renderiza asset si present — deps: ninguna
+- 🟡 **D-14** Brand registry unificado `lib/brands.ts`: eliminar `BRAND_REGISTRY` + `ALL_BRANDS` duplicados — deps: ninguna
+- 🟡 **D-15** Helpers format `lib/format.ts`: `formatUsdc`, `truncateAddress`, `truncateTxHash`, `basescanUrl` — deps: ninguna
+- 🟡 **D-16** Toast feedback al guardar settings (framer-motion, 2s auto-dismiss) — deps: ninguna
+- ⬜ **D-17** Empty + error states en server pages — deps: ninguna
+- ⬜ **D-18** Demo failure mode: fixture JSON + GSAP replay + badge — deps: ninguna
+- ⬜ **D-19** Verificación OBS Browser Source + cookbook `docs/OBS-SETUP.md` — deps: D-13
+- 🟡 **D-20** Wallet display + basescan link en brand console header — deps: D-15
 
 ✅ **Checkpoint 2 — sáb 18:00:** sync ritual — verificar que todos los tracks A/B/C/D arrancaron y que los TODOs cerrados ya están en `main`. Identificar bloqueos antes de Phase 2.
 
