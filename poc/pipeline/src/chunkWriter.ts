@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { TranscribeHandle } from './transcribe.js';
 import type { FrameHandle } from './frame.js';
 import type { TwitchHandle } from './twitch.js';
+import type { ChatHandle } from './chat.js';
 import { log } from './log.js';
 
 const CHUNK_INTERVAL_MS = Number(process.env.CHUNK_INTERVAL_MS ?? 30_000);
@@ -13,6 +14,7 @@ export interface ChunkSources {
   transcribe: () => TranscribeHandle | null;
   frame: () => FrameHandle | null;
   twitch: () => TwitchHandle | null;
+  chat: () => ChatHandle | null;
   // Counters absolutos (nunca decrecen). El writer calcula deltas internos.
   getTickCount: () => number;
   getFrameCount: () => number;
@@ -83,6 +85,7 @@ export function startChunkWriter(sources: ChunkSources): ChunkWriterHandle {
     const transcribe = sources.transcribe();
     const frame = sources.frame();
     const twitch = sources.twitch();
+    const chat = sources.chat();
 
     const ticksNow = sources.getTickCount();
     const framesNow = sources.getFrameCount();
@@ -93,6 +96,7 @@ export function startChunkWriter(sources: ChunkSources): ChunkWriterHandle {
 
     const frameLatest = frame?.getLatest();
     const tw = twitch?.getLatest();
+    const chatMetrics = chat?.getMetrics() ?? null;
 
     const viewers = tw?.is_live ? tw.viewers : null;
     const viewersDelta = lastViewers !== null && viewers !== null ? viewers - lastViewers : null;
@@ -115,11 +119,11 @@ export function startChunkWriter(sources: ChunkSources): ChunkWriterHandle {
       mood_tags: frameLatest?.result.mood_tags ?? [],
       on_screen_text: frameLatest?.result.on_screen_text ?? null,
 
-      // Chat: B-06 los va a poblar via tmi.js
-      chat_velocity_avg: null,
-      chat_velocity_peak: null,
-      chat_recent_keywords: null,
-      sentiment_avg: null,
+      // Chat (tmi.js — métricas crudas del chat de Twitch en la ventana de 30s).
+      chat_velocity_avg: chatMetrics?.velocity_avg ?? null,
+      chat_velocity_peak: chatMetrics?.velocity_peak ?? null,
+      chat_recent_keywords: chatMetrics?.recent_keywords ?? null,
+      sentiment_avg: chatMetrics?.sentiment ?? null,
 
       viewers,
       viewers_delta_30s: viewersDelta,
@@ -132,7 +136,9 @@ export function startChunkWriter(sources: ChunkSources): ChunkWriterHandle {
 
     log.success(
       `[chunk ${sources.streamKey}] #${chunkCount} · ${ticksAggregated} ticks · ${framesAggregated} frames · ` +
-        `viewers=${viewers ?? '—'} (Δ${viewersDelta ?? '—'}) · scene="${chunk.scene_type ?? '—'}"`,
+        `viewers=${viewers ?? '—'} (Δ${viewersDelta ?? '—'}) · ` +
+        `chat=${chatMetrics ? `${chatMetrics.velocity_avg.toFixed(1)}msg/s ${chatMetrics.sentiment}` : '—'} · ` +
+        `scene="${chunk.scene_type ?? '—'}"`,
     );
 
     if (supabase) {

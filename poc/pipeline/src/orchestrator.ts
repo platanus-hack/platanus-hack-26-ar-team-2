@@ -3,6 +3,8 @@ import { fetchStreamStats } from './streamStats.js';
 import { startTranscribe, type TranscribeHandle } from './transcribe.js';
 import { startFrameAnalysis, type FrameHandle, type FrameAnalysisResult } from './frame.js';
 import { startTwitchPoll, type TwitchHandle } from './twitch.js';
+import { startChat, type ChatHandle, type ChatMetrics } from './chat.js';
+import { startRealtimeBus, type RealtimeBus } from './realtimeBus.js';
 import { startChunkWriter, type ChunkWriterHandle } from './chunkWriter.js';
 import { log } from './log.js';
 
@@ -17,6 +19,8 @@ interface ActiveSession {
   transcribe: TranscribeHandle | null;
   frame: FrameHandle | null;
   twitch: TwitchHandle | null;
+  chat: ChatHandle | null;
+  realtime: RealtimeBus | null;
   chunkWriter: ChunkWriterHandle | null;
 }
 
@@ -43,21 +47,38 @@ function flattenFrame(latest: { result: FrameAnalysisResult; ageMs: number } | n
   };
 }
 
-function flattenStats(
+function flattenChat(metrics: ChatMetrics | null): Record<string, unknown> {
+  if (!metrics) {
+    return {
+      chat_velocity_now: null,
+      chat_velocity_baseline: null,
+      chat_sentiment: null,
+      chat_recent_keywords: null,
+      chat_total_messages: null,
+    };
+  }
+  return {
+    chat_velocity_now: metrics.velocity_now,
+    chat_velocity_baseline: metrics.velocity_baseline,
+    chat_sentiment: metrics.sentiment,
+    chat_recent_keywords: metrics.recent_keywords,
+    chat_total_messages: metrics.total_messages,
+  };
+}
+
+function flattenTick(
   stats: StreamStats,
   bwEffectiveKbps: number,
   audio30s: string,
   audioPartial: string,
   frame: { result: FrameAnalysisResult; ageMs: number } | null,
   twitchHandle: TwitchHandle | null,
+  chat: ChatMetrics | null,
 ): Record<string, unknown> {
   const tw = twitchHandle?.getLatest();
   return {
     uptime_s: stats.uptime_seconds,
     bw_effective_kbps: bwEffectiveKbps,
-    bw_in_kbps: stats.bw_in_kbps,
-    bw_video_kbps: stats.bw_video_kbps,
-    bw_audio_kbps: stats.bw_audio_kbps,
     bytes_in: stats.bytes_in,
     nclients: stats.nclients,
     video: stats.video
@@ -69,6 +90,7 @@ function flattenStats(
     audio_30s: audio30s || '(no committed transcript yet)',
     audio_partial: audioPartial || '(no partial)',
     ...flattenFrame(frame),
+    ...flattenChat(chat),
     twitch_viewers: tw?.is_live ? tw.viewers : '(offline / no twitch)',
     twitch_game: tw?.game_category || null,
     twitch_title: tw?.stream_title || null,
@@ -92,6 +114,8 @@ export function startSession(session: StreamSession): void {
     transcribe: null,
     frame: null,
     twitch: null,
+    chat: null,
+    realtime: null,
     chunkWriter: null,
     interval: setInterval(async () => {
       state.pollCount += 1;
@@ -111,55 +135,74 @@ export function startSession(session: StreamSession): void {
         dtSec > 0 && dBytes >= 0 ? Math.round((dBytes * 8) / 1000 / dtSec) : 0;
       state.lastBytesIn = stats.bytes_in;
       state.lastPollAt = now;
+
       const audio30s = state.transcribe?.getAudio30s() ?? '';
       const audioPartial = state.transcribe?.getPartial() ?? '';
       const frame = state.frame?.getLatest() ?? null;
-      log.tick(state.pollCount, flattenStats(stats, bwEffectiveKbps, audio30s, audioPartial, frame, state.twitch));
+      const chat = state.chat?.getMetrics() ?? null;
+
+      const tickPayload = flattenTick(stats, bwEffectiveKbps, audio30s, audioPartial, frame, state.twitch, chat);
+      log.tick(state.pollCount, tickPayload);
+
+      // Broadcast a Realtime channel `context:<stream_key>` para que el
+      // manager-worker (Track C / Andy) consuma. No-op si SUPABASE_URL no está.
+      if (state.realtime) {
+        void state.realtime.broadcast('tick', {
+          stream_key: key,
+          tick_number: state.pollCount,
+          ts: now,
+          ...tickPayload,
+        });
+      }
     }, POLL_INTERVAL_MS),
   };
 
   sessions.set(key, state);
 
-  // Audio + frame + twitch arrancan en paralelo. Cada uno tiene su propia
-  // degradación graceful si la API key correspondiente falta.
+  // Pipes en paralelo. Cada uno se desactiva graciosamente si su dep falta.
   startTranscribe(key)
     .then((handle) => {
       const active = sessions.get(key);
       if (active && handle) active.transcribe = handle;
     })
-    .catch((e) => {
-      const msg = e instanceof Error ? e.message : String(e);
-      log.warn(`[transcribe ${key}] start failed: ${msg}`);
-    });
+    .catch((e) => log.warn(`[transcribe ${key}] start failed: ${e instanceof Error ? e.message : e}`));
 
   startFrameAnalysis(key)
     .then((handle) => {
       const active = sessions.get(key);
       if (active && handle) active.frame = handle;
     })
-    .catch((e) => {
-      const msg = e instanceof Error ? e.message : String(e);
-      log.warn(`[frame ${key}] start failed: ${msg}`);
-    });
+    .catch((e) => log.warn(`[frame ${key}] start failed: ${e instanceof Error ? e.message : e}`));
 
   startTwitchPoll(key)
     .then((handle) => {
       const active = sessions.get(key);
       if (active && handle) active.twitch = handle;
     })
-    .catch((e) => {
-      const msg = e instanceof Error ? e.message : String(e);
-      log.warn(`[twitch ${key}] start failed: ${msg}`);
-    });
+    .catch((e) => log.warn(`[twitch ${key}] start failed: ${e instanceof Error ? e.message : e}`));
+
+  startChat(key)
+    .then((handle) => {
+      const active = sessions.get(key);
+      if (active && handle) active.chat = handle;
+    })
+    .catch((e) => log.warn(`[chat ${key}] start failed: ${e instanceof Error ? e.message : e}`));
+
+  startRealtimeBus(key)
+    .then((handle) => {
+      const active = sessions.get(key);
+      if (active && handle) active.realtime = handle;
+    })
+    .catch((e) => log.warn(`[realtime ${key}] start failed: ${e instanceof Error ? e.message : e}`));
 
   // Chunk writer arranca de inmediato (no async). Los handles los toma con
-  // getters lazy — si no están listos al momento del primer chunk, los
-  // campos correspondientes quedan en NULL.
+  // getters lazy — si no están listos al primer chunk, los campos quedan en NULL.
   state.chunkWriter = startChunkWriter({
     streamKey: key,
     transcribe: () => state.transcribe,
     frame: () => state.frame,
     twitch: () => state.twitch,
+    chat: () => state.chat,
     getTickCount: () => state.pollCount,
     getFrameCount: () => state.frame?.getAnalysisCount() ?? 0,
   });
@@ -173,13 +216,14 @@ export function stopSession(streamKey: string): void {
   }
   clearInterval(active.interval);
 
-  // Cleanup en paralelo. ChunkWriter primero, así escribe un chunk final
-  // con los datos antes de cerrar los pipes.
+  // ChunkWriter primero: escribe chunk final antes de cerrar pipes.
   const cleanups: Promise<void>[] = [];
   if (active.chunkWriter) cleanups.push(active.chunkWriter.stop().catch(() => {}));
   if (active.transcribe) cleanups.push(active.transcribe.stop().catch(() => {}));
   if (active.frame) cleanups.push(active.frame.stop().catch(() => {}));
   if (active.twitch) cleanups.push(active.twitch.stop().catch(() => {}));
+  if (active.chat) cleanups.push(active.chat.stop().catch(() => {}));
+  if (active.realtime) cleanups.push(active.realtime.stop().catch(() => {}));
   void Promise.all(cleanups);
 
   sessions.delete(streamKey);
