@@ -72,7 +72,7 @@ Dos agents AI negocian en tiempo real durante un stream en vivo. El brand-agent 
 │  CAPA 4 · SETTLEMENT (on-chain)                                     │
 │  ───────────────────────────────────────────────────────────        │
 │                                                                     │
-│   AddieEscrow.lock(placementId, coscu_addr, 1.80 USDC)              │
+│   AddieEscrow.lock(placementId, streamer_team_addr, 1.80 USDC)      │
 │   ⚡ tx en basescan #1                                              │
 │                                                                     │
 │   Plataforma arma placement assembly:                               │
@@ -99,7 +99,7 @@ Dos agents AI negocian en tiempo real durante un stream en vivo. El brand-agent 
 │              │                                                      │
 │              ▼ (placement termina sin pull)                         │
 │   AddieEscrow.release(placementId)                                  │
-│   ⚡ tx #2 (release): 1.80 USDC → coscu wallet                      │
+│   ⚡ tx #2 (release): 1.80 USDC → streamer-team wallet              │
 │                                                                     │
 │   En paralelo, async: clip 30s (T-10s..T+20s) → Vercel Blob         │
 │   → placements.clip_url para auditoría de la marca                  │
@@ -118,16 +118,16 @@ Dos agents AI negocian en tiempo real durante un stream en vivo. El brand-agent 
 > **Nota — ejemplo ilustrativo.** El timeline de abajo usa nombres de marca reales (adidas/nike/mp) porque corresponde al spec técnico pre-pivote. El **demo final** usa marcas inventadas (☕ CafetITO, 🧊 TermoFlex, 🌭 Pancho Rex, 🧉 MateBros) y la narrativa externa es de **matching win-win-win** en vez de subasta competitiva — ver `docs/PITCH.md` y `docs/DEMO_RUNBOOK.md`. El mecanismo interno (auction con deadline + standing offers + soft holds) **no cambia**: es el plumbing que implementa el matching. Solo cambia cómo se cuenta hacia afuera.
 
 ```
-T+0.0s    Coscu mete gol en FIFA
+T+0.0s    Speaker dice trigger word ("ÉPICO") en el pitch
 ─────────────────────────────────────────────────────────────────────
 T+0.5s    OBS encode → RTMP llega a nginx-rtmp
-T+1.2s    ElevenLabs Scribe v2 realtime transcribe "GOLAZO"
-T+1.3s    Gemini Flash describe frame: "FIFA replay celebration"
+T+1.2s    ElevenLabs Scribe v2 realtime transcribe "ÉPICO"
+T+1.3s    Gemini Flash describe frame: "speakers gesticulando + dashboard"
 T+1.5s    tmi.js detecta chat velocity 12→180 msg/s
 T+1.5s    Context broadcast a brand-agents
 ─────────────────────────────────────────────────────────────────────
 T+2.0s    LLM call paralela en los brand-agents (2 en MVP: adidas + mp; N en prod):
-          → adidas: HUNT con "epic_goal_lower" (FIFA + epic + audience match)
+          → adidas: HUNT con "epic_goal_lower" (epic mood + audience match)
           → nike: HUNT con "win_moment_lower"
           → quilmes: HUNT con "social_celebration"
           → rappi: SKIP (no es food context)
@@ -161,7 +161,7 @@ T+6.55s   Overlay renderiza:
 ─────────────────────────────────────────────────────────────────────
 T+12.55s  Placement termina (duración 6s)
 T+12.6s   ⚡ AddieEscrow.release(placementId)  [tx 0xBBB]
-          → 1.80 USDC al wallet de Coscu
+          → 1.80 USDC al wallet del streamer-team
 ─────────────────────────────────────────────────────────────────────
 T+15s     [Async] Clip de auditoría guardado:
           nginx-rtmp segmenta T-10s..T+20s → mp4 → Vercel Blob
@@ -225,7 +225,7 @@ LAPTOP / VPS BACKEND (un solo host físico para el demo)
     /demo-display                                  ← pantalla principal del demo (D-09)
     /brands/[brandId]                              ← brand console (D-06)
 
-LAPTOP STREAMER (uno del equipo, Coscu-test)
+LAPTOP STREAMER (laptop del team que streamea el pitch — meta-streaming)
 ├── OBS (publica RTMP a backend)
 ├── Browser Source overlay (loads /overlay/<stream_id>)
 └── OBS Browser Dock (loads /dock)
@@ -660,7 +660,7 @@ LLM output:
   ad_id: "epic_goal_lower",
   bid_usdc_cents: 150,
   zone: "lower_third",
-  opening_message: "Coscu! Gol épico. Ofrezco $1.50 por mi ad 
+  opening_message: "¡ÉPICO! Quiero este momento. Ofrezco $1.50 por mi ad 
                     'Epic Goal Lower' en lower_third 6s." }
 ```
 
@@ -714,7 +714,7 @@ create table placements (
 3. Sobre ese clip base, segundo paso ffmpeg: overlay del ad video del `ad_url` en la zona/timestamp correctos (`overlay=x:y:enable='between(t,10,16)'`) + overlay del QR en el corner (`overlay`).
 4. Output mp4 final → upload a Vercel Blob → guarda URL en `placements.clip_url`.
 
-Total ~4-6s, **async, no bloquea el placement** ni el settlement on-chain. La marca recibe el clip ya compuesto: ve exactamente lo que el viewer vio (su ad encima del juego de Coscu, con el QR y todo).
+Total ~4-6s, **async, no bloquea el placement** ni el settlement on-chain. La marca recibe el clip ya compuesto: ve exactamente lo que el viewer vio (su ad encima del stream del team, con el QR y todo).
 
 ---
 
@@ -1028,44 +1028,12 @@ T+30h  12:00   DEMO LIVE 🎤
 
 ---
 
-## 12. Demo choreography (5-7 minutos)
+## 12. Demo choreography
 
-### Setup físico
-
-- **Laptop streamer** — uno del equipo, OBS, juego, micro/cámara, segunda pantalla con OBS Dock visible.
-- **Laptop presenter** — controla pantalla principal con `/demo-display` proyectada.
-- **Servidor backend** — laptop o VPS Hetzner.
-- **nginx-rtmp** en localhost de laptop streamer.
-- **Hotspot 4G** como backup wifi.
-- **Backup VOD** pre-grabado en standby.
-
-### Acto 1 (45s) — Setup narrativo
-
-> *"Esto es Addie. 2 brand-agents corriendo en este MVP — adidas y MercadoPago — cada uno con USDC propio en Base, mandate firmado, y biblioteca de ads que la marca ya subió. La arquitectura escala a N marcas. Coscu — del equipo — está streameando FIFA en vivo a Twitch."*
-
-### Acto 2 (90s) — Primer momento épico + negociación visible
-
-Streamer mete gol → pipeline detecta → brand-agents inician negociaciones paralelas → demo display muestra 4 columnas de chat negociación EN ESPAÑOL con standing offers actualizándose turno a turno → ⏰ deadline 5s → streamer-agent cierra unilateralmente al mejor postor → adidas gana con su ad "epic_goal_lower" → escrow.lock visible → render del video adidas (con voz baked-in) + QR dinámico encima.
-
-> *"Los agents pelearon en lenguaje natural por el momento. Adidas eligió SU ad de su biblioteca, no algo generado en runtime. La marca es la dueña de su arte. Addie decide cuándo y dónde aparecer."*
-
-### Acto 3 (30s) — Brand safety pull
-
-Streamer dice palabra prohibida → fade out automático en 200ms → escrow.refund visible en feed → marcas demuestran protección on-chain.
-
-### Acto 4 (90s) — FULL BREAK premium
-
-Streamer aprieta "FULL BREAK NOW" → subasta especial fullscreen_takeover → Coca-Cola gana $5.20 con su ad "premium_takeover" → 30s de video premium con voz + música → escrow.release visible.
-
-### Acto 5 (45s) — Cash-out
-
-Stream cierra con balance acumulado en wallet de Coscu. Presenter abre basescan, muestra historial de las ~12 txs del demo (6 placements × 2 txs cada uno).
-
-> *"Coscu cobró $X.XX USDC en 5 minutos. Sin Stripe, sin payouts mensuales, sin contratos. Verificable acá en basescan en este momento."*
-
-### Acto 6 (Q&A devs, opcional 30s)
-
-Pantalla técnica con `curl` mostrando endpoint de auctions + AddieEscrow.sol explorer.
+> **El demo es meta-streaming.** El equipo se streamea a sí mismo durante el pitch — no hay videojuego, los speakers + dashboard son el contenido. Las trigger words ensayadas (ÉPICO/CLUTCH/TRANQUI/FOGÓN) disparan matches de las 4 brands fictional (CafetITO/TermoFlex/Pancho Rex/MateBros) durante los 90s del Bloque 3.
+>
+> - **Flow del pitch** (180s, 5 bloques, qué se dice y qué se muestra) → [`docs/PITCH.md`](./docs/PITCH.md).
+> - **Setup físico, hardware, OBS scenes, viewer-bot, fallback plan, Q&A** → [`docs/DEMO_RUNBOOK.md`](./docs/DEMO_RUNBOOK.md).
 
 ---
 
@@ -1091,7 +1059,7 @@ El MVP del demo prioriza claridad narrativa y demo robusto en 24h. Estos feature
 
 | Feature | Por qué importa | Qué cambia |
 |---|---|---|
-| **Approve granular del creator por placement** | Algunos creators (top-tier como Coscu real) querrán control fino más allá del mandate, con veto manual antes de cada render. | OBS Browser Dock con countdown 2s + botones aprobar/rechazar antes del overlay. Refund tx automática si rechaza. Mandate-only sigue siendo el default; este es opt-in. |
+| **Approve granular del creator por placement** | Algunos creators top-tier querrán control fino más allá del mandate, con veto manual antes de cada render. | OBS Browser Dock con countdown 2s + botones aprobar/rechazar antes del overlay. Refund tx automática si rechaza. Mandate-only sigue siendo el default; este es opt-in. |
 | **External / self-hosted agents (BYO agent)** | Marcas grandes (Adidas global, Coca-Cola corporate) y creators top no van a confiar su mandate a un agent que corre en infra de Addie. Su equipo de marketing/legal va a querer correr el agent ellos, en su infra, con sus propios prompts y reglas. | API pública con WebSocket para que el agent externo se subscriba al context channel + endpoint para emitir standing offers + verificación on-chain del mandate firmado. Addie pasa de "operador del agent" a **infra del marketplace de agents**. Mismo patrón para streamer-agent: top creators correrán el suyo. |
 | **EIP-3009 holds on-chain** | Soft holds off-chain dependen del orchestrator central. En producción multi-tenant con múltiples streamers en paralelo, el hold tiene que ser real, no centralizado. | Brand-agent firma `transferWithAuthorization` por cada standing offer (`validBefore = T+10s`). Settlement submit la auth del ganador. Auditable, descentralizable, sin trust en Addie. |
 | **Brand onboarding real para humanos** | El demo tiene 8 brands pre-cargadas. Producción necesita que cualquier marca firme up, fondee USDC, suba ads, defina mandate, vea performance. | Stripe → on-ramp USDC → wizard de mandate (presets por vertical) → upload UI con preview en zonas reales → dashboard de performance. |
@@ -1141,7 +1109,7 @@ Lo que **sí está en MVP**: audit completo (clip + reasoning + transcript) y so
 | Stream pipeline | **RTMP propio + multi-streaming a Twitch** |
 | Demo | **Live real**, backup VOD en standby |
 | Use case marquee | **FIFA + brand-safety pull + coalición + FULL BREAK** |
-| Vertical primario | Gaming streams LATAM (Coscu como persona) |
+| Vertical primario | Live streams LATAM (creators independientes) |
 | Pricing | **Negociación multi-turno** brand-agent vs streamer-agent |
 | **Creative** | **Brands suben sus ads. Cero generación runtime. Pre-gen offline con ElevenLabs Creative para el demo.** |
 | **Sub-agents** | **Cero. Solo brand-agents y streamer-agent.** |

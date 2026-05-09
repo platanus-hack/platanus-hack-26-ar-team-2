@@ -17,7 +17,7 @@ create table context_chunks (
   id uuid primary key default gen_random_uuid(),
 
   -- Identificación del stream
-  stream_key text not null,                                  -- nginx-rtmp stream key (ej "coscu-test")
+  stream_key text not null,                                  -- nginx-rtmp stream key (ej "team-stream")
   stream_id uuid,                                            -- FK lógica a streams(id), null en POC standalone
   ts_start timestamptz not null,                             -- inicio de la ventana del chunk
   duration_s int not null default 30,                        -- segundos cubiertos

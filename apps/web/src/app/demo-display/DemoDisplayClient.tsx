@@ -31,7 +31,7 @@ function useDemoSequence(
         delay: 1200,
         fn: () => {
           onBid({ brand_id: "adidas", brand_label: "Adidas", bid_usdc: 1.5, zone: "lower_third", status: "bidding" });
-          onMessage({ id: "m1", role: "brand", brand_id: "adidas", brand_label: "Adidas", text: "¡Coscu! Gol épico. Ofrezco $1.50 por mi ad 'epic_goal_lower' en lower_third 6s.", ts: Date.now() });
+          onMessage({ id: "m1", role: "brand", brand_id: "adidas", brand_label: "Adidas", text: "¡ÉPICO! Quiero este momento. Ofrezco $1.50 por mi ad 'epic_goal_lower' en lower_third 6s.", ts: Date.now() });
         },
       },
 
