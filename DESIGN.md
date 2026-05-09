@@ -183,7 +183,7 @@ Tres roles agénticos, todos LLM-powered, cada uno con su propio prompt + toolin
 |---|---|---|---|---|
 | **Manager** | 1 por stream | Claude Haiku 4.5 | chunk filtrado por audio_intent + audio_mentions (semantic filter, B-07c) | Decide si el momento amerita pautar (auctionable). Pre-flag de brand-safety. Sugiere zonas + duración. |
 | **Brand-agent** | **2 en MVP** (adidas + mp), escalable a N | Claude Haiku 4.5 | inicio de auction | Hunt + bid + counter-response con curva de concesión. Walk-away discipline. |
-| **Streamer-agent** | 1 por creator | Claude Sonnet 4.6 | inicio de auction (parallel batched) | Counter-batched a todas las ofertas, picks single winner. Defiende inventario. |
+| **Streamer-agent** | 1 por creator | Claude Sonnet 4.6 | **single-shot al deadline T+5s** (MVP) | Pickea winner con razonamiento auditable + walk si todas las offers están bajo reserve. **NO** counter-ea turno a turno (eso era el plan original — se descartó por presupuesto de latencia). Ver §4 Mecánica. |
 
 **MVP scope — 2 brands:**
 - **adidas** (premium episodic) — apunta a momentos celebratorios deportivos. Bidea fuerte en zonas premium (`lower_third`) cuando el manager flaggea épico.
@@ -445,15 +445,22 @@ Mismo POST endpoint, mismo SSE stream. La auction llama `POST /api/creators/<cre
 ### Mecánica
 
 ```
-T+0s     N brand-agents inician diálogo con streamer-agent
-T+0-4s   Cada uno regatea hasta 3 turnos (paralelo, en español)
-         Cada turno → standing offer actualizada + soft hold renovado
-T+5s     ⏰ Hard deadline → settlement step:
-         streamer-agent toma la mejor standing offer ≥ floor del mandate
-         y la cierra unilateralmente (sin requerir "OK" final del brand)
+T+0s     N brand-agents arrancan en paralelo con market_signals + manager_decision
+T+0-5s   Cada brand corre su concession curve (Haiku) hasta 3 turnos.
+         CADA brand ve las standing offers de los OTROS como market_state
+         en su prompt → escalan respondiendo a fair_value (anchor) y entre sí.
+         El streamer-agent NO responde durante esta ventana (sin presión LLM
+         turno-a-turno → presupuesto de latencia 5s seguro).
+T+5s     ⏰ Hard deadline → snapshot de standing offers finales.
+T+5-6s   Streamer-agent corre UNA vez con TODAS las standing offers + market_signals
+         + manager_decision + creator mandate como input. Output: NegotiationTurn
+         { from: 'streamer', action: 'accept'|'walk', winner_brand_id?, reason }.
+         ~1 Sonnet call ≈ 600-1500ms p95 — fits dentro del lock budget.
 ```
 
 **Standing offers.** En cualquier turno, lo último que dijo el brand-agent cuenta como su oferta vigente. Si se traba en regateo eterno o se queda sin turnos, su última oferta sigue en pie. Al deadline el streamer-agent agarra la mejor disponible — igual que un closing call de mercado real ("going once, going twice, sold").
+
+**Por qué single-shot streamer-agent (decisión 2026-05-09).** El plan original era streamer Sonnet por turno (counter-batched cada round). Eso suma 1.8-4.5s de Sonnet en serie/paralelo dentro del deadline 5s — alto riesgo de blow. Single-shot al deadline preserva la narrativa "agents hablando" del pitch (el streamer aparece 1 vez en `/demo-display` con razonamiento auditable de por qué pickeó X), pero **delega el price-discovery a market_signals + competencia entre brands**: el precio sube por brands escalando contra `fair_value_usdc` y respondiendo a las offers visibles de los otros, no por presión activa del streamer. Mismo modelo que un order book real. Tácticas turno-a-turno descartadas en MVP: PLAY_BIDDERS y ANCHOR_ABOVE_RESERVE requieren streamer respondiendo cada turno — si las queremos post-MVP, se restaura el plan original.
 
 ### Un solo ad por momento
 
