@@ -49,7 +49,7 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 - ✅ **P0-11** `[INFRA]` App Privy con embedded smart wallets en Base (Kernel implementation) → `PRIVY_APP_ID`, `NEXT_PUBLIC_PRIVY_APP_ID`, `PRIVY_APP_SECRET` cargados en `apps/web/.env.local`. Smoke test OK: `POST /v1/wallets` devolvió address válido (ver `tmp/test-privy.sh`, gitignored).
 - ✅ **P0-12** `[INFRA]` Proyecto Supabase + URL + service-role + anon key
 - ✅ **P0-13** `[INFRA]` App Alchemy en Base mainnet → `ALCHEMY_RPC_URL`
-- ⬜ **P0-14** `[INFRA]` **(Andy)** Vercel Blob token (CDN para assets de ads + clips de auditoría) → `BLOB_READ_WRITE_TOKEN`
+- 🚧 **P0-14** `[INFRA]` **(Andy — BLOQUEANTE para B-11 audit clip + D-07 ad uploader)** Vercel Blob token → `BLOB_READ_WRITE_TOKEN`. Sacar en Vercel Dashboard → Storage → Blob → crear store si no existe → copiar token. Cargarla en `apps/web/.env.local` (Vercel proyecto `web`) Y en `poc/pipeline/.env` local. **El POC pipeline ya falla con HTTP 503 cuando le pegan a `/api/audit/clip` sin esta token** — código en [`poc/pipeline/src/auditClip.ts`](./poc/pipeline/src/auditClip.ts), error class `MissingBlobTokenError`. NO hay fallback local — el audit clip requiere URL pública para que la marca lo consuma.
 - ✅ **P0-15** `[INFRA]` Canal Twitch del team creado para meta-streaming + chat tmi.js (read-only anonymous, sin auth). Stream key conventional: `team-stream`. Per pivote a meta-streaming (`docs/PITCH.md`), el equipo se streamea a sí mismo durante el pitch — no hay videojuego, los speakers + dashboard son el contenido.
 - ✅ **P0-16** `.env.example` con todas las vars + `.env.local` cargado (no commitear)
 
@@ -122,7 +122,7 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 - ✅ **B-08** **Audit clip · recorder rolling**: ffmpeg long-lived que escribe el stream a 4 segmentos rotativos de 5s cada uno (`-f segment -segment_time 5 -segment_wrap 4 -c copy`) → siempre tenés los últimos 15-20s en disco sin re-encode + sin cron cleanup. Vive en [`poc/pipeline/src/recorder.ts`](./poc/pipeline/src/recorder.ts), arrancado por el orchestrator junto con transcribe/frame/chat. Lo consume B-11 cuando llega POST /api/audit/clip. — deps: B-02, B-03
 - ❌ **B-09** ~~ffmpeg cliprange T-10s..T+20s~~ — **DEPRECATED 2026-05-09.** El scope se redujo a "últimos 10s del stream" (no T-10..T+20). El concat de los 2 segmentos rotativos más recientes lo hace `auditClip.ts` directamente — no se necesita cliprange separado.
 - ❌ **B-10** ~~ffmpeg overlay ad+QR~~ — **DEPRECATED 2026-05-09.** El audit clip ahora es solo el highlight del stream del creator (10s) — sin overlay del ad encima. La marca igual ve qué pasaba en el momento del placement, que es lo que importa para auditoría. Si en el futuro queremos "ad sobre stream" para promo material, se reactiva como B-10b.
-- ✅ **B-11** **Endpoint `POST /api/audit/clip` + Vercel Blob upload.** Recibe `{ stream_key, placement_id, duration_s? }`, ffmpeg concat los 2 segmentos rotativos más recientes (10s del stream del creator) sin re-encode + `-movflags +faststart` para playback web instantáneo, sube a Vercel Blob si `BLOB_READ_WRITE_TOKEN` está cargada, fallback a `/tmp/addie-clips/` local si no. Devuelve `{ clip_url, size_bytes, duration_s, source: 'vercel-blob' \| 'local', segments_used }`. apps/web (C-14) hace el POST después del INSERT a placements y después UPDATE-ea `placements.clip_url`. Implementación en [`poc/pipeline/src/auditClip.ts`](./poc/pipeline/src/auditClip.ts) + handler en [`server.ts`](./poc/pipeline/src/server.ts). Smoke test [`scripts/smoke-clip.ts`](./poc/pipeline/scripts/smoke-clip.ts) valida concat sin RTMP (genera 4 .ts dummy con lavfi → 12KB mp4 en 33ms). **Heads up Track A/C: `BLOB_READ_WRITE_TOKEN` aún ⬜ en P0-14, hasta que esté cargada el endpoint devuelve `file://` URLs locales.** — deps: B-08, P0-14 (Andy, opcional para fallback)
+- ✅ **B-11** **Endpoint `POST /api/audit/clip` + Vercel Blob upload.** Recibe `{ stream_key, placement_id, duration_s? }`, ffmpeg concat los 2 segmentos rotativos más recientes (10s del stream del creator) sin re-encode + `-movflags +faststart` para playback web instantáneo, sube a Vercel Blob, devuelve URL pública. **`BLOB_READ_WRITE_TOKEN` REQUIRED — sin la token el endpoint devuelve HTTP 503 con `{ code: 'BLOB_TOKEN_MISSING' }`** (decisión 2026-05-09: sin URL pública la marca no puede consumir el clip, mejor fallar explícito que cargar un `file://` que apps/web no puede servir). Devuelve `{ clip_url, size_bytes, duration_s, source: 'vercel-blob', segments_used }`. apps/web (C-14) hace el POST después del INSERT a placements y después UPDATE-ea `placements.clip_url`. Implementación en [`poc/pipeline/src/auditClip.ts`](./poc/pipeline/src/auditClip.ts) (export `MissingBlobTokenError`) + handler en [`server.ts`](./poc/pipeline/src/server.ts). Smoke test [`scripts/smoke-clip.ts`](./poc/pipeline/scripts/smoke-clip.ts) valida concat + upload e2e con .ts dummies (no requiere RTMP). — deps: B-08, **P0-14 BLOQUEANTE**
 - ✅ **B-12** `POST /api/stream/on-publish-done` cierra polling, mata ffmpeg, cierra WS de ElevenLabs, loggea resumen (duración + total_bytes_in). POC en [`poc/pipeline/src/server.ts`](./poc/pipeline/src/server.ts) + [`orchestrator.ts`](./poc/pipeline/src/orchestrator.ts). Falta swap a route handler de Next.js + cerrar fila en `streams`. — deps: B-03
 
 ### Track C · Agents (sugerido: Andy)
@@ -150,7 +150,7 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 - ⬜ **C-12** Settlement engine: al T+5s pickea **single winner** mejor standing ≥ floor a través de TODAS las zonas competidoras (single-ad-per-moment §4), fallback a default bidder si nadie pasa el floor, fallback a runner-up si lock falla — deps: C-10, C-11, A-08
 - ⬜ **C-13** Default bidder al floor para mp (`always_bid_floor: true`): siempre emite floor offer si el contexto no es brand-unsafe; garantiza fill cuando ningún brand premium bidea — deps: C-08
 - ✅ **C-13a** **Event broadcast foundation** — pattern reusable de "API POST → row en `render_events` table + pg `NOTIFY` → SSE handler hace `LISTEN` y push al iframe del creator". Pivot desde Supabase Realtime broadcast a SSE + pg LISTEN/NOTIFY (decisión 2026-05-09): queremos audit trail + capa de logic intermedia. Implementado: migration `0007_render_events.sql` + `POST /api/creators/[creator_id]/render` + `GET /api/creators/[creator_id]/stream` (SSE) + `/o/[creator_id]` iframe page + `apps/web/src/lib/pg.ts` shared pool. Verificado live en prod (curl POST → SSE receives). MVP: solo `message` text. C-14 lo reusa con `{ asset_url, asset_type, duration_ms, zone, ... }` cuando los assets en S3 estén. — deps: P0-12
-- ⬜ **C-14** Endpoint `POST /api/auctions/run` que recibe `{ tick, manager_decision }` del manager-worker y corre la subasta sincrónica (~5-8s): `computeMarketSignals(tick)` → 8 brand-agents `huntForBrand()` paralelo → orchestrator multi-turno con AC_combi + curva de concesión → `pickWinner()` → INSERT placements → `escrow.lock()` → llama `POST /api/creators/[creator_id]/render` (C-13a) con asset metadata para emitir el placement al iframe del creator. Durante la subasta, broadcast `auction:<auction_id>:turn` por cada turno para el demo display (también vía C-13a pattern, channel separado). — deps: C-10, C-12, C-13a
+- ⬜ **C-14** Endpoint `POST /api/auctions/run` que recibe `{ tick, manager_decision }` del manager-worker y corre la subasta sincrónica (~5-8s): `computeMarketSignals(tick)` → 4 brand-agents `huntForBrand()` paralelo → orchestrator multi-turno con AC_combi + curva de concesión → `pickWinner()` → INSERT placements → `escrow.lock()` → llama `POST /api/creators/[creator_id]/render` (C-13a) con asset metadata para emitir el placement al iframe del creator. **Después del render, fire-and-forget `POST http://localhost:3000/api/audit/clip { stream_key, placement_id, duration_s: 10 }` al pipeline POC** (B-11 endpoint) — el pipeline arma el highlight de los últimos 10s y devuelve `clip_url` de Vercel Blob, después `UPDATE placements SET clip_url=...`. Si el pipeline devuelve 503 (`code: 'BLOB_TOKEN_MISSING'`) loggear warning y seguir — la subasta no se rompe, solo queda el placement sin clip auditable. Durante la subasta, broadcast `auction:<auction_id>:turn` por cada turno para el demo display (también vía C-13a pattern, channel separado). — deps: C-10, C-12, C-13a, B-11 (audit clip integration)
 - ⬜ **C-15** Brand-safety listener (`apps/web/src/lib/agents/safety/`) que monitorea audio + chat durante el render y dispara `escrow.refund` si hay keyword pull — deps: C-14, A-08, B-04, B-06
 - ⬜ **C-16** Persistir audit metadata al settlement: `agent_reasoning` (output LLM ganador) + `negotiation_transcript` (todos los turnos) + `winning_offer` en `placements` — deps: C-14, C-05
 - ⬜ **C-17** QR generator server-side + endpoint `GET /api/q/[placement]/route.ts` que redirige a `tracking_url` y registra el scan — deps: C-05
@@ -172,6 +172,50 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
 - ⬜ **D-12** CSS fallback render (banda negra + logo + colores corporativos) si un ad no tiene `asset_url` — deps: D-02
 
 ✅ **Checkpoint 2 — sáb 18:00:** sync ritual — verificar que todos los tracks A/B/C/D arrancaron y que los TODOs cerrados ya están en `main`. Identificar bloqueos antes de Phase 2.
+
+---
+
+## 🚨 Path crítico al demo · cosas que TIENEN que cerrarse antes del domingo 12:00
+
+> **Estado al 2026-05-09 noche:** Track A 100%, Track B 100%, Track D 50%, **Track C 15% — es el cuello de botella**. Phase 2 (integración I-01..I-09) está toda abierta, depende de que C cierre. Phase 3 (polish + ensayos) está toda abierta.
+
+### Andy — orden topológico para llegar a I-01 happy path
+
+Andy ya está laburando en C-08m (manager-worker, ver WIP). Una vez que cierre eso, el orden sugerido es:
+
+1. **P0-14** [INFRA, 5 min] — cargar `BLOB_READ_WRITE_TOKEN` en `apps/web/.env.local` Y en `poc/pipeline/.env`. **Bloqueante para B-11 y D-07**. Sin esto, el endpoint `/api/audit/clip` del pipeline tira HTTP 503 y la subasta C-14 queda sin clip auditable. Vercel Dashboard → Storage → Blob → token.
+2. **P0-07** [INFRA, 5 min] — `ANTHROPIC_API_KEY` en Vercel + local. Sin esto C-08, C-08c, C-08m, C-09, C-10 todos rompen.
+3. **C-02e** [30 min] — renombrar YAMLs: `cafetito.yaml` / `termoflex.yaml` / `pancho-rex.yaml` / `matebros.yaml` (mantener shape, cambiar display_name + persona + target_moods).
+4. **C-06** [1 h] — `scripts/seed-mandates.ts` que parsea YAMLs → INSERT en `mandates` table.
+5. **C-07** [30 min] — `scripts/seed-inventory.ts` con zonas + floors del creator demo (1 sola fila).
+6. **C-08** [2 h] — `huntForBrand()` brand-agent runner. Claude Haiku con mandate + balance + ads + market_signals + manager_decision → `BrandAgentDecision`.
+7. **C-08a** [1 h] — Gate1 deterministic mandate filter (event_filters, dayparts, brand_safety). Sin LLM.
+8. **C-08b** [1.5 h] — Gate2 embeddings similarity. Cache de `ideal_contexts` embeds + fresh embed del context cada call. **Si el tiempo aprieta, skipear este gate y pasar directo a Gate3 — la pérdida es semántica, no funcional**.
+9. **C-08c** [1 h] — Gate3 Haiku triage. ~150 tokens IN, ~50 tokens OUT.
+10. **C-08d** [30 min] — Gate4 Sonnet decision integration en `huntForBrand()`.
+11. **C-09** [2 h] — `streamerEvaluate()` streamer-agent runner.
+12. **C-10** [3 h] — Negotiation orchestrator multi-turno paralelo, 5s hard deadline. **Es la pieza más grande sin cerrar.**
+13. **C-11** [1 h] — Soft hold ledger en memoria.
+14. **C-12** [1 h] — Settlement engine + pickWinner + lock fallback a runner-up.
+15. **C-13** [30 min] — Default bidder TermoFlex (`always_bid_floor: true`).
+16. **C-14** [2 h] — `POST /api/auctions/run` orquesta TODO + `escrow.lock()` + render event + **call al pipeline `/api/audit/clip`**.
+17. **C-15** [1 h] — Brand-safety listener (post-MVP si el tiempo aprieta).
+18. **C-16** [30 min] — Persistir audit metadata.
+19. **C-17** [30 min] — QR generator + redirect endpoint.
+
+**Total optimista: ~22 horas si todo va bien**, sin C-08b (embeddings opcional). A 24h del demo + dormir + ensayos, **muy ajustado**. Si Andy se traba en C-10 (la más grande), conviene llamar refuerzos del lado D o pedir ayuda con scoping.
+
+### Jere — D-02, D-07, D-08, D-09a, D-10..D-12
+
+Estimación liviana, ~6 hs total. Empezar por D-10 (pre-gen ads) en paralelo con Andy porque **C-08 los necesita** (los brand-agents seleccionan un ad existente, no se inventan uno).
+
+### Lucas — disponible para help
+
+Track B 100% cerrado. Lo que más sirve: **agarrar uno de los gates C-08a/b/c/d** o **C-06/C-07** (seeders, lectura de YAML simple) para destrabar Andy de las dependencias. Decidir según lo que diga Andy en el sync.
+
+### Test E2E real del audit clip
+
+Pendiente: arrancar OBS + el pipeline + un placement fake → verificar que `/api/audit/clip` devuelve URL de Vercel Blob accesible. Lo hacemos cuando P0-14 esté listo.
 
 ---
 
