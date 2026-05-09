@@ -30,7 +30,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        {/* Browser extensions (1Password, LastPass, Bitwarden, etc) suelen
+            inyectar atributos en scripts inline del <head> antes de que React
+            hidrate → mismatch. suppressHydrationWarning evita el warning, no
+            afecta producción ni la lógica del themeScript. */}
+        <script suppressHydrationWarning dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className="min-h-full flex flex-col bg-[var(--page)] text-[var(--text)]">
         <ThemeProvider>{children}</ThemeProvider>
