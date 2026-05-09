@@ -12,6 +12,20 @@ const ROLLING_WINDOW_MS = Number(process.env.AUDIO_ROLLING_WINDOW_MS ?? 30_000);
 const MODEL_ID = process.env.ELEVENLABS_STT_MODEL ?? 'scribe_v2_realtime';
 const LANGUAGE_CODE = process.env.ELEVENLABS_STT_LANGUAGE ?? 'es';
 
+// Keyterms: lista (coma-separada) de palabras que sesgan al modelo. Útil para slang
+// rioplatense, nombres de streamers, marcas. Max 50, cada una max 20 chars (limite
+// de la API). Si una keyterm supera 20 chars, ElevenLabs la rechaza la sesión entera.
+function parseKeyterms(): string[] | undefined {
+  const raw = process.env.ELEVENLABS_STT_KEYTERMS;
+  if (!raw) return undefined;
+  const list = raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0 && s.length <= 20)
+    .slice(0, 50);
+  return list.length > 0 ? list : undefined;
+}
+
 interface CommittedEntry {
   text: string;
   ts: number;
@@ -50,6 +64,8 @@ export async function startTranscribe(streamKey: string): Promise<TranscribeHand
   let conn: RealtimeConnection | null = null;
   let ffmpeg: ChildProcess | null = null;
 
+  const keyterms = parseKeyterms();
+
   try {
     conn = await elevenlabs.speechToText.realtime.connect({
       modelId: MODEL_ID,
@@ -57,6 +73,7 @@ export async function startTranscribe(streamKey: string): Promise<TranscribeHand
       sampleRate: 16000,
       commitStrategy: CommitStrategy.VAD,
       languageCode: LANGUAGE_CODE,
+      ...(keyterms ? { keyterms } : {}),
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -65,7 +82,8 @@ export async function startTranscribe(streamKey: string): Promise<TranscribeHand
   }
 
   conn.on(RealtimeEvents.SESSION_STARTED, () => {
-    log.success(`[transcribe ${streamKey}] WS open · model=${MODEL_ID} · lang=${LANGUAGE_CODE}`);
+    const ktSummary = keyterms ? ` · keyterms=${keyterms.length}` : '';
+    log.success(`[transcribe ${streamKey}] WS open · model=${MODEL_ID} · lang=${LANGUAGE_CODE}${ktSummary}`);
   });
 
   conn.on(RealtimeEvents.PARTIAL_TRANSCRIPT, (msg) => {
