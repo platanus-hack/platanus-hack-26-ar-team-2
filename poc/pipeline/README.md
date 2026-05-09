@@ -14,27 +14,45 @@ Standalone proof of concept de la capa de pipeline desde [DESIGN.md §3](../../D
 
 > **Cero mocks de contenido.** Lo que se mide es lo que el stream realmente está mandando, lo que se transcribe es lo que realmente se dice.
 
+## API keys necesarias
+
+| Variable | Para qué sirve | Estado | Cómo conseguirla |
+|---|---|---|---|
+| `ELEVENLABS_API_KEY` | Audio: transcripción en streaming con Scribe v2 realtime (B-04). **Misma key cubre Creative para pre-gen de ads + TTS** — una sola cuenta para los 3 servicios. | **Requerida para audio_30s.** Sin ella el POC corre igual pero los campos `audio_30s` y `audio_partial` van vacíos. | [elevenlabs.io](https://elevenlabs.io) → Sign up → Settings → API Keys → Create. Free tier alcanza para el demo. |
+| `GEMINI_API_KEY` | Frame analysis multimodal (B-05, próximo commit). | Aún no usada. | [aistudio.google.com](https://aistudio.google.com) → Get API key. Free tier 1M tokens/día. |
+| `TWITCH_*` | Chat real desde Twitch IRC (B-06, después). | Aún no usada. | tmi.js usa OAuth anónimo; configuración en commit B-06. |
+
+**La `.env` está gitignored** — nunca pushees tu key al repo. Verificalo siempre con `git status` antes de commitear.
+
 ## Setup
 
 ```bash
 cd poc/pipeline
 npm install
 cp .env.example .env
-# editá .env y poné tu ELEVENLABS_API_KEY (opcional — sin esto el POC corre sin audio_30s)
+# editá .env y pegá ELEVENLABS_API_KEY=sk_...
 docker compose up -d         # nginx-rtmp en :1935 RTMP y :8080 HTTP/stat
 npm run demo                 # express webhook server en :3000
 ```
 
-### ElevenLabs setup (opcional pero recomendado)
+### ElevenLabs — paso a paso
 
-1. Creá una cuenta en [elevenlabs.io](https://elevenlabs.io) (free tier alcanza para el demo).
-2. Settings → API Keys → copiá tu key.
-3. Pegala en `.env`:
+1. Creá una cuenta en [elevenlabs.io](https://elevenlabs.io) (Sign up con Google o email).
+2. Verificá el email.
+3. Avatar arriba a la derecha → **API Keys** → **Create API Key** → nombre cualquiera (ej `addie-poc`) → **Create**.
+4. Copiá la key (empieza con `sk_...`). **Solo se ve una vez.**
+5. Pegala en `.env`:
    ```
    ELEVENLABS_API_KEY=sk_...
    ELEVENLABS_STT_LANGUAGE=es
+   # Opcional: keyterms para sesgar a slang argentino + nombres propios del demo
+   ELEVENLABS_STT_KEYTERMS=che,boludo,groso,quilombo,laburo,Coscu,adidas,Quilmes
    ```
-4. La misma key sirve para **Scribe v2 realtime (audio)** + **Creative (pre-gen de ads)** + **TTS (voiceovers)**.
+6. Reiniciá `npm run demo` para que tome las env vars.
+
+Cuando arranque vas a ver `[transcribe ...] WS open · model=scribe_v2_realtime · lang=es · keyterms=N` confirmando la conexión.
+
+### Sin API key
 
 Si la key NO está, el POC arranca igual y los ticks tienen `audio_30s: "(no committed transcript yet)"` — el resto del pipeline (frame analysis, chat) son independientes del audio.
 
