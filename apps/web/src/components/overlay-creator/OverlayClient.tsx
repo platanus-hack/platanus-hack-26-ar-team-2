@@ -2,26 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import PlacementOverlay from "@/components/overlay/PlacementOverlay";
-import { isZoneId, type ZoneId, type ZonePosition } from "@/lib/types/zones";
+import { isZoneId, type ZoneId } from "@/lib/types/zones";
+import type { RenderEventPayload } from "@/lib/types/render";
 
-type RenderEvent = {
-  id: string;
-  creator_id: string;
-  message: string;
-  created_at: string;
-  /** Zone id (snake_case, ver lib/types/zones.ts). */
+type RenderEvent = RenderEventPayload & {
+  /** Legacy field por retro-compat (server lo normaliza a zone_id, pero
+   *  algún consumer viejo todavía puede emitir esto). */
   zone?: string;
-  asset_url?: string;
-  asset_type?: "video" | "image";
-  duration_ms?: number;
-  qr_url?: string;
-  /** Posición pixel-canvas (0..1920 × 0..1080) desde inventory_zones. */
-  position?: ZonePosition;
-  /** Override del max_duration_s del zone (en ms). */
-  max_duration_ms?: number;
-  /** Audio default según ZONE_AUDIO_DEFAULT, override per-placement. */
-  audio?: boolean;
-  brand_id?: string;
 };
 
 type Status = "connecting" | "open" | "error" | "closed";
@@ -118,7 +105,9 @@ export default function OverlayClient({ creator_id }: { creator_id: string }) {
             ad_url: current!.asset_url!,
             qr_url: current!.qr_url ?? "",
             duration_ms: current!.duration_ms ?? 8000,
-            zone_id: resolveZoneId(current!.zone),
+            // Server normaliza a zone_id (snake) pero aceptamos zone (legacy)
+            // por si llega algo viejo en flight.
+            zone_id: resolveZoneId(current!.zone_id ?? current!.zone),
             position: current!.position,
             max_duration_ms: current!.max_duration_ms,
             audio: current!.audio,
