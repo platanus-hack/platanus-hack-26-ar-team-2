@@ -25,6 +25,7 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 | Lucas | POC-PIPE | Pipeline POC standalone bajo `poc/pipeline/` (foundation para B-01..B-07: docker-compose nginx-rtmp + webhooks on_publish/on_publish_done + ffmpeg audio/frames + tmi.js chat + context tick en terminal) | 2026-05-09 |
 | Andy | DESIGN-AGENTS | DESIGN.md §4: tres agentes (Manager + Brand×8 + Streamer) + process topology + event flow Supabase Realtime + nuevos task IDs B-07a (salience) + C-08m (manager-worker) + reword C-14 | 2026-05-09 |
 | Jere | C-02 | 8 mandate templates YAML (brands/*.yaml) + loader TypeScript | 2026-05-09 |
+| Franco | A-03 | `Deploy.s.sol` + deploy AddieEscrow a Base mainnet (USDC token + treasury owner) + verify en basescan | 2026-05-09 11:23 |
 
 ---
 
@@ -89,7 +90,7 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
   - **Signatures / replay** — n/a hoy; re-evaluar si se introduce EIP-712 (mandate signing, etc.).
 
   Si findings críticos → fix + `forge test` verde + re-audit. Si clean o nits → FF cierre de A-01 + A-02 + A-02b a `main`. **Mismo gate aplica a todo cambio futuro de `AddieEscrow.sol`.** — deps: A-02
-- ⬜ **A-03** `contracts/script/Deploy.s.sol` + deploy a Base mainnet — deps: A-02b, P0-13, P0-21
+- 🟡 **A-03** `contracts/script/Deploy.s.sol` + deploy a Base mainnet — deps: A-02b, P0-13, P0-21
 - ⬜ **A-04** `[INFRA]` Anotar address del contrato deployed en `apps/web/src/lib/chain/escrow.ts` como const + verificar en basescan — deps: A-03
 - ⬜ **A-05** `scripts/seed-wallets.ts` — genera 9 Privy smart wallets (8 brand + 1 platform owner) y persiste addresses en `accounts` — deps: P0-11, P0-12, P0-04
 - ⬜ **A-06** `[INFRA]` Fondear las 8 brand wallets con $5 USDC y ~$0.10 ETH cada una — deps: A-05, P0-20, P0-21
