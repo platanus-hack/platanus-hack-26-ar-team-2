@@ -3,6 +3,11 @@
 import { useMemo } from "react";
 import type { PlacementRow } from "@/lib/db";
 import DockClient, { type DockHooks, type RecentPlacement } from "@/components/dock/DockClient";
+<<<<<<< Updated upstream
+=======
+import { useRef } from "react";
+import type { PlacementRow } from "@/lib/db";
+>>>>>>> Stashed changes
 
 const DEMO_PLACEMENTS: RecentPlacement[] = [
   {
@@ -73,11 +78,17 @@ export default function DockWrapper({
   demo: boolean;
   recentPlacements: PlacementRow[];
 }) {
+<<<<<<< Updated upstream
   const hooks = useMemo(
     () => (demo ? makeDemoHooks() : makeLiveHooks(recentPlacements)),
     [demo, recentPlacements],
   );
 
+=======
+  const hooksRef = useRef<DockHooks | undefined>(
+    demo ? makeDemoHooks() : makeLiveHooks(recentPlacements),
+  );
+>>>>>>> Stashed changes
   return (
     <main className="p-0">
       <DockClient hooks={hooks} />
