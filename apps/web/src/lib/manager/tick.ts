@@ -84,6 +84,25 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
       return { decision: "no_chunks", stream_key: config.streamKey };
     }
 
+    // 1b. Skip if we already processed this exact chunk (avoid duplicate emits
+    // when the cron fires faster than the pipeline writes new chunks).
+    // Raw firehose events store JSON with chunk.id — check if we already
+    // emitted a raw event for this chunk.
+    const alreadyProcessed = await client.query<{ id: string }>(
+      `select id from render_events
+        where creator_id = $1 and kind = 'raw'
+          and message::jsonb -> 'chunk' ->> 'id' = $2
+        limit 1`,
+      [config.creatorId, String(chunk.id)],
+    );
+    if (alreadyProcessed.rows.length > 0) {
+      return {
+        decision: "skip:already_processed",
+        stream_key: config.streamKey,
+        chunk_id: chunk.id,
+      } as TickResult;
+    }
+
     // Visibility: log the chunk we're about to evaluate, so it's obvious
     // which DB row drives each decision (and whether it's stale).
     const ageS = Math.round((Date.now() - new Date(chunk.ts_start).getTime()) / 1000);
