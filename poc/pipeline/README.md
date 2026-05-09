@@ -16,15 +16,35 @@ Standalone proof of concept de la capa de pipeline desde [DESIGN.md §3](../../D
 
 ## API keys necesarias
 
-| Variable | Para qué sirve | Estado | Cómo conseguirla |
-|---|---|---|---|
-| `ELEVENLABS_API_KEY` | Audio: transcripción en streaming con Scribe v2 realtime (B-04). **Misma key cubre Creative para pre-gen de ads + TTS** — una sola cuenta para los 3 servicios. | **Requerida para audio_30s.** Sin ella el POC corre igual pero los campos `audio_30s` y `audio_partial` van vacíos. | [elevenlabs.io](https://elevenlabs.io) → Sign up → Settings → API Keys → Create. Free tier alcanza para el demo. |
-| `AI_GATEWAY_API_KEY` | Frame analysis (B-05) con Gemini 2.5 Flash multimodal vía **Vercel AI Gateway**. Una sola key del gateway rutea a Gemini/Claude/GPT/etc — ideal porque el equipo ya tiene cuenta Vercel para deploy. | **Requerida para frame_summary / scene_type / mood_tags / on_screen_text.** Sin ella el POC corre con esos campos como `(unknown)`. | [vercel.com/dashboard](https://vercel.com/dashboard) → AI Gateway → Create Key. Créditos compartidos del proyecto Vercel. |
-| `TWITCH_CLIENT_ID` + `TWITCH_CLIENT_SECRET` + `TWITCH_CHANNEL` | Twitch Helix API para metrics del stream real (viewers, game_category, title) — B-07. **Gratis**, App Access Token con rate limit 800/min. | Sin esto los chunks tienen `viewers / game_category / stream_title` en NULL. | [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps) → Register Your Application → name `addie-poc`, OAuth Redirect URLs `http://localhost`, Category `Application Integration` → te da Client ID + New Secret. `TWITCH_CHANNEL` es el login del canal (ej `coscu`). |
-| `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | Persistencia de los `context_chunks` (B-07). Sin esto el chunk writer loggea a consola en lugar de hacer INSERT. | Opcional para POC standalone. **Requerida en producción** para que los brand-agents pollen la tabla. | Proyecto Supabase del equipo (P0-12 ✅) → Settings → API. **Service role bypass RLS — server-side ONLY.** |
-| `TWITCH_USERNAME` + `TWITCH_OAUTH` | Chat real desde Twitch IRC (B-06, después). | Aún no usada — tmi.js usa connection anónima para read-only. | Configuración en commit B-06. |
+> **Status**: pipeline verificado end-to-end con todas las APIs activas el 2026-05-09 (ver sección [Verificación end-to-end](#-verificación-end-to-end-2026-05-09) abajo).
+
+| Variable | Capa del pipeline | Sin la key |
+|---|---|---|
+| `ELEVENLABS_API_KEY` | Audio (Scribe v2 realtime) → `audio_text` + `audio_partial` | esos campos quedan en NULL, resto sigue funcionando |
+| `AI_GATEWAY_API_KEY` | Frame analysis (Gemini 2.5 Flash via Vercel AI Gateway) → `scene_type` + `energy_level` + `mood_tags` + `on_screen_text` | esos campos quedan en `(unknown)` |
+| `TWITCH_CLIENT_ID` + `TWITCH_CLIENT_SECRET` | Helix API → `viewers` + `game_category` + `stream_title` | esos campos quedan en NULL |
+| `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | Persistencia en `context_chunks` + broadcast Realtime al canal `context:<stream_key>` | chunks salen como JSON a consola, no hay broadcast a Track C |
+| `TWITCH_CHANNEL_OVERRIDE` (opcional) | Override global del canal Twitch para testing local | cada sesión usa su `stream_key` como `twitch_channel` (multi-stream) |
+
+### Cómo conseguir cada una
+
+- **ElevenLabs**: [elevenlabs.io](https://elevenlabs.io) → Sign up → Settings → API Keys → Create. Free tier suficiente para el demo. Cubre **Scribe v2 realtime + Creative + TTS** con la misma key.
+- **AI Gateway** (Vercel): [vercel.com/dashboard](https://vercel.com/dashboard) → tu proyecto Addie → AI Gateway → Create Key. Créditos compartidos del proyecto.
+- **Twitch Helix** (gratis, requiere 2FA en la cuenta): [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps) → Register Your Application (name `addie-poc`, OAuth Redirect `http://localhost`, Category `Application Integration`, Client Type `Confidential`) → te da Client ID. Click **New Secret**. **Las creds son del proyecto, NO per-creator** — una sola app autentica las consultas Helix de todos los streams onboardeados.
+- **Supabase** (proyecto del equipo, P0-12 ✅ Andy): pediselo a Andy. Settings → API → URL + service_role key. **Service role bypassea RLS — server-side ONLY, NO frontend.**
+- **Migration 0005**: ya aplicada en producción ([`supabase/migrations/0005_context_chunks.sql`](../../supabase/migrations/0005_context_chunks.sql)). Si reseteás la DB, reaplicala con `psql $POSTGRES_URL_NON_POOLING -f supabase/migrations/0005_context_chunks.sql`.
 
 **La `.env` está gitignored** — nunca pushees tu key al repo. Verificalo siempre con `git status` antes de commitear.
+
+### Multi-stream — cómo se resuelve `twitch_channel` per-session
+
+El pipeline soporta **múltiples streams concurrentes** (un `Map<stream_key, ActiveSession>` en el orchestrator). El `twitch_channel` para chat + Helix se resuelve en cada sesión así:
+
+1. **`TWITCH_CHANNEL_OVERRIDE`** env var (testing standalone — fuerza TODAS las sesiones al mismo canal)
+2. **`opts.twitchChannel`** pasado a `startSession()` (lookup en DB, producción)
+3. **`stream_key`** del nginx-rtmp como default (asume creator usa username Twitch como key)
+
+En producción (apps/web), el handler del `on_publish` debe lookups en `accounts.metadata.twitch_channel` y pasar el valor explícito a `startSession(session, { twitchChannel })`.
 
 ## Setup
 
@@ -117,6 +137,39 @@ curl -X POST http://localhost:3000/api/stream/on-publish-done \
 ```bash
 ffprobe rtmp://localhost/live/coscu-test
 ```
+
+## ✅ Verificación end-to-end (2026-05-09)
+
+Smoke test corrido con **todas las APIs activas + datos reales** apuntando al canal de [Ibai](https://twitch.tv/ibai) en vivo:
+
+```
+[transcribe full-stack]   WS open · model=scribe_v2_realtime · lang=es
+[frame full-stack]        ✓ calm · patrón de prueba de televisión   ← Gemini reconoció el testpattern de ffmpeg
+[twitch full-stack]       poll arrancado · channel=ibai
+[chat full-stack]         conectado a Twitch IRC · channel=ibai
+[realtime full-stack]     broadcast channel listo · context:full-stack
+[chunk full-stack]        writer arrancado · cada 8000ms → Supabase
+
+▶ tick #005
+    twitch_viewers          32181                                        ← Helix viewers reales
+    twitch_game             "League of Legends"                          ← categoría real
+    twitch_title            "MKOI vs KC | LA BATALLA DEFINITIVA..."      ← título real
+    chat_recent_keywords    ["estuviera","mellado","ganaba","aeglos777"] ← chat real del IRC
+
+[chunk full-stack] #1 · 8 ticks · 1 frames · viewers=32181 · chat=0.0msg/s neutral
+                                            scene="patrón de prueba de televisión"
+```
+
+Confirmación en DB:
+```sql
+SELECT scene_type, viewers, game_category, chat_recent_keywords FROM context_chunks ORDER BY ts_start DESC;
+
+scene_type                       viewers   game_category         chat_recent_keywords
+patrón de prueba de televisión   32181     League of Legends     {estuviera,mellado,esto,ganaba,giant,aeglos777,tal}
+patrón de prueba de televisión   32181     League of Legends     {estuviera,mellado,esto,ganaba,giant}
+```
+
+**Migration 0005 ya está aplicada en la DB de producción** del proyecto Addie (Supabase del equipo, P0-12 ✅).
 
 ## Arquitectura
 
