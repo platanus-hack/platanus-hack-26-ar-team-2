@@ -6,7 +6,13 @@ import type { ChatHandle } from './chat.js';
 import { summarizeAudio } from './audioSummary.js';
 import { log } from './log.js';
 
-const CHUNK_INTERVAL_MS = Number(process.env.CHUNK_INTERVAL_MS ?? 30_000);
+// Default 15s — bajado desde 30s el 2026-05-09 para que el manager-worker
+// pueda decidir más rápido sobre placements (1 decisión / 15s en vez de / 30s).
+// Trade-off: duplica las calls a Gemini Flash-Lite del audio summary (4 RPM en
+// vez de 2). Suma a frame analysis (~12-15 RPM con FRAME_FPS=0.5) → estamos en
+// ~16-19 RPM, justo encima de 15 RPM del free tier de Google AI Studio. Si
+// chocás rate-limits, bajá FRAME_FPS a 0.33 o pagá credits.
+const CHUNK_INTERVAL_MS = Number(process.env.CHUNK_INTERVAL_MS ?? 15_000);
 
 export interface ChunkSources {
   streamKey: string;
@@ -53,7 +59,7 @@ interface ChunkRow {
 }
 
 /**
- * Escribe un row en `context_chunks` cada CHUNK_INTERVAL_MS (default 30s).
+ * Escribe un row en `context_chunks` cada CHUNK_INTERVAL_MS (default 15s).
  * Consume los handles del orchestrator (transcribe, frame, twitch) y los
  * counters absolutos para calcular deltas.
  *
