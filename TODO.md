@@ -23,6 +23,7 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 | Dev | Task ID | Scope | Started |
 |---|---|---|---|
 | Lucas | POC-PIPE | Pipeline POC standalone bajo `poc/pipeline/` (foundation para B-01..B-07: docker-compose nginx-rtmp + webhooks on_publish/on_publish_done + ffmpeg audio/frames + tmi.js chat + context tick en terminal) | 2026-05-09 |
+| Lucas | B-08..B-11 | Audit clip composite (nginx record buffer + ffmpeg cliprange + ad/QR overlay + Vercel Blob upload). Endpoint POST /api/audit/clip que recibe placement metadata y devuelve URL del mp4. | 2026-05-09 |
 | Jere | C-02 | 8 mandate templates YAML (brands/*.yaml) + loader TypeScript | 2026-05-09 |
 | Franco | A-12 | Kill-switch CHAIN_LIVE_TXS — bloquea broadcast de signApproveUsdc/signLockEscrow + owner wrappers cuando el flag es false | 2026-05-09 15:32 -03 |
 
