@@ -83,32 +83,33 @@ Dos agents AI negocian en tiempo real durante un stream en vivo. El brand-agent 
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│  CAPA 5 · APPROVE + RENDER + RELEASE                                │
+│  CAPA 5 · RENDER + RELEASE                                          │
 │  ───────────────────────────────────────────────────────────        │
 │                                                                     │
-│   Push preview al OBS Browser Dock del creator                      │
-│   (countdown 2s, botones Aprobar/Rechazar)                          │
-│                              │                                      │
-│              ┌───────────────┴───────────────┐                      │
-│              ▼                               ▼                      │
-│         Aprueba                          Rechaza                    │
-│              │                               │                      │
-│              ▼                               ▼                      │
-│   Push al Browser Source overlay    AddieEscrow.refund              │
-│   <video src={ad_url}>              ⚡ tx #2 (refund)                │
-│   <img src={qr_dynamic}>            USDC vuelve a brand-agent       │
+│   Push directo al Browser Source overlay (MVP: sin approve manual)  │
+│   <video autoplay src={ad_url}>                                     │
+│   <img class="qr-corner" src={qr_dynamic}>                          │
 │   framer-motion fade-in                                             │
 │              │                                                      │
-│   Twitch viewers + jueces ven                                       │
-│   el placement durante 6s                                           │
+│   Brand-safety listener corre en paralelo durante el render:        │
+│   keyword prohibida → fade out 200ms → AddieEscrow.refund           │
+│   ⚡ tx alt #2 (refund): USDC vuelve al brand-agent                 │
 │              │                                                      │
-│              ▼ (placement termina)                                  │
+│   Twitch viewers + jueces ven el placement durante N segundos       │
+│              │                                                      │
+│              ▼ (placement termina sin pull)                         │
 │   AddieEscrow.release(placementId)                                  │
 │   ⚡ tx #2 (release): 1.80 USDC → coscu wallet                      │
+│                                                                     │
+│   En paralelo, async: clip 30s (T-10s..T+20s) → Vercel Blob         │
+│   → placements.clip_url para auditoría de la marca                  │
+│                                                                     │
+│   Per-placement approve del creator → Post-MVP §13.                 │
+│   MVP confía en mandate firmado + brand-safety auto-pull.           │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-**Latencia end-to-end:** ~6-8 segundos del momento épico al placement on-screen. **2 txs por placement** (lock + release).
+**Latencia end-to-end:** ~5-7 segundos del momento épico al placement on-screen (sin step de approve manual en MVP). **2 txs por placement** (lock + release).
 
 ---
 
@@ -148,19 +149,20 @@ T+6.2s    Plataforma arma placement assembly:
             qr_url: "addie.app/q/abc123?placement=...",
             duration_ms: 6000, zone: "lower_third" }
 ─────────────────────────────────────────────────────────────────────
-T+6.5s    Push preview al OBS Browser Dock de Coscu
-T+6.5s-8.5s   Coscu tiene 2s para aprobar
-─────────────────────────────────────────────────────────────────────
-T+8.5s    Aprobado → push al Browser Source overlay
-T+8.55s   Overlay renderiza:
+T+6.5s    Push directo al Browser Source overlay (MVP: sin approve)
+T+6.55s   Overlay renderiza:
           <video autoplay src={ad_url}>     ← ad de adidas (con voz baked-in)
           <img class="qr-corner" src={qr_dynamic}>
           framer-motion fade-in
+          Brand-safety listener activo en paralelo
 ─────────────────────────────────────────────────────────────────────
-T+14.5s   Placement termina (duración 6s)
-T+14.6s   ⚡ AddieEscrow.release(placementId)  [tx 0xBBB]
+T+12.55s  Placement termina (duración 6s)
+T+12.6s   ⚡ AddieEscrow.release(placementId)  [tx 0xBBB]
           → 1.80 USDC al wallet de Coscu
 ─────────────────────────────────────────────────────────────────────
+T+15s     [Async] Clip de auditoría guardado:
+          nginx-rtmp segmenta T-10s..T+20s → mp4 → Vercel Blob
+          → placements.clip_url disponible en la brand console
 
 2 transacciones on-chain por placement (lock + release).
 Demo de 5 min con ~6 placements = ~12 txs visibles en basescan.
@@ -168,7 +170,64 @@ Demo de 5 min con ~6 placements = ~12 txs visibles en basescan.
 
 ---
 
-## 4. Brand Console — donde las marcas suben sus ads
+## 4. Negociación: subasta con deadline + soft holds
+
+La negociación no funciona como un protocolo "sí/no" donde los agents tienen que llegar a un acuerdo explícito. Es una **subasta con deadline duro de 5s** sobre standing offers que se actualizan turno a turno.
+
+### Mecánica
+
+```
+T+0s     N brand-agents inician diálogo con streamer-agent
+T+0-4s   Cada uno regatea hasta 3 turnos (paralelo, en español)
+         Cada turno → standing offer actualizada + soft hold renovado
+T+5s     ⏰ Hard deadline → settlement step:
+         streamer-agent toma la mejor standing offer ≥ floor del mandate
+         y la cierra unilateralmente (sin requerir "OK" final del brand)
+```
+
+**Standing offers.** En cualquier turno, lo último que dijo el brand-agent cuenta como su oferta vigente. Si se traba en regateo eterno o se queda sin turnos, su última oferta sigue en pie. Al deadline el streamer-agent agarra la mejor disponible — igual que un closing call de mercado real ("going once, going twice, sold").
+
+**Fill garantizado vía house bidder.** Uno de los 8 brand-agents (típicamente MercadoPago con su `persistent_logo` en corner) actúa como **floor bidder permanente**: para cualquier contexto que no sea brand-unsafe, ofrece exactamente el reserve del streamer. Eso garantiza que siempre haya al menos un deal cerrable. Los otros 7 cazan momentos épicos y desplazan al house cuando matchean. Es transparente — figura como tercera pata del *Know Your Agent* del mp (`always_bid_floor: true` en su mandate).
+
+### Soft hold ledger (off-chain)
+
+Para evitar que un brand-agent prometa $1.80 acá y $1.50 en otra subasta paralela cuando solo tiene $2 en wallet, el orchestrator mantiene en memoria:
+
+```ts
+holds: { brand_id, placement_id, amount, expires_at }[]
+```
+
+Cada vez que un brand-agent emite o actualiza una standing offer, se crea/refresca su hold con `expires_at = now + 10s`. La `available_balance` que se le expone al LLM en el siguiente prompt = `on_chain_balance - Σ(holds_propios_activos)`. Garantiza correctness sin tx on-chain durante la negociación.
+
+### Settlement step (T+5s)
+
+1. Streamer-agent elige la mejor standing offer ≥ floor de su mandate.
+2. Si ninguna supera el floor, gana el house bidder (siempre tiene una standing offer exacta al floor → fill garantizado).
+3. El hold del ganador se convierte en `escrow.lock()` on-chain real.
+4. Si el lock falla on-chain (defensivo), fallback al runner-up — también tiene hold activo.
+5. Holds de los perdedores se liberan; vuelven al `available_balance` del LLM en su próxima decisión.
+
+### Garantías
+
+- ✅ **Siempre hay ganador** — house bidder + fallback al runner-up.
+- ✅ **Latencia predecible** — 5s exactos, sin diálogos eternos.
+- ✅ **Sin double-spend** — soft holds previenen sobre-comprometer balance entre subastas paralelas.
+- ✅ **Cero gaps en pantalla** — capa always-on (corner) sirve continuo mientras los premium slots resuelven.
+
+### Inventario en dos capas
+
+| Capa | Slots | Comportamiento | Estado típico |
+|---|---|---|---|
+| **Always-on** | `bottom_right_corner` | Servido continuo por house bidder a floor price | Siempre lleno (logo persistente) |
+| **Episódico** | `lower_third`, `fullscreen_takeover` | Solo dispara en contextos épicos detectados por pipeline | Vacío la mayor parte del tiempo (la escasez los hace premium) |
+
+Esto significa que **siempre hay algo on-screen y algo en basescan**, incluso si los slots premium están en gap entre momentos épicos.
+
+**Post-MVP:** reemplazar soft hold por **EIP-3009 `transferWithAuthorization`** (USDC nativo). Cada standing offer firmada como auth con `validBefore = T+10s`. Hold real on-chain, no centralizado, auditable. Ver §13.
+
+---
+
+## 5. Brand Console — donde las marcas suben sus ads
 
 Cada marca tiene su consola en `addie.app/brands/<brand_id>`.
 
@@ -279,9 +338,59 @@ LLM output:
 
 El brand-agent NO genera nada. Solo elige.
 
+### Auditoría por placement: clip + reasoning + transcript
+
+Cada placement queda guardado completo para que la marca pueda auditar **dónde** apareció su ad, **por qué** su agent decidió bidear, y **qué** pagó. Sin esto, agent commerce no es defendible: si la marca delega a un agent que toma decisiones autónomas con su plata, tiene que poder reconstruir cualquier decisión a posteriori.
+
+Lo que se guarda por placement:
+
+| Campo | Contenido |
+|---|---|
+| `clip_url` | Clip de 30s del **video compuesto** (stream + ad overlay + QR) centrado en T+0, mostrando exactamente lo que vieron los viewers durante el placement. 10s antes + 20s después del momento épico. Generado server-side post-render. |
+| `context_snapshot` | JSON con lo que vio el brand-agent en el momento de bidear: `{ audio_30s, frame_summary, frame_tags, chat_velocity, viewers, sentiment, ts }`. |
+| `agent_reasoning` | Output completo del LLM al decidir bidear: `{ should_bid, ad_id, bid_usdc_cents, zone, opening_message, reasoning }`. |
+| `negotiation_transcript` | Diálogo completo en español entre brand-agent y streamer-agent (todos los turnos, standing offers actualizadas turno a turno). |
+| `winning_offer` | `{ bid_amount, ad_id, zone, duration_ms, settled_at }` — la oferta cerrada que ganó la subasta. |
+| `onchain_refs` | `{ lock_tx_hash, release_tx_hash, refund_tx_hash }` con links a basescan. |
+| `qr_metrics` | Scans agregados, conversiones reportadas (post-render). |
+
+La brand console expone estos por placement con botones **"Ver clip"**, **"Ver razonamiento"**, **"Ver transcript"**, **"Ver en basescan"**. También exportable a CSV/JSON para auditorías externas (legal, compliance, agencia).
+
+```sql
+create table placements (
+  id uuid primary key default gen_random_uuid(),
+  stream_id uuid references streams(id),
+  brand_id uuid references accounts(id),
+  ad_id uuid references ads(id),
+  zone text not null,
+  amount_usdc_cents int not null,
+  duration_ms int not null,
+  rendered_at timestamptz,
+  -- audit
+  clip_url text,                          -- 30s mp4 en CDN
+  context_snapshot jsonb,                 -- lo que vio el brand-agent
+  agent_reasoning jsonb,                  -- decisión del LLM
+  negotiation_transcript jsonb,           -- diálogo completo en español
+  -- on-chain
+  lock_tx_hash text,
+  release_tx_hash text,
+  refund_tx_hash text,
+  status text not null check (status in ('locked','rendered','refunded','failed')),
+  created_at timestamptz default now()
+);
+```
+
+**Pipeline del clip compuesto:**
+1. nginx-rtmp `record` directive con segmentos de 1s en buffer circular (~60s) — captura el stream crudo del creator.
+2. Al evento de placement, el orchestrator extrae el rango T-10s..T+20s del buffer (single ffmpeg `cliprange`, ~2s).
+3. Sobre ese clip base, segundo paso ffmpeg: overlay del ad video del `ad_url` en la zona/timestamp correctos (`overlay=x:y:enable='between(t,10,16)'`) + overlay del QR en el corner (`overlay`).
+4. Output mp4 final → upload a Vercel Blob → guarda URL en `placements.clip_url`.
+
+Total ~4-6s, **async, no bloquea el placement** ni el settlement on-chain. La marca recibe el clip ya compuesto: ve exactamente lo que el viewer vio (su ad encima del juego de Coscu, con el QR y todo).
+
 ---
 
-## 5. Pre-generación de la biblioteca de ads (para el demo)
+## 6. Pre-generación de la biblioteca de ads (para el demo)
 
 Las marcas reales generarían sus ads con sus agencias / herramientas. Para el demo, **nosotros pre-generamos la biblioteca de las 8 brands con ElevenLabs Creative**, una sola vez antes del demo.
 
@@ -340,7 +449,7 @@ Para combinaciones que no quedaron generadas a tiempo: **CSS fallback** — band
 
 ---
 
-## 6. Las tres patas del track *agent money*
+## 7. Las tres patas del track *agent money*
 
 | Pata | Cómo se manifiesta |
 |---|---|
@@ -350,7 +459,7 @@ Para combinaciones que no quedaron generadas a tiempo: **CSS fallback** — band
 
 ---
 
-## 7. Stack tecnológico
+## 8. Stack tecnológico
 
 | Pieza | Tech | Por qué |
 |---|---|---|
@@ -374,7 +483,7 @@ Para combinaciones que no quedaron generadas a tiempo: **CSS fallback** — band
 
 ---
 
-## 8. Estructura del proyecto
+## 9. Estructura del proyecto
 
 ```
 addie/                                  ← repo platanus-hack-26-ar-team-2
@@ -434,7 +543,8 @@ addie/                                  ← repo platanus-hack-26-ar-team-2
 ├── supabase/migrations/
 │   ├── 0001_init.sql
 │   ├── 0002_inventory.sql
-│   └── 0003_ads.sql
+│   ├── 0003_ads.sql
+│   └── 0004_placements.sql              ← audit fields (§5)
 ├── scripts/
 │   ├── seed-wallets.ts                 ← genera 9 smart wallets (8 brand + 1 platform)
 │   ├── seed-mandates.ts                ← 8 brand mandates iniciales
@@ -447,7 +557,7 @@ addie/                                  ← repo platanus-hack-26-ar-team-2
 
 ---
 
-## 9. Estrategia de ramas + asignaciones
+## 10. Estrategia de ramas + asignaciones
 
 ### Ramas
 
@@ -493,6 +603,7 @@ main                         ← integraciones, mergeos en checkpoints
 - tmi.js Twitch chat
 - Context buffer + Supabase Realtime push
 - Webhooks `on_publish` / `on_publish_done`
+- **Audit clip compuesto** (§5): nginx-rtmp `record` con segmentos 1s en buffer circular 60s → ffmpeg `cliprange` T-10s..T+20s del stream crudo → segundo ffmpeg overlay con `ad_url` + QR en zona/timestamp del placement (mp4 final = lo que vio el viewer) → upload a Vercel Blob → escribir `clip_url` y `context_snapshot` en `placements`
 
 **Files:**
 - `infra/**`
@@ -504,13 +615,14 @@ main                         ← integraciones, mergeos en checkpoints
 #### 🤖 Dev 3 — AGENTS
 
 **Owns:**
-- 8 brand mandate templates (YAML)
+- 8 brand mandate templates (YAML), incluyendo `always_bid_floor: true` para mp (house bidder, §4)
 - brand-agent runner (hunter logic — pickea ad variant + bid amount)
 - streamer-agent runner (defender logic — accept/counter/reject)
-- negotiation orchestrator (multi-turn paralelo, timeout 5s)
-- subasta engine (compara closed deals)
+- **Subasta con deadline duro (§4):** negotiation orchestrator multi-turno paralelo (3 turnos cap) + standing offers table actualizada turno a turno + **soft hold ledger off-chain** (10s expiry, expone `available_balance` corregido a cada LLM)
+- **Settlement engine (§4):** al deadline T+5s, streamer-agent cierra unilateralmente la mejor standing ≥ floor; fallback al house bidder si nadie pasa el floor; fallback al runner-up si lock on-chain falla
 - Brand-safety listener (auto-pull + escrow.refund trigger)
 - QR generation server-side + tracking redirect (`/api/q/[placement]`)
+- **Audit metadata (§5):** persistir `agent_reasoning` (output del LLM) + `negotiation_transcript` (todos los turnos) en `placements` al settlement
 
 **Files:**
 - `apps/web/src/lib/agents/**`
@@ -525,10 +637,10 @@ main                         ← integraciones, mergeos en checkpoints
 **Owns:**
 - Tailwind theme + design tokens
 - Browser Source overlay (`/overlay/[id]`) con framer-motion
-- Browser Dock (`/dock`) con preview + approve/reject + balance + FULL BREAK button
+- Browser Dock (`/dock`) con balance + recent placements + FULL BREAK button (preview/approve/reject → post-MVP §14)
 - Settings + Inventory editor (`/settings/inventory`)
-- **Brand console** (`/brands/[brandId]`) con upload de ads + ad library viewer
-- Demo Display (`/demo-display`) con bid leaderboard + tx feed + negotiation chat
+- **Brand console** (`/brands/[brandId]`) con upload de ads + ad library viewer + **audit log panel (§5):** lista de placements con clip player (video compuesto) + viewer JSON de `agent_reasoning` + viewer del transcript de negociación + export CSV/JSON
+- Demo Display (`/demo-display`) con bid leaderboard + tx feed + negotiation chat (mostrando standing offers actualizándose en vivo, §4)
 - **Pre-generación de ads sábado de noche** (`scripts/pregen-brand-ads.ts`) con ElevenLabs Creative
 
 **Files:**
@@ -542,7 +654,7 @@ main                         ← integraciones, mergeos en checkpoints
 
 ---
 
-## 10. Cronograma 24 horas
+## 11. Cronograma 24 horas
 
 ```
 SÁBADO
@@ -586,7 +698,7 @@ T+24h  16:00   DEMO LIVE 🎤
 
 ---
 
-## 11. Demo choreography (5-7 minutos)
+## 12. Demo choreography (5-7 minutos)
 
 ### Setup físico
 
@@ -603,7 +715,7 @@ T+24h  16:00   DEMO LIVE 🎤
 
 ### Acto 2 (90s) — Primer momento épico + negociación visible
 
-Streamer mete gol → pipeline detecta → brand-agents inician negociaciones paralelas → demo display muestra 4 columnas de chat negociación EN ESPAÑOL → adidas gana con su ad "epic_goal_lower" → escrow.lock visible → preview en dock → approve → render del video adidas (con voz baked-in) + QR dinámico encima.
+Streamer mete gol → pipeline detecta → brand-agents inician negociaciones paralelas → demo display muestra 4 columnas de chat negociación EN ESPAÑOL con standing offers actualizándose turno a turno → ⏰ deadline 5s → streamer-agent cierra unilateralmente al mejor postor → adidas gana con su ad "epic_goal_lower" → escrow.lock visible → render del video adidas (con voz baked-in) + QR dinámico encima.
 
 > *"Los agents pelearon en lenguaje natural por el momento. Adidas eligió SU ad de su biblioteca, no algo generado en runtime. La marca es la dueña de su arte. Addie decide cuándo y dónde aparecer."*
 
@@ -627,7 +739,7 @@ Pantalla técnica con `curl` mostrando endpoint de auctions + AddieEscrow.sol ex
 
 ---
 
-## 12. Riesgos y mitigaciones
+## 13. Riesgos y mitigaciones
 
 | Riesgo | Mitigación |
 |---|---|
@@ -643,7 +755,26 @@ Pantalla técnica con `curl` mostrando endpoint de auctions + AddieEscrow.sol ex
 
 ---
 
-## 13. Fuera de scope (YAGNI)
+## 14. Post-MVP roadmap (importante pero no para el hackatón)
+
+El MVP del demo prioriza claridad narrativa y demo robusto en 24h. Estos features quedan **diseñados** pero no implementados — son críticos para la versión post-hackatón:
+
+| Feature | Por qué importa | Qué cambia |
+|---|---|---|
+| **Approve granular del creator por placement** | Algunos creators (top-tier como Coscu real) querrán control fino más allá del mandate, con veto manual antes de cada render. | OBS Browser Dock con countdown 2s + botones aprobar/rechazar antes del overlay. Refund tx automática si rechaza. Mandate-only sigue siendo el default; este es opt-in. |
+| **External / self-hosted agents (BYO agent)** | Marcas grandes (Adidas global, Coca-Cola corporate) y creators top no van a confiar su mandate a un agent que corre en infra de Addie. Su equipo de marketing/legal va a querer correr el agent ellos, en su infra, con sus propios prompts y reglas. | API pública con WebSocket para que el agent externo se subscriba al context channel + endpoint para emitir standing offers + verificación on-chain del mandate firmado. Addie pasa de "operador del agent" a **infra del marketplace de agents**. Mismo patrón para streamer-agent: top creators correrán el suyo. |
+| **EIP-3009 holds on-chain** | Soft holds off-chain dependen del orchestrator central. En producción multi-tenant con múltiples streamers en paralelo, el hold tiene que ser real, no centralizado. | Brand-agent firma `transferWithAuthorization` por cada standing offer (`validBefore = T+10s`). Settlement submit la auth del ganador. Auditable, descentralizable, sin trust en Addie. |
+| **Brand onboarding real para humanos** | El demo tiene 8 brands pre-cargadas. Producción necesita que cualquier marca firme up, fondee USDC, suba ads, defina mandate, vea performance. | Stripe → on-ramp USDC → wizard de mandate (presets por vertical) → upload UI con preview en zonas reales → dashboard de performance. |
+| **Streamer pricing dinámico** | El streamer-agent del MVP usa floor + reglas simples del mandate. En producción debería aprender qué contextos / horarios / brands rinden más y ajustar. | Pricing model entrenado sobre placements pasados (CTR, scan rate, conversion del QR) → floor adaptativo por zona/contexto/hora. |
+| **Coalición de bids (varios brands chip-in)** | Si ningún brand individual paga el floor del takeover premium, varios podrían pagarlo en conjunto y aparecer como split (logo izq + logo der). | Negociación N-a-1 con división proporcional del crédito en el ad asset (ad genérico + logos overlay). |
+| **Disputas / refunds disputables** | Brand reclama que el render no fue como se acordó (zona equivocada, duración corta, contexto inadecuado). Necesita recurso. | Smart contract con período de reclamo + admin/oracle para resolver. Para esto el clip de auditoría de §5 es la evidencia clave. |
+| **KYC / AML para off-ramp fiat** | Cuando agreguemos off-ramp directo a peso/dólar bancario, necesitamos compliance. | Integración con un proveedor (Bitso, Buenbit) por país. |
+
+Lo que **sí está en MVP**: audit completo (clip + reasoning + transcript) y soft holds off-chain. Ambos necesarios para defender las decisiones del agent y para que las marcas confíen el delegate desde el día 1.
+
+---
+
+## 15. Fuera de scope (YAGNI)
 
 - ❌ Cero off-ramp fiat — USDC nativo, fin.
 - ❌ Cero Twitch Extension oficial — solo OBS Browser Dock.
@@ -663,13 +794,13 @@ Pantalla técnica con `curl` mostrando endpoint de auctions + AddieEscrow.sol ex
 
 ---
 
-## 14. Pitch line
+## 16. Pitch line
 
 > **Las marcas suben sus ads pre-producidos a Addie. El brand-agent decide cuándo aparecer, contra qué streamer, con qué variante de su biblioteca. Negocia con el agent del creator en lenguaje natural. Cierran en USDC vía smart contract en Base. El long tail de creators monetiza atención sin contratos, sin equipos de ventas, sin esperas. Agents hablando, agents pagando, on-chain, en tiempo real.**
 
 ---
 
-## 15. Decisiones cerradas finales
+## 17. Decisiones cerradas finales
 
 | Decisión | Resultado |
 |---|---|
@@ -688,6 +819,12 @@ Pantalla técnica con `curl` mostrando endpoint de auctions + AddieEscrow.sol ex
 | QR | **Server-side dynamic con tracking_id por placement** |
 | On-chain txs por placement | **2** (lock + release). Demo de 5 min × 6 placements = 12 txs. |
 | Brand-safety | **Auto-pull con escrow.refund automático** |
+| **Auction mechanics** | **Standing offers + 5s hard deadline + house bidder al floor → fill garantizado, cero gaps en pantalla** |
+| **Holds durante negociación** | **Soft hold ledger off-chain (10s expiry). Post-MVP: EIP-3009 on-chain.** |
+| **Inventario** | **Dos capas: always-on (corner, house bidder) + episódico (lower_third / takeover)** |
+| **Audit por placement** | **Clip 30s + context snapshot + agent reasoning + transcript negociación, todo guardado y exportable a la marca** |
+| **Approve del creator per placement** | **Post-MVP §14. MVP confía en mandate firmado + brand-safety auto-pull.** |
+| **Hosting de los agents** | **MVP: 9 agents corren en infra de Addie. Post-MVP §14: marcas/streamers pueden traer su propio agent (BYO).** |
 
 ---
 
