@@ -1,18 +1,21 @@
 /**
  * Smoke test del audit clip — genera 4 segmentos .ts dummy con ffmpeg
  * (colores sólidos distintos), llama a `captureClip()` con ese dir, y
- * verifica que el mp4 de salida existe + tiene size > 0.
+ * verifica que el upload a Vercel Blob devuelva un URL público válido.
  *
  * NO requiere RTMP activo / OBS / docker. Valida la lógica de concat +
- * selección de segments + (si BLOB_READ_WRITE_TOKEN está) upload a Vercel
- * Blob. Sin token, valida el fallback local.
+ * selección de segments + upload a Vercel Blob end-to-end.
+ *
+ * **Requiere `BLOB_READ_WRITE_TOKEN` cargada en .env** — sin la token
+ * `captureClip()` tira `MissingBlobTokenError` y este smoke exit 1 con
+ * mensaje claro pidiendo que Andy cierre P0-14.
  *
  * Uso: npm run smoke:clip
  */
 import 'dotenv/config';
 import { spawn } from 'child_process';
-import { existsSync, mkdirSync, rmSync, statSync } from 'fs';
-import { captureClip } from '../src/auditClip.js';
+import { mkdirSync, rmSync } from 'fs';
+import { captureClip, MissingBlobTokenError } from '../src/auditClip.js';
 
 const SMOKE_DIR = `/tmp/addie-smoke-record/${Date.now()}`;
 const COLORS = ['red', 'green', 'blue', 'yellow'];
@@ -60,6 +63,20 @@ async function main() {
   console.log(`→ smoke test audit clip · dir=${SMOKE_DIR}`);
   console.log('');
 
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    console.error('✗ BLOB_READ_WRITE_TOKEN no está cargada en .env');
+    console.error('');
+    console.error('   El audit clip REQUIERE Vercel Blob (P0-14, Andy).');
+    console.error('   Sin la token, `captureClip()` tira MissingBlobTokenError y el');
+    console.error('   endpoint POST /api/audit/clip devuelve HTTP 503.');
+    console.error('');
+    console.error('   Cómo conseguirla:');
+    console.error('   1. Andy → Vercel Dashboard → Storage → Blob → crear store si no existe');
+    console.error('   2. Pegá la token en poc/pipeline/.env como BLOB_READ_WRITE_TOKEN=...');
+    console.error('   3. Re-correr `npm run smoke:clip`');
+    process.exit(1);
+  }
+
   // Setup: generamos 4 segmentos secuencialmente para que sus mtime queden
   // ordenados (auditClip.ts ordena por mtime, no por nombre).
   mkdirSync(SMOKE_DIR, { recursive: true });
@@ -72,18 +89,27 @@ async function main() {
     await sleep(50);
   }
   console.log('');
-
-  console.log('   provider:', process.env.BLOB_READ_WRITE_TOKEN ? 'vercel-blob' : 'local-fallback');
+  console.log('   provider: vercel-blob (BLOB_READ_WRITE_TOKEN cargada)');
   console.log('   capturing 10s clip from 4×5s segments...');
   console.log('');
 
   const t0 = Date.now();
-  const result = await captureClip({
-    streamKey: 'smoke-stream',
-    placementId: `smoke-${Date.now()}`,
-    recordDir: SMOKE_DIR,
-    durationS: 10,
-  });
+  let result;
+  try {
+    result = await captureClip({
+      streamKey: 'smoke-stream',
+      placementId: `smoke-${Date.now()}`,
+      recordDir: SMOKE_DIR,
+      durationS: 10,
+    });
+  } catch (e) {
+    if (e instanceof MissingBlobTokenError) {
+      // No debería pasar dado el guard arriba, pero por las dudas.
+      console.error('✗ captureClip rechazó la token — ¿está vacía?');
+      process.exit(1);
+    }
+    throw e;
+  }
   const ms = Date.now() - t0;
 
   console.log(`✓ ${ms}ms`);
@@ -102,21 +128,12 @@ async function main() {
   if (result.segments_used !== 2) {
     throw new Error(`esperaba 2 segments para 10s/5s, usó ${result.segments_used}`);
   }
-  if (result.source === 'local') {
-    const localPath = result.clip_url.replace('file://', '');
-    if (!existsSync(localPath)) {
-      throw new Error(`local fallback path no existe: ${localPath}`);
-    }
-    const localSize = statSync(localPath).size;
-    if (localSize !== result.size_bytes) {
-      throw new Error(`size mismatch: reported=${result.size_bytes}, on disk=${localSize}`);
-    }
-    console.log(`   ✓ local fallback file existe y tiene ${localSize} bytes`);
-  } else {
-    console.log('   ✓ uploaded a Vercel Blob');
+  if (!result.clip_url.startsWith('http')) {
+    throw new Error(`clip_url debería ser una URL pública, recibí: ${result.clip_url}`);
   }
+  console.log('   ✓ uploaded a Vercel Blob');
 
-  // Cleanup
+  // Cleanup local
   try {
     rmSync(SMOKE_DIR, { recursive: true, force: true });
     console.log(`   ✓ cleanup: borrado ${SMOKE_DIR}`);

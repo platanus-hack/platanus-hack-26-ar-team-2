@@ -2,7 +2,7 @@ import express from 'express';
 import type { Request, Response } from 'express';
 import { log } from './log.js';
 import { startSession, stopSession, listActiveSessions, getSessionRecordDir } from './orchestrator.js';
-import { captureClip } from './auditClip.js';
+import { captureClip, MissingBlobTokenError } from './auditClip.js';
 import type { NginxRtmpHookBody } from './types.js';
 
 export function makeServer() {
@@ -51,7 +51,9 @@ export function makeServer() {
    * Response 200: { clip_url, size_bytes, duration_s, source, segments_used }
    * Response 400: { error } — body inválido
    * Response 404: { error } — no hay sesión activa o recorder aún no arrancó
-   * Response 500: { error } — ffmpeg / upload falló
+   * Response 503: { error, code: 'BLOB_TOKEN_MISSING' } — falta P0-14
+   *               (Andy debe cargar `BLOB_READ_WRITE_TOKEN` en .env)
+   * Response 500: { error } — ffmpeg / upload Vercel Blob falló
    */
   app.post('/api/audit/clip', async (req: Request, res: Response) => {
     const streamKey = String(req.body?.stream_key ?? '').trim();
@@ -86,6 +88,15 @@ export function makeServer() {
       });
       res.status(200).json(result);
     } catch (e) {
+      if (e instanceof MissingBlobTokenError) {
+        log.warn(`[audit-clip ${streamKey}] BLOB_READ_WRITE_TOKEN missing — pidiendo a Andy P0-14`);
+        res.status(503).json({
+          error: e.message,
+          code: 'BLOB_TOKEN_MISSING',
+          fix: 'Andy debe cargar BLOB_READ_WRITE_TOKEN en poc/pipeline/.env (sacar token en Vercel Dashboard → Storage → Blob)',
+        });
+        return;
+      }
       const msg = e instanceof Error ? e.message : String(e);
       log.warn(`[audit-clip ${streamKey}] capture failed: ${msg}`);
       res.status(500).json({ error: msg });

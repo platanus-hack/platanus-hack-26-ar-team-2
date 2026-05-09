@@ -2,7 +2,7 @@ import { spawn } from 'child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'fs';
 import { log } from './log.js';
 
-const FALLBACK_DIR = process.env.AUDIT_CLIP_FALLBACK_DIR ?? '/tmp/addie-clips';
+const TEMP_DIR = process.env.AUDIT_CLIP_TEMP_DIR ?? '/tmp/addie-clips';
 const SEGMENT_TIME_S = Number(process.env.RECORDER_SEGMENT_TIME_S ?? 5);
 const DEFAULT_DURATION_S = Number(process.env.AUDIT_CLIP_DURATION_S ?? 10);
 
@@ -18,16 +18,31 @@ export interface CaptureClipResult {
   clip_url: string;
   size_bytes: number;
   duration_s: number;
-  source: 'vercel-blob' | 'local';
+  source: 'vercel-blob';
   segments_used: number;
+}
+
+/**
+ * Error específico cuando falta `BLOB_READ_WRITE_TOKEN`. El endpoint
+ * `/api/audit/clip` lo mapea a HTTP 503 — el caller (apps/web) puede
+ * distinguir esto de un fallo de ffmpeg (500). Decisión 2026-05-09:
+ * el audit clip es la pata "auditable" del pitch — sin URL pública la
+ * marca no puede consumirlo. Si la token falta, fallamos explícito y
+ * obligamos a P0-14 (Andy) antes de seguir, en vez de devolver un
+ * `file://` que apps/web no puede servir.
+ */
+export class MissingBlobTokenError extends Error {
+  constructor() {
+    super('BLOB_READ_WRITE_TOKEN no está cargada — audit clip requiere Vercel Blob (P0-14, Andy).');
+    this.name = 'MissingBlobTokenError';
+  }
 }
 
 /**
  * Toma los N segmentos rotativos más recientes del recorder, los concatena
  * con `ffmpeg -f concat` (sin re-encode → fast), y sube el mp4 final a
- * Vercel Blob. Si `BLOB_READ_WRITE_TOKEN` no está cargado, fallback a
- * `/tmp/addie-clips/` y devuelve un `file://` URL — apps/web puede UPDATE-ear
- * después cuando el upload esté disponible.
+ * Vercel Blob. **Requiere `BLOB_READ_WRITE_TOKEN`** — sin la token tira
+ * `MissingBlobTokenError` antes de invocar ffmpeg.
  *
  * Estrategia de selección de segmentos: ordenamos los .ts por mtime DESC
  * (más nuevo primero), tomamos `ceil(durationS / SEGMENT_TIME_S)`, los
@@ -42,6 +57,10 @@ export interface CaptureClipResult {
  */
 export async function captureClip(input: CaptureClipInput): Promise<CaptureClipResult> {
   const { streamKey, placementId, recordDir, durationS = DEFAULT_DURATION_S } = input;
+
+  // Pre-check: token requerida ANTES de gastar ffmpeg. Falla rápido.
+  const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
+  if (!blobToken) throw new MissingBlobTokenError();
 
   if (!existsSync(recordDir)) {
     throw new Error(`record dir does not exist: ${recordDir} (¿está activo el recorder?)`);
@@ -63,9 +82,9 @@ export async function captureClip(input: CaptureClipInput): Promise<CaptureClipR
   const needed = Math.min(Math.ceil(durationS / SEGMENT_TIME_S), segments.length);
   const selected = segments.slice(0, needed).reverse(); // chronological
 
-  mkdirSync(FALLBACK_DIR, { recursive: true });
-  const concatList = `${FALLBACK_DIR}/${placementId}.txt`;
-  const outPath = `${FALLBACK_DIR}/${placementId}.mp4`;
+  mkdirSync(TEMP_DIR, { recursive: true });
+  const concatList = `${TEMP_DIR}/${placementId}.txt`;
+  const outPath = `${TEMP_DIR}/${placementId}.mp4`;
 
   // ffmpeg concat demuxer requiere un archivo de texto con `file '<path>'` por línea.
   // -safe 0 permite paths absolutos.
@@ -91,52 +110,33 @@ export async function captureClip(input: CaptureClipInput): Promise<CaptureClipR
     `[clip ${streamKey}] concat ok · placement=${placementId} · ${(size / 1024).toFixed(1)}KB · ${selected.length} segments → ${durationS}s`,
   );
 
-  // Intentar upload a Vercel Blob si está la token cargada.
-  const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
-  if (blobToken) {
-    try {
-      const { put } = await import('@vercel/blob');
-      const buffer = readFileSync(outPath);
-      const blobPath = `audit-clips/${streamKey}/${placementId}.mp4`;
-      const result = await put(blobPath, buffer, {
-        access: 'public',
-        token: blobToken,
-        contentType: 'video/mp4',
-      });
-      // Limpiar local — Vercel Blob es la fuente de verdad ahora.
-      try {
-        unlinkSync(concatList);
-        unlinkSync(outPath);
-      } catch {
-        /* ignore */
-      }
-      log.success(
-        `[clip ${streamKey}] uploaded to Vercel Blob · placement=${placementId} · ${result.url}`,
-      );
-      return {
-        clip_url: result.url,
-        size_bytes: size,
-        duration_s: durationS,
-        source: 'vercel-blob',
-        segments_used: selected.length,
-      };
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      log.warn(`[clip ${streamKey}] Vercel Blob upload failed: ${msg} · fallback to local`);
-    }
-  } else {
-    log.info(
-      `[clip ${streamKey}] BLOB_READ_WRITE_TOKEN missing · clip guardado local en ${outPath}`,
-    );
+  // Upload a Vercel Blob (única source válida — sin fallback local).
+  const { put } = await import('@vercel/blob');
+  const buffer = readFileSync(outPath);
+  const blobPath = `audit-clips/${streamKey}/${placementId}.mp4`;
+  const result = await put(blobPath, buffer, {
+    access: 'public',
+    token: blobToken,
+    contentType: 'video/mp4',
+  });
+
+  // Limpiar archivos temporales — Vercel Blob es la fuente de verdad ahora.
+  try {
+    unlinkSync(concatList);
+    unlinkSync(outPath);
+  } catch {
+    /* ignore */
   }
 
-  // Fallback: dejamos el archivo local. apps/web puede consumir el path o
-  // re-uploadearlo después si la token aparece.
+  log.success(
+    `[clip ${streamKey}] uploaded to Vercel Blob · placement=${placementId} · ${result.url}`,
+  );
+
   return {
-    clip_url: `file://${outPath}`,
+    clip_url: result.url,
     size_bytes: size,
     duration_s: durationS,
-    source: 'local',
+    source: 'vercel-blob',
     segments_used: selected.length,
   };
 }
