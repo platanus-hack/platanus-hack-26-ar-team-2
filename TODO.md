@@ -24,7 +24,6 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 |---|---|---|---|
 | Lucas | POC-PIPE | Pipeline POC standalone bajo `poc/pipeline/` (foundation para B-01..B-07: docker-compose nginx-rtmp + webhooks on_publish/on_publish_done + ffmpeg audio/frames + tmi.js chat + context tick en terminal) | 2026-05-09 |
 | Jere | C-02 | 8 mandate templates YAML (brands/*.yaml) + loader TypeScript | 2026-05-09 |
-| Franco | A-05 | scripts/seed-wallets.ts (5 Privy smart wallets: 4 brands fictional + streamer-team, persistidas en accounts) | 2026-05-09 |
 
 ---
 
@@ -91,7 +90,7 @@ Bloqueador absoluto de todo lo demás. Apuntar a Checkpoint 1 a las **08:00 sáb
   Si findings críticos → fix + `forge test` verde + re-audit. Si clean o nits → FF cierre de A-01 + A-02 + A-02b a `main`. **Mismo gate aplica a todo cambio futuro de `AddieEscrow.sol`.** — deps: A-02
 - ✅ **A-03** `contracts/script/Deploy.s.sol` + deploy a Base mainnet @ [`0x8300B9Bd1B6a18163EBd5fB9e0EFa1b7Fd99bCfE`](https://basescan.org/address/0x8300B9Bd1B6a18163EBd5fB9e0EFa1b7Fd99bCfE) (verified, owner `0x7e6685A241278d83068f8Cfb0Dd145F62cb17914`, USDC `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`)
 - ✅ **A-04** `[INFRA]` Anotar address del contrato deployed en `apps/web/src/lib/chain/escrow.ts` como const + verificar en basescan — deps: A-03
-- 🟡 **A-05** `scripts/seed-wallets.ts` — genera **5 Privy smart wallets** (4 brands: cafetito/termoflex/pancho-rex/matebros + 1 streamer-team) y persiste addresses en `accounts`. La platform owner (`0x7e6685A241278d83068f8Cfb0Dd145F62cb17914`) ya existe — es quien deployó `AddieEscrow` y es `owner` inmutable; NO se genera vía Privy. — deps: P0-11, P0-12, P0-04
+- ✅ **A-05** `apps/web/scripts/seed-wallets.ts` — generó **5 Privy smart wallets** (4 brands: CafetITO `0x7529…2099` / TermoFlex `0x599e…EA25` / Pancho Rex `0xad1b…FA88` / MateBros `0x96D2…087D` + streamer-team `0x8B0d…374c`) y persistió addresses en `accounts` con `metadata.privy_wallet_id`. Idempotente (re-run → skip). Mismo patrón que `db-migrate.mjs` (pg directo + `POSTGRES_URL_NON_POOLING`). La platform owner (`0x7e6685A241278d83068f8Cfb0Dd145F62cb17914`) NO se genera vía Privy — es owner inmutable de `AddieEscrow`.
 - ⬜ **A-06** `[INFRA]` Fondear las **4 brand wallets** con $5 USDC y ~$0.10 ETH cada una. La streamer-team wallet no necesita fondos (solo recibe USDC en `release()`, no firma nada). — deps: A-05, P0-20, P0-21
 - ✅ **A-07** Cliente viem en `apps/web/src/lib/chain/viem.ts` (publicClient + walletClient factory por brand) — deps: A-04
 - ✅ **A-08** Bindings escrow en `apps/web/src/lib/chain/escrow.ts` (`lockEscrow`, `releaseEscrow`, `refundEscrow`, watchers de eventos) + helper `approveUsdcForEscrow` (USDC approve para que la brand wallet pueda hacer `transferFrom` desde el lock) + smoke `apps/web/scripts/smoke-escrow.mts` que valida ABI/RPC contra Base mainnet (verificado: owner/usdc/placements). — deps: A-07
