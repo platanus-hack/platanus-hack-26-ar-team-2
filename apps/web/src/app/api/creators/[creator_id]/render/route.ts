@@ -111,11 +111,15 @@ export async function POST(
     // (lookup por creator + zone) > ZONE_MAX_DURATION_MS default.
     let effectiveMaxDuration: number | undefined = raw.max_duration_ms;
     if (zoneId && effectiveMaxDuration === undefined) {
+      // El slug del creator vive en `accounts.metadata->>'slug'` (jsonb), NO
+      // como columna. La schema de 0001_init.sql NO tiene `accounts.slug` —
+      // antes este JOIN tiraba "column a.slug does not exist" y el endpoint
+      // caía a ZONE_MAX_DURATION_MS defaults silenciosamente.
       const inv = await client.query<{ max_duration_ms: number }>(
         `select i.max_duration_ms
            from inventory i
            join accounts a on a.id = i.creator_id
-          where a.slug = $1 and i.zone = $2
+          where a.metadata->>'slug' = $1 and i.zone = $2
           limit 1`,
         [creator_id, zoneId],
       );
