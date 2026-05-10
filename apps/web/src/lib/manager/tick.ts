@@ -15,7 +15,7 @@
  * No HTTP roundtrip — we hit the DB directly via the shared pg pool.
  */
 
-import { pool } from "@/lib/pg";
+import { transactPool } from "@/lib/pg";
 
 import { applyGateLadder } from "@/lib/agents/brand/gates/applyGateLadder";
 import { runAuction } from "@/lib/auctions/runAuction";
@@ -75,7 +75,7 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
   const t0 = Date.now();
   const elapsed = () => Date.now() - t0;
 
-  const client = await pool().connect();
+  const client = await transactPool().connect();
   const tPool = elapsed();
   try {
     // 1. Latest chunk

@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL; // e.g. https://addie-worker.fly.dev
+
 const PRESETS = [
   { label: "Banana / Platanus", text: "Che boludo mirá esa banana gigante, platanus hack es lo más, hackathon mode activado" },
   { label: "Yerba / Mate", text: "Che pasame el mate que me estoy quedando dormido, cebá otro amargo dale" },
@@ -69,7 +71,19 @@ export default function MockPage() {
         return;
       }
 
-      // 2. Trigger orchestrator (single tick)
+      // 2. Trigger orchestrator
+      // When using Fly worker, LISTEN/NOTIFY handles it automatically — no trigger needed.
+      if (WORKER_URL) {
+        setResults((prev) => [{
+          text,
+          chunk: chunkData,
+          tick: { decision: "auto:listen_notify", stream_key: streamKey },
+          timing: { chunk_ms: tChunk, tick_ms: 0, total_ms: Date.now() - t0 },
+          ts: Date.now(),
+        }, ...prev].slice(0, 20));
+        return;
+      }
+
       const tickT0 = Date.now();
       const tickRes = await fetch(
         `/api/internal/manager-tick?key=${encodeURIComponent(streamKey)}&once=1`,
@@ -112,9 +126,14 @@ export default function MockPage() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6 max-w-2xl mx-auto">
       <h1 className="text-xl font-bold mb-1">Mock Orchestrator</h1>
-      <p className="text-xs text-zinc-500 mb-6">
+      <p className="text-xs text-zinc-500 mb-4">
         Inserta chunk + ejecuta el orchestrator (Claude picker). Muestra la decisión y tiempos.
       </p>
+      <div className="text-xs font-mono mb-4 px-3 py-2 rounded bg-zinc-900 border border-zinc-800 flex items-center gap-2">
+        <span className={`inline-block h-2 w-2 rounded-full ${WORKER_URL ? "bg-cyan-400" : "bg-yellow-400"}`} />
+        <span className="text-zinc-400">backend:</span>
+        <span className="text-zinc-200">{WORKER_URL ?? "Next.js API (local)"}</span>
+      </div>
 
       {/* Stream key */}
       <label className="block text-xs text-zinc-400 mb-1">stream_key</label>

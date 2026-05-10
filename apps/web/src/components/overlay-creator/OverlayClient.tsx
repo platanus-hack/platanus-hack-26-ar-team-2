@@ -14,6 +14,7 @@ type RenderEvent = RenderEventPayload & {
 type Status = "connecting" | "open" | "error" | "closed";
 
 const DEFAULT_TEXT_DURATION_MS = 8000;
+const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL; // e.g. https://addie-worker.fly.dev
 
 export default function OverlayClient({ creator_id }: { creator_id: string }) {
   const [status, setStatus] = useState<Status>("connecting");
@@ -27,9 +28,12 @@ export default function OverlayClient({ creator_id }: { creator_id: string }) {
 
     const connect = () => {
       if (stopped) return;
-      const url = lastEventIdRef.current
-        ? `/api/creators/${encodeURIComponent(creator_id)}/stream?since=${encodeURIComponent(lastEventIdRef.current)}`
+      const base = WORKER_URL
+        ? `${WORKER_URL}/events/${encodeURIComponent(creator_id)}`
         : `/api/creators/${encodeURIComponent(creator_id)}/stream`;
+      const url = lastEventIdRef.current
+        ? `${base}${base.includes("?") ? "&" : "?"}since=${encodeURIComponent(lastEventIdRef.current)}`
+        : base;
 
       es = new EventSource(url);
 
@@ -41,8 +45,12 @@ export default function OverlayClient({ creator_id }: { creator_id: string }) {
         try {
           const data = JSON.parse((msgEvent as MessageEvent).data) as RenderEvent;
           lastEventIdRef.current = data.id;
-          setCurrent(data);
           setCount((c) => c + 1);
+          // Only show brand events that have an asset or a real message.
+          // Skip "raw" diagnostic events and no-match brands (message "...").
+          if (data.kind === "raw") return;
+          if (!data.asset_url && (!data.message || data.message === "...")) return;
+          setCurrent(data);
         } catch {
           // ignore malformed
         }

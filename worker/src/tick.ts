@@ -55,11 +55,11 @@ export async function managerTick(
       return { decision: "no_chunks", stream_key: config.streamKey };
     }
 
-    // 1b. Dedup — skip if already processed
+    // 1b. Dedup — skip if this chunk was already processed
     const alreadyProcessed = await client.query<{ id: string }>(
       `select id from render_events
-        where creator_id = $1 and kind = 'raw'
-          and message::jsonb -> 'chunk' ->> 'id' = $2
+        where creator_id = $1 and kind = 'brand'
+          and payload::jsonb ->> 'chunk_id' = $2
         limit 1`,
       [config.creatorId, String(chunk.id)],
     );
@@ -72,44 +72,7 @@ export async function managerTick(
       };
     }
 
-    const ageS = Math.round((Date.now() - new Date(chunk.ts_start).getTime()) / 1000);
-
-    // 2. Emit raw firehose event
-    const rawPayload = {
-      type: "raw_chunk",
-      tick_at: new Date().toISOString(),
-      chunk: {
-        id: chunk.id,
-        ts_start: chunk.ts_start,
-        age_s: ageS,
-        duration_s: chunk.duration_s,
-        audio_text: chunk.audio_text,
-        audio_summary: chunk.audio_summary,
-        audio_intent: chunk.audio_intent,
-        audio_mentions: chunk.audio_mentions,
-        audio_topics: chunk.audio_topics,
-        scene_type: chunk.scene_type,
-        energy_level: chunk.energy_level,
-        mood_tags: chunk.mood_tags,
-        on_screen_text: chunk.on_screen_text,
-        viewers: chunk.viewers,
-        viewers_delta_30s: chunk.viewers_delta_30s,
-        game_category: chunk.game_category,
-        stream_title: chunk.stream_title,
-      },
-    };
-    const rawInsert = await client.query<{ id: string }>(
-      `insert into render_events (creator_id, message, kind)
-       values ($1, $2, 'raw')
-       returning id`,
-      [config.creatorId, JSON.stringify(rawPayload)],
-    );
-    await client.query("select pg_notify('render_events', $1)", [
-      `${config.creatorId}:${rawInsert.rows[0]!.id}`,
-    ]);
-    const tRawEmit = elapsed();
-
-    // 3. Claude (or stub) picker
+    // 2. Claude (or stub) picker
     const picker: Picker = config.dryRun
       ? makeStubPicker()
       : (() => {
@@ -124,13 +87,13 @@ export async function managerTick(
 
     const message = pick.message ?? "...";
 
-    // 4. Build placement payload if brand has ad asset
+    // 3. Build placement payload if brand has ad asset
     const matchedBrand = pick.brand_id
       ? brands.find((b) => b.slug === pick.brand_id)
       : undefined;
     const hasAsset = matchedBrand?.ad.asset_url;
 
-    const payload: Record<string, unknown> = {};
+    const payload: Record<string, unknown> = { chunk_id: chunk.id };
     if (hasAsset) {
       payload.asset_url = matchedBrand.ad.asset_url;
       payload.asset_type = matchedBrand.ad.asset_type ?? "video";
@@ -140,7 +103,7 @@ export async function managerTick(
       payload.audio = true;
     }
 
-    // 5. Insert brand render_event + pg_notify
+    // 4. Insert brand render_event + pg_notify
     const insert = await client.query<{ id: string; created_at: string }>(
       `insert into render_events (creator_id, message, kind, payload)
        values ($1, $2, 'brand', $3)
@@ -166,8 +129,7 @@ export async function managerTick(
       pool_ms: tPool,
       chunk_query_ms: tChunkQuery - tPool,
       dedup_ms: tDedup - tChunkQuery,
-      raw_emit_ms: tRawEmit - tDedup,
-      picker_ms: tPicker - tRawEmit,
+      picker_ms: tPicker - tDedup,
       brand_emit_ms: tBrandEmit - tPicker,
       total_ms: tBrandEmit,
     };

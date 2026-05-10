@@ -25,7 +25,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { pool } from "@/lib/pg";
+import { transactPool } from "@/lib/pg";
 import { isZoneId, ZONE_MAX_DURATION_MS, type ZoneId } from "@/lib/types/zones";
 import type { RenderEventPayload, RenderPostBody } from "@/lib/types/render";
 
@@ -105,7 +105,7 @@ export async function POST(
   const message = raw.message ?? "";
   const kind: RenderEventPayload["kind"] = hasAsset ? "brand" : "render";
 
-  const client = await pool().connect();
+  const client = await transactPool().connect();
   try {
     // Resolver max_duration efectivo: body override > inventory.max_duration_ms
     // (lookup por creator + zone) > ZONE_MAX_DURATION_MS default.
