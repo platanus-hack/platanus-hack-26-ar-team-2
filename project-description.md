@@ -40,7 +40,7 @@ Verificable en basescan. Sin middleman. Sin contratos a 30 días.
 
 ### Pipeline de captura
 
-El streamer transmite su contenido vía RTMP a un servidor `nginx-rtmp` local (corriendo en Docker). Un orchestrator en Node levanta varios pipes en paralelo por sesión:
+El streamer transmite su contenido vía RTMP a un servidor de ingesta `nginx-rtmp`. Un orchestrator en Node levanta varios pipes en paralelo por sesión:
 
 - **Transcripción.** Audio PCM 16kHz → WebSocket de ElevenLabs Scribe v2 con VAD agresivo (commit lag ~400ms).
 - **Twitch Helix poll.** Viewers + game_category cada 30s para enriquecer el contexto.
@@ -76,7 +76,7 @@ A diferencia de las soluciones automatic-bidding clásicas, el streamer **siempr
 
 | Componente | Stack | Hosting |
 |---|---|---|
-| Pipeline ingesta | nginx-rtmp + ffmpeg + Node.js + ElevenLabs Scribe v2 | Local (Docker) |
+| Pipeline ingesta | nginx-rtmp + ffmpeg + Node.js + ElevenLabs Scribe v2 | Docker container |
 | Worker agentic | TypeScript standalone + Claude Haiku 4.5 | Fly.io |
 | Web app | Next.js 16 (App Router) + Tailwind 4 | Vercel |
 | Base de datos | Postgres + LISTEN/NOTIFY | Supabase |
@@ -87,7 +87,7 @@ A diferencia de las soluciones automatic-bidding clásicas, el streamer **siempr
 
 ## Demo flow
 
-1. **Streamer arranca OBS** apuntando a `rtmp://localhost:1935/live/<stream_key>` y agrega un Browser Source con `https://addie.demo/o/<stream_key>` (overlay vacío hasta que apruebe un offer).
+1. **Streamer arranca OBS** apuntando al endpoint RTMP de Addie con su `stream_key`, y agrega un Browser Source con `https://addie.demo/o/<stream_key>` (overlay vacío hasta que apruebe un offer).
 2. **Streamer abre `/dock?creator_id=<stream_key>`** en su segundo monitor.
 3. **Streamer dice "platanus"** en cámara.
 4. **~500ms después** aparece una card en el dock: 🍌 Platanus, $1.50 USDC, lower_third 8s, countdown 8s.
