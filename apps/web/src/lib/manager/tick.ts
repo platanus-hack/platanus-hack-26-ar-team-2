@@ -1,18 +1,24 @@
 /**
  * managerTick — single cron tick worth of work.
  *
- * 1. Fetch latest context_chunks row for stream_key.
- * 2. Fetch latest render_events row for creator_id (= stream_key today).
- * 3. If we're inside cooldown window since the last emit → skip.
- * 4. Stage 1 semantic filter on the chunk → maybe skip.
- * 5. Stage 2 Claude (or stub) picker → maybe skip on score thresholds.
- * 6. INSERT render_events + pg_notify (same shape the existing /render
- *    route writes), so the SSE consumer at /o/<id> gets the message.
+ * Flow (post-0012):
+ *   1. Fetch latest context_chunks row for stream_key.
+ *   2. Cooldown lookup: si hubo un OFFER en los últimos `cooldownMs`, skip.
+ *      (No usamos kind='brand' como anchor porque ahora 'brand' es la row
+ *      derivada del accept — si gateamos por eso, dock spam-eable.)
+ *   3. Stage 1 semantic filter on the chunk → maybe skip.
+ *   4. Stage 2 Claude (or stub) picker → maybe skip on score thresholds.
+ *   5. INSERT render_events kind='offer' status='pending' bid_usdc_cents=N
+ *      + pg_notify con payload completo → dock muestra card al toque.
+ *   6. La row kind='brand' SOLO se inserta cuando el streamer ✅ accept
+ *      (endpoint POST /api/creators/[id]/offers/[event_id]/accept).
  *
  * No HTTP roundtrip — we hit the DB directly via the shared pg pool.
  */
 
 import { pool } from "@/lib/pg";
+
+import { BRANDS } from "@/lib/brands";
 
 import { stage1Filter } from "./intensity";
 import { makeClaudePicker, makeStubPicker, type Picker } from "./pickBrand";
@@ -147,11 +153,13 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
       `${config.creatorId}:${rawInsert.rows[0]!.id}`,
     ]);
 
-    // 2. Last BRAND emit timestamp (cooldown anchor). Filter by kind so the
-    //    raw-chunk firehose (kind='raw') doesn't keep cooldown permanently active.
+    // 2. Last OFFER emit timestamp (cooldown anchor) — incluye pending,
+    //    accepted, rejected, expired. Sin esto el agent spamearía offers
+    //    (uno por chunk) si el usuario tarda en moderar. Status no influye:
+    //    una vez emitido un offer, esperamos cooldownMs antes del próximo.
     const lastEmitRes = await client.query<{ created_at: string }>(
       `select created_at from render_events
-        where creator_id = $1 and kind = 'brand'
+        where creator_id = $1 and kind = 'offer'
         order by created_at desc
         limit 1`,
       [config.creatorId],
@@ -209,16 +217,53 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
       return { decision: "skip:empty_message", stream_key: config.streamKey, chunk: meta, pick };
     }
 
-    // 5. Emit — kind='brand' so cooldown query picks it up next tick.
-    const insert = await client.query<{ id: string }>(
-      `insert into render_events (creator_id, message, kind)
-       values ($1, $2, 'brand')
-       returning id`,
-      [config.creatorId, pick.message.slice(0, 280)],
+    // 5. Emit OFFER — pending, esperando approve/reject del streamer en /dock.
+    //    El payload jsonb lleva todo lo que el dock necesita renderizar la
+    //    card sin re-fetch (brand_id, brand_label, bid, mensaje, zone, etc).
+    const brand = BRANDS.find((b) => b.id === pick.brand_id);
+    const bidUsdcCents = pick.bid_usdc != null ? Math.round(pick.bid_usdc * 100) : null;
+    const offerPayload = {
+      kind: "offer" as const,
+      status: "pending" as const,
+      brand_id: pick.brand_id,
+      brand_label: brand?.display_name ?? pick.brand_id,
+      brand_color: brand?.brand_color,
+      bid_usdc_cents: bidUsdcCents,
+      bid_usdc: pick.bid_usdc,
+      moment_quality: pick.moment_quality,
+      brand_match: pick.brand_match,
+      reason: pick.reason,
+      // Default zone para text-only — el agent no elige zone hoy. Cuando se
+      // agregue creative pre-gen, el zone vendrá del asset.
+      zone_id: "lower_third" as const,
+      duration_ms: 8_000,
+    };
+    const insert = await client.query<{ id: string; created_at: string }>(
+      `insert into render_events (creator_id, message, kind, status, bid_usdc_cents, payload)
+       values ($1, $2, 'offer', 'pending', $3, $4)
+       returning id, created_at`,
+      [
+        config.creatorId,
+        pick.message.slice(0, 280),
+        bidUsdcCents,
+        offerPayload,
+      ],
     );
     const event_id = insert.rows[0]!.id;
+    const created_at = insert.rows[0]!.created_at;
+
+    // pg_notify formato '<creator_id>:<event_id>:<json>' — el SSE handler
+    // lo splittea en los primeros dos colons. El JSON acá es lo que el dock
+    // recibe directo sin un fetch extra a la DB.
+    const sseEvent = {
+      id: event_id,
+      creator_id: config.creatorId,
+      created_at,
+      message: pick.message.slice(0, 280),
+      ...offerPayload,
+    };
     await client.query("select pg_notify('render_events', $1)", [
-      `${config.creatorId}:${event_id}`,
+      `${config.creatorId}:${event_id}:${JSON.stringify(sseEvent)}`,
     ]);
 
     return { decision: "emit", stream_key: config.streamKey, chunk: meta, pick, event_id };

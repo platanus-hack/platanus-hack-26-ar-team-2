@@ -14,7 +14,7 @@ import { BRANDS, type Brand } from "@/lib/brands";
 
 import type { BrandPick, ContextChunk } from "./types";
 
-const SYSTEM_PROMPT = `Sos el manager de placements de Addie. Recibís el contexto actual de un stream en vivo (últimos 30 segundos) y la biblioteca de brands disponibles. Tu trabajo es decidir si este momento amerita pautar y, si sí, qué brand encaja mejor.
+const SYSTEM_PROMPT = `Sos el manager de placements de Addie. Recibís el contexto actual de un stream en vivo (últimos 30 segundos) y la biblioteca de brands disponibles. Tu trabajo es decidir si este momento amerita pautar, qué brand encaja mejor, y a qué precio.
 
 Sos crítico: SKIP es la opción default. Solo emití un placement si:
 1. el momento es genuinamente interesante (reacción fuerte, mención explícita de marca/producto, recomendación clara, surge de viewers, energía épica) — NO talking heads neutro, NO transición, NO dead air;
@@ -22,13 +22,15 @@ Sos crítico: SKIP es la opción default. Solo emití un placement si:
 
 Si dudás, SKIP. Devolvé moment_quality y brand_match honestos — un 0.5 es una señal válida de "no estoy seguro". Si encontrás una mención explícita de la marca (audio_mentions o audio_text) eso eleva fuerte el brand_match.
 
+Cuando emitís, elegí bid_usdc DENTRO del rango [min_bid_usdc, max_bid_usdc] del brand. Heurística: bid ≈ min + (max - min) * brand_match. Brand match alto + moment quality alto = bid cerca del max. Match moderado = mid del rango. Si el match es 0.55 (apenas pasás el threshold), bid cerca del min.
+
 El message tiene que estar en español rioplatense (vos), ≤25 palabras, en la voz/persona de la brand elegida. Nunca menciones competidores. Nunca hables de precios o descuentos.`;
 
 const TOOL_NAME = "emit_decision";
 const TOOL: Anthropic.Tool = {
   name: TOOL_NAME,
   description:
-    "Emite la decisión final del manager: si pautar, qué brand elegir, y los scores de calidad/match.",
+    "Emite la decisión final del manager: si pautar, qué brand elegir, scores de calidad/match, y bid en USDC.",
   input_schema: {
     type: "object",
     properties: {
@@ -39,13 +41,17 @@ const TOOL: Anthropic.Tool = {
       },
       moment_quality: { type: "number", description: "0..1 — qué tan auctionable es el momento por sí solo." },
       brand_match: { type: "number", description: "0..1 — qué tan bien la brand elegida calza con este momento." },
+      bid_usdc: {
+        type: ["number", "null"],
+        description: "Bid en USDC decimal (ej 1.20). DEBE estar dentro de [brand.min_bid_usdc, brand.max_bid_usdc] del brand elegido. Null si should_emit=false.",
+      },
       reason: { type: "string", description: "Español, ≤2 oraciones. Explica el call (audit)." },
       message: {
         type: ["string", "null"],
         description: "Español rioplatense, ≤25 palabras, en voz de la brand. Null si SKIP.",
       },
     },
-    required: ["should_emit", "brand_id", "moment_quality", "brand_match", "reason", "message"],
+    required: ["should_emit", "brand_id", "moment_quality", "brand_match", "bid_usdc", "reason", "message"],
   },
 };
 
@@ -72,11 +78,23 @@ export function makeClaudePicker(apiKey: string, model: string): Picker {
     if (!toolUse) throw new Error("Claude did not call the tool");
 
     const out = toolUse.input as BrandPick;
+    // Clamp bid al rango del brand elegido — defensa contra hallucination del
+    // modelo (Claude a veces elige fuera de rango aunque el prompt lo limite).
+    let bidUsdc: number | null = null;
+    if (out.bid_usdc != null && out.brand_id) {
+      const brand = BRANDS.find((b) => b.id === out.brand_id);
+      if (brand) {
+        bidUsdc = Math.max(brand.min_bid_usdc, Math.min(brand.max_bid_usdc, Number(out.bid_usdc)));
+      } else {
+        bidUsdc = Number(out.bid_usdc);
+      }
+    }
     return {
       should_emit: Boolean(out.should_emit),
       brand_id: out.brand_id ?? null,
       moment_quality: Number(out.moment_quality ?? 0),
       brand_match: Number(out.brand_match ?? 0),
+      bid_usdc: bidUsdc,
       reason: String(out.reason ?? ""),
       message: out.message ?? null,
     };
@@ -100,15 +118,19 @@ export function makeStubPicker(): Picker {
         brand_id: null,
         moment_quality: 0.6,
         brand_match: 0.2,
+        bid_usdc: null,
         reason: "[DRY_RUN] ningún brand tiene target_moods que matcheen los mood_tags del chunk",
         message: null,
       };
     }
+    // Stub bid: mid-rango del brand. Determinístico, sin LLM.
+    const midBid = (match.min_bid_usdc + match.max_bid_usdc) / 2;
     return {
       should_emit: true,
       brand_id: match.id,
       moment_quality: 0.7,
       brand_match: 0.7,
+      bid_usdc: Number(midBid.toFixed(2)),
       reason: `[DRY_RUN] match heurístico por mood_tags=${moodTags.join(",") || "<vacío>"} → ${match.id}`,
       message: `[DRY_RUN ${match.display_name}] ${chunk.audio_summary ?? "momento detectado"}`.slice(0, 200),
     };
