@@ -37,16 +37,28 @@ const DATABASE_URL = dbUrl.toString();
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const BRANDS_DIR = process.env.BRANDS_DIR ?? join(__dirname, "..", "brands");
 
-// ─── SSE client registry ────────────────────────────────────────────
+// ─── SSE client registries ──────────────────────────────────────────
+//
+// Dos canales separados:
+//   - sseClients (eventos /events/:creator) → render_events para OBS overlay
+//   - requestsClients (/requests/:creator)  → placement_requests para Dock
+// Misma forma de registry, broadcast independiente para que un cliente del
+// Dock no reciba ads ya aprobados y vice-versa.
 
 type SSEClient = {
   res: http.ServerResponse;
   heartbeat: ReturnType<typeof setInterval>;
 };
 const sseClients = new Map<string, Set<SSEClient>>();
+const requestsClients = new Map<string, Set<SSEClient>>();
 
-function broadcastSSE(creatorId: string, eventName: string, data: string) {
-  const clients = sseClients.get(creatorId);
+function broadcastTo(
+  registry: Map<string, Set<SSEClient>>,
+  creatorId: string,
+  eventName: string,
+  data: string,
+) {
+  const clients = registry.get(creatorId);
   if (!clients || clients.size === 0) return;
   const msg = `event: ${eventName}\ndata: ${data}\n\n`;
   for (const c of clients) {
@@ -56,6 +68,14 @@ function broadcastSSE(creatorId: string, eventName: string, data: string) {
       clients.delete(c);
     }
   }
+}
+
+function broadcastSSE(creatorId: string, eventName: string, data: string) {
+  broadcastTo(sseClients, creatorId, eventName, data);
+}
+
+function broadcastRequest(creatorId: string, eventName: string, data: string) {
+  broadcastTo(requestsClients, creatorId, eventName, data);
 }
 
 // ─── Main ───────────────────────────────────────────────────────────
@@ -155,6 +175,44 @@ async function main() {
     broadcastSSE(creatorId, "render", json);
   });
 
+  // 4b. LISTEN placement_requests_new + placement_requests_status (Dock SSE)
+  const requestsListener = new Client({
+    connectionString: DATABASE_URL,
+    ssl: sslConfig,
+  });
+  await requestsListener.connect();
+  await requestsListener.query("LISTEN placement_requests_new");
+  await requestsListener.query("LISTEN placement_requests_status");
+  console.log("[worker] LISTEN placement_requests_{new,status} — Dock SSE ready");
+
+  requestsListener.on("notification", (n) => {
+    if (!n.payload) return;
+
+    if (n.channel === "placement_requests_new") {
+      // payload format: <creator_id>:<request_id>:<json row>
+      const firstColon = n.payload.indexOf(":");
+      const secondColon = n.payload.indexOf(":", firstColon + 1);
+      if (firstColon === -1 || secondColon === -1) return;
+      const creatorId = n.payload.slice(0, firstColon);
+      const json = n.payload.slice(secondColon + 1);
+      broadcastRequest(creatorId, "request_new", json);
+      return;
+    }
+
+    if (n.channel === "placement_requests_status") {
+      // payload format: <creator_id>:<request_id>:<status>
+      const parts = n.payload.split(":");
+      if (parts.length < 3) return;
+      const [creatorId, requestId, status] = parts as [string, string, string];
+      broadcastRequest(
+        creatorId,
+        "request_status",
+        JSON.stringify({ id: requestId, status }),
+      );
+      return;
+    }
+  });
+
   // 5. HTTP server
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url!, `http://localhost:${PORT}`);
@@ -215,6 +273,58 @@ async function main() {
       return;
     }
 
+    // GET /requests/:creator_id — SSE stream para Dock (placement_requests).
+    // Al conectar, replay de los pending actuales como `request_new` events para
+    // que el Dock no quede vacío hasta que aparezca uno nuevo.
+    const requestsMatch = url.pathname.match(/^\/requests\/(.+)$/);
+    if (requestsMatch && req.method === "GET") {
+      const creatorId = decodeURIComponent(requestsMatch[1]);
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no",
+      });
+      res.write(
+        `event: hello\ndata: ${JSON.stringify({ creator_id: creatorId, channel: "requests", ts: Date.now() })}\n\n`,
+      );
+
+      // Catch-up: reenviar los pending no expirados al cliente recién conectado
+      try {
+        const pending = await pool.query(
+          `select row_to_json(p) as row
+             from placement_requests p
+            where creator_id = $1
+              and status = 'pending'
+              and expires_at > now()
+            order by created_at asc`,
+          [creatorId],
+        );
+        for (const r of pending.rows) {
+          res.write(`event: request_new\ndata: ${JSON.stringify(r.row)}\n\n`);
+        }
+      } catch (err) {
+        console.error("[worker] catch-up failed:", err);
+      }
+
+      if (!requestsClients.has(creatorId)) requestsClients.set(creatorId, new Set());
+      const heartbeat = setInterval(() => {
+        try {
+          res.write(`: heartbeat ${Date.now()}\n\n`);
+        } catch {
+          /* ignore */
+        }
+      }, 25_000);
+      const client: SSEClient = { res, heartbeat };
+      requestsClients.get(creatorId)!.add(client);
+
+      req.on("close", () => {
+        clearInterval(heartbeat);
+        requestsClients.get(creatorId)?.delete(client);
+      });
+      return;
+    }
+
     // POST /trigger/:stream_key — manual tick trigger
     const triggerMatch = url.pathname.match(/^\/trigger\/(.+)$/);
     if (triggerMatch && req.method === "POST") {
@@ -251,16 +361,26 @@ async function main() {
     }
 
     res.writeHead(404, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "not found", endpoints: ["/health", "/events/:creator_id", "/trigger/:stream_key", "/brands"] }));
+    res.end(JSON.stringify({
+      error: "not found",
+      endpoints: [
+        "/health",
+        "/events/:creator_id",
+        "/requests/:creator_id",
+        "/trigger/:stream_key",
+        "/brands",
+      ],
+    }));
   });
 
   server.listen(PORT, () => {
     console.log(`[worker] HTTP server on :${PORT}`);
     console.log(`[worker] endpoints:`);
-    console.log(`  GET  /health              — status`);
-    console.log(`  GET  /events/:creator_id  — SSE stream`);
-    console.log(`  POST /trigger/:stream_key — manual tick`);
-    console.log(`  GET  /brands              — loaded brands`);
+    console.log(`  GET  /health               — status`);
+    console.log(`  GET  /events/:creator_id   — SSE render_events (OBS overlay)`);
+    console.log(`  GET  /requests/:creator_id — SSE placement_requests (Dock)`);
+    console.log(`  POST /trigger/:stream_key  — manual tick`);
+    console.log(`  GET  /brands               — loaded brands`);
   });
 
   // Graceful shutdown
@@ -269,6 +389,7 @@ async function main() {
     server.close();
     await chunkListener.end().catch(() => {});
     await renderListener.end().catch(() => {});
+    await requestsListener.end().catch(() => {});
     await pool.end().catch(() => {});
     process.exit(0);
   };

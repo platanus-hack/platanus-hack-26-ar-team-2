@@ -54,6 +54,11 @@ export type LoadedBrand = {
     zone?: string;
     duration_ms?: number;
   };
+  // Bid bounds del YAML (min_bid_usdc / max_bid_usdc del BrandMandate).
+  // El tick los usa para proponer un bid lerpeado contra brand_match — el
+  // creator ve este número en el Dock al decidir approve/deny.
+  min_bid_usdc?: number;
+  max_bid_usdc?: number;
 };
 
 export type TickResult = {

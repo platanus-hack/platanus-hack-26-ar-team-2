@@ -69,9 +69,11 @@ function makeLiveHooks(rows: PlacementRow[]): DockHooks {
 export default function DockWrapper({
   demo,
   recentPlacements,
+  creatorId,
 }: {
   demo: boolean;
   recentPlacements: PlacementRow[];
+  creatorId: string;
 }) {
   const hooks = useMemo(
     () => (demo ? makeDemoHooks() : makeLiveHooks(recentPlacements)),
@@ -81,7 +83,7 @@ export default function DockWrapper({
 
   return (
     <main className="p-0">
-      <DockClient hooks={hooks} />
+      <DockClient hooks={hooks} creatorId={creatorId} demo={demo} />
     </main>
   );
 }
