@@ -126,3 +126,50 @@ Speakers TBD.
 - `docs/DEMO_RUNBOOK.md` — runbook con setup físico, hardware, fallback plan, Q&A esperado.
 - `DESIGN.md §4` — agent topology y event flow.
 - `DESIGN.md §16` — pitch line de una sola frase (puede que necesite update post-pivote).
+
+---
+
+## Feedback de coaching y criterios de jueces (capturado 2026-05-09, pre-demo)
+
+> Notas crudas del briefing pre-demo. **Todavía NO están reflejadas en el pitch de arriba** — lock de narrativa a las **06:00 del 2026-05-10**. Después de esa hora, solo retoques de fraseo.
+
+### Contexto del pitch
+
+- **De 0 a producto en 36 días.** Hay que mostrar **qué hicimos** (no solo qué imaginamos).
+- **Tiempos en escenario:**
+  - 3 min de pitch (estructura actual del doc)
+  - **2 min de Q&A con jueces** — respuestas buenas y rápidas
+  - 1 min de jueces juzgando sin nosotros
+- **4 jueces.**
+
+### Criterios de evaluación (con pesos)
+
+| Criterio | Peso |
+|---|---|
+| Aspecto técnico | **25%** |
+| Ambición | 20% |
+| Ejecución | 20% |
+| Impacto | 20% |
+| Originalidad | 15% |
+
+### Estructura sugerida por el coaching
+
+| Bloque | Tiempo |
+|---|---|
+| Problema | ~20s |
+| Solución + impacto + ambición | ~20–30s |
+| Demo + cómo lo resuelven | resto |
+
+### Preguntas que el pitch tiene que responder de entrada
+
+- ¿Cuál es el problema?
+- ¿A quién afecta?
+- ¿Qué tan relevante es?
+- ¿Por qué no está resuelto todavía?
+
+### Notas finas
+
+- **Explicar qué usamos en la solución sin ser detallistas.** Mencionar el stack lo justo — los jueces no quieren un tour por cada librería; quieren entender la arquitectura agentic + on-chain.
+- **Mencionar a cuántos apuntábamos vs. cuánto logramos avanzar — con pinza.** Sirve para "ambición" + "ejecución", pero sobreprometer mata credibilidad.
+- **Evitar títulos genéricos ("Problema", "Solución", "Demo").** Cada título tiene que llevar un mensaje en sí mismo — el jurado tiene que captar la idea aunque solo lea los headers. Ejemplo malo: *"Solución"*. Ejemplo bueno: *"El streamer chico factura 20× más por hora de stream"* / *"Cada minuto de stream tiene 20 slots ocultos"* / *"Las marcas pagan por encajar, no por aparecer"*. Aplica a slides de overlay, headers de bloques y cualquier caption que aparezca en cámara.
+- **Lock de narrativa a las 06:00.** Después de eso solo cambios de fraseo, no de estructura.
