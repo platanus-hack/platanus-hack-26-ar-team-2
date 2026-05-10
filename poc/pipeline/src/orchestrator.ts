@@ -187,26 +187,52 @@ export function startSession(session: StreamSession, opts?: StartSessionOptions)
     })
     .catch((e) => log.warn(`[transcribe ${key}] start failed: ${e instanceof Error ? e.message : e}`));
 
-  startFrameAnalysis(key)
-    .then((handle) => {
-      const active = sessions.get(key);
-      if (active && handle) active.frame = handle;
-    })
-    .catch((e) => log.warn(`[frame ${key}] start failed: ${e instanceof Error ? e.message : e}`));
+  // Frame analysis (Claude Haiku vision @ FRAME_FPS) está apagado por default
+  // desde 2026-05-09 para el demo: el agent es 100% audio-driven (keyword en
+  // partial transcript → flush instantáneo del chunk → manager-tick). El frame
+  // analysis era info extra para el picker (scene_type, mood_tags) pero su
+  // costo (RPM Anthropic + ~$0.001 por frame) no se justifica si el match ya
+  // pega solo con keyword + audio_text. Encendelo si querés que el picker
+  // tenga contexto visual:  FRAME_ANALYSIS_ENABLED=true
+  if (process.env.FRAME_ANALYSIS_ENABLED === 'true') {
+    startFrameAnalysis(key)
+      .then((handle) => {
+        const active = sessions.get(key);
+        if (active && handle) active.frame = handle;
+      })
+      .catch((e) => log.warn(`[frame ${key}] start failed: ${e instanceof Error ? e.message : e}`));
+  } else {
+    log.info(`[frame ${key}] disabled (FRAME_ANALYSIS_ENABLED!=true) — pipeline 100% audio-driven`);
+  }
 
-  startTwitchPoll(key, twitchChannel)
-    .then((handle) => {
-      const active = sessions.get(key);
-      if (active && handle) active.twitch = handle;
-    })
-    .catch((e) => log.warn(`[twitch ${key}] start failed: ${e instanceof Error ? e.message : e}`));
+  // Twitch Helix poll (viewers, game_category, stream_title) — DEFAULT ON.
+  // Viewers + viewers_delta_30s son señal valiosa para Stage 1 (gatea ads en
+  // momentos virales: raid, bombazo de viewers, etc) y para el pitch.
+  // Apagar explícitamente:  TWITCH_POLL_ENABLED=false
+  if (process.env.TWITCH_POLL_ENABLED !== 'false') {
+    startTwitchPoll(key, twitchChannel)
+      .then((handle) => {
+        const active = sessions.get(key);
+        if (active && handle) active.twitch = handle;
+      })
+      .catch((e) => log.warn(`[twitch ${key}] start failed: ${e instanceof Error ? e.message : e}`));
+  } else {
+    log.info(`[twitch ${key}] disabled (TWITCH_POLL_ENABLED=false)`);
+  }
 
-  startChat(key, twitchChannel)
-    .then((handle) => {
-      const active = sessions.get(key);
-      if (active && handle) active.chat = handle;
-    })
-    .catch((e) => log.warn(`[chat ${key}] start failed: ${e instanceof Error ? e.message : e}`));
+  // Chat (tmi.js IRC anonymous read-only) está apagado por default desde
+  // 2026-05-09. El chunkWriter ya no lee chat_velocity / sentiment / etc.
+  // Encender:  CHAT_ENABLED=true
+  if (process.env.CHAT_ENABLED === 'true') {
+    startChat(key, twitchChannel)
+      .then((handle) => {
+        const active = sessions.get(key);
+        if (active && handle) active.chat = handle;
+      })
+      .catch((e) => log.warn(`[chat ${key}] start failed: ${e instanceof Error ? e.message : e}`));
+  } else {
+    log.info(`[chat ${key}] disabled (CHAT_ENABLED!=true)`);
+  }
 
   startRealtimeBus(key)
     .then((handle) => {

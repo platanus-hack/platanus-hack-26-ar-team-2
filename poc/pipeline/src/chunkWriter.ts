@@ -3,16 +3,68 @@ import type { TranscribeHandle } from './transcribe.js';
 import type { FrameHandle } from './frame.js';
 import type { TwitchHandle } from './twitch.js';
 import type { ChatHandle } from './chat.js';
-import { summarizeAudio } from './audioSummary.js';
 import { log } from './log.js';
 
-// Default 15s — bajado desde 30s el 2026-05-09 para que el manager-worker
-// pueda decidir más rápido sobre placements (1 decisión / 15s en vez de / 30s).
-// Trade-off: duplica las calls a Gemini Flash-Lite del audio summary (4 RPM en
-// vez de 2). Suma a frame analysis (~12-15 RPM con FRAME_FPS=0.5) → estamos en
-// ~16-19 RPM, justo encima de 15 RPM del free tier de Google AI Studio. Si
-// chocás rate-limits, bajá FRAME_FPS a 0.33 o pagá credits.
+// audio_summary IA fue removido del fast-path el 2026-05-09 — mataba 1-3s
+// por chunk en una call a Claude Haiku que solo se usaba para que Stage 1
+// (intensity.ts) tuviera audio_mentions / audio_intent. Como el chunkWriter
+// YA sabe qué keyword disparó el flush instantáneo, podemos populate esos
+// campos sin LLM. El picker (Stage 2) lee audio_text crudo directamente y
+// extrae lo que necesita on-demand. summarizeAudio.ts queda en disco por si
+// hace falta volver a habilitarlo, pero NO se importa.
+
+// Default 15s — bajado desde 30s el 2026-05-09. Es el techo del worst-case:
+// con instant-flush por keyword (abajo) la mayoría de los chunks salen mucho
+// más rápido. Trade-off vs RPM del provider: 15s + keyword flushes ocasionales
+// nos deja holgados con Anthropic tier 1 (50 RPM).
 const CHUNK_INTERVAL_MS = Number(process.env.CHUNK_INTERVAL_MS ?? 15_000);
+
+// Instant-flush keywords. Si una palabra de esta lista aparece en el partial
+// transcript (o en el audio committed de la ventana actual), gatillamos un
+// writeChunk() YA — sin esperar al próximo CHUNK_INTERVAL_MS. Idea: alinear
+// esto con los `audio_mentions` que les interesan a los mandates de los brands
+// (ej "quilmes,fernet,banana,messi"). Vacío → poll desactivado y vuelve al
+// comportamiento clásico cada 15s.
+//
+// Debounce per-keyword 30s (KEYWORD_DEBOUNCE_MS) — matchea el cooldown del
+// manager-tick. Una segunda mención dentro de 30s se ignora porque igual el
+// agent estaría en cooldown y no emitiría placement.
+const FLUSH_KEYWORDS = (process.env.INSTANT_FLUSH_KEYWORDS ?? '')
+  .split(',')
+  .map((s) => s.trim().toLowerCase())
+  .filter((s) => s.length > 0);
+const KEYWORD_POLL_MS = Number(process.env.KEYWORD_POLL_MS ?? 500);
+const KEYWORD_DEBOUNCE_MS = 30_000;
+
+// Webhook al manager-tick cuando un chunk acaba de insertarse. Push-based →
+// el agent corre 1-2s después del INSERT en lugar de esperar al próximo tick
+// del cron de Vercel (que tiene gaps de hasta 6s entre invocaciones). El cron
+// queda como safety net.
+//   MANAGER_WEBHOOK_URL    — base URL del deploy de apps/web (ej "https://web-x.vercel.app")
+//   MANAGER_WEBHOOK_SECRET — = CRON_SECRET en apps/web. Sin esto, el endpoint
+//                            queda público — el route lo permite si CRON_SECRET
+//                            no está seteado del lado server, así que tampoco
+//                            es estrictamente requerido para que funcione.
+function fireManagerWebhook(streamKey: string): void {
+  const base = process.env.MANAGER_WEBHOOK_URL;
+  if (!base) return;
+  const secret = process.env.MANAGER_WEBHOOK_SECRET;
+  const target = `${base.replace(/\/$/, '')}/api/internal/manager-tick?key=${encodeURIComponent(streamKey)}&single=1`;
+  // Fire-and-forget — no awaiteamos así no bloquea el próximo writeChunk si
+  // el manager está lento (ej una pickBrand tarda 2s con Claude Haiku). El
+  // .catch() previene unhandled rejection que mataría el pipeline.
+  fetch(target, {
+    method: 'GET',
+    headers: secret ? { Authorization: `Bearer ${secret}` } : {},
+  })
+    .then((r) => {
+      if (!r.ok) log.warn(`[chunk ${streamKey}] manager webhook → ${r.status}`);
+    })
+    .catch((e) => {
+      const msg = e instanceof Error ? e.message : String(e);
+      log.warn(`[chunk ${streamKey}] manager webhook error: ${msg}`);
+    });
+}
 
 export interface ChunkSources {
   streamKey: string;
@@ -31,31 +83,32 @@ export interface ChunkWriterHandle {
   stop(): Promise<void>;
 }
 
+// Schema reducido — del row anterior con 22 columnas, solo persistimos las
+// que el agent realmente lee + viewers (importantes para Stage 1 fallback +
+// para mostrar contexto al pitch). El resto de las columnas en context_chunks
+// quedan en NULL (todas nullable salvo ticks/frame_aggregated con default 0).
+//
+// Lo que NO escribimos y por qué:
+//   - stream_id              → siempre null en POC (no creamos fila en streams)
+//   - audio_partial_at_end   → solo debug, nadie lo lee
+//   - audio_topics           → frame/summary apagados → nadie lo populate
+//   - scene_type, energy_level, mood_tags, on_screen_text → frame off
+//   - chat_velocity_*, chat_recent_keywords, sentiment_avg → chat off
+//   - game_category, stream_title → no se usan downstream
+//   - duration_s             → tiene default 30 en DB
+//   - ticks_aggregated, frame_analyses_aggregated → default 0 en DB
 interface ChunkRow {
   stream_key: string;
-  stream_id: string | null;
   ts_start: string;
-  duration_s: number;
   audio_text: string | null;
-  audio_partial_at_end: string | null;
   audio_summary: string | null;
-  audio_topics: string[] | null;
   audio_mentions: string[] | null;
   audio_intent: 'discussion' | 'recommendation' | 'complaint' | 'question' | 'reaction' | 'silence' | null;
-  scene_type: string | null;
-  energy_level: 'calm' | 'medium' | 'high' | 'epic' | null;
-  mood_tags: string[];
-  on_screen_text: string | null;
-  chat_velocity_avg: number | null;
-  chat_velocity_peak: number | null;
-  chat_recent_keywords: string[] | null;
-  sentiment_avg: 'positive' | 'neutral' | 'negative' | 'hype' | null;
+  // Viewers — lee Stage 1 (intensity.ts) como fallback signal: si delta>100
+  // gatea aun sin keyword match. Útil para captar momentos virales (raid,
+  // bombazo de viewers) sin necesitar trigger word del streamer.
   viewers: number | null;
   viewers_delta_30s: number | null;
-  game_category: string | null;
-  stream_title: string | null;
-  ticks_aggregated: number;
-  frame_analyses_aggregated: number;
 }
 
 /**
@@ -79,94 +132,80 @@ export function startChunkWriter(sources: ChunkSources): ChunkWriterHandle {
 
   let active = true;
   let chunkCount = 0;
-  let lastTickCount = 0;
-  let lastFrameCount = 0;
-  let lastViewers: number | null = null;
   let windowStartedAt = Date.now();
+  // Viewers tracking entre chunks → calcula delta vs el chunk anterior. Reset
+  // a null al perder señal de twitch (offline, 401, etc) → el delta del próximo
+  // chunk es null tampoco y Stage 1 lo skipea graciosamente.
+  let lastViewers: number | null = null;
+  // Mutex — los dos triggers (setInterval CHUNK_INTERVAL_MS + keyword poll)
+  // pueden firear al mismo tiempo. Sin esto, dos writeChunk concurrentes
+  // duplicarían rows + romperían el cálculo de deltas (ticksAggregated etc).
+  let writing = false;
+  const lastKeywordFlushAt = new Map<string, number>();
 
-  const writeChunk = async (): Promise<void> => {
+  const writeChunk = async (
+    trigger: 'interval' | 'keyword' | 'final' = 'interval',
+    matchedKeyword?: string,
+  ): Promise<void> => {
     if (!active && chunkCount > 0) return; // evita doble write en stop()
+    if (writing) return; // otro writeChunk en curso, este trigger se descarta
+    writing = true;
+    // Declarado fuera del try para que el webhook fire post-finally pueda leerlo.
+    let inserted = false;
 
+    try {
     chunkCount += 1;
     const now = Date.now();
-    const tsStart = new Date(windowStartedAt).toISOString();
-    const durationS = Math.round((now - windowStartedAt) / 1000);
+    // Capturamos prevWindowStart ANTES de mover windowStartedAt — es el ts
+    // que pasamos a getCommittedSince() para traer SOLO audio nuevo desde el
+    // último chunk (sin redundancia con el rolling window de transcribe).
+    const prevWindowStart = windowStartedAt;
+    const tsStart = new Date(prevWindowStart).toISOString();
+    const durationS = Math.round((now - prevWindowStart) / 1000);
     windowStartedAt = now;
 
     const transcribe = sources.transcribe();
-    const frame = sources.frame();
-    const twitch = sources.twitch();
-    const chat = sources.chat();
+    // audio_text = SOLO commits dentro de (prevWindowStart, now). Si el
+    // anterior chunk persistió "che, una banana" hace 5s, este chunk NO lo
+    // re-incluye — solo lo nuevo. El rolling window de transcribe sigue
+    // usándose para keyword detection (checkKeywords abajo) que sí necesita
+    // mirar un toque atrás.
+    const audio_text = transcribe?.getCommittedSince(prevWindowStart) || null;
 
-    const ticksNow = sources.getTickCount();
-    const framesNow = sources.getFrameCount();
-    const ticksAggregated = ticksNow - lastTickCount;
-    const framesAggregated = framesNow - lastFrameCount;
-    lastTickCount = ticksNow;
-    lastFrameCount = framesNow;
-
-    const frameLatest = frame?.getLatest();
-    const tw = twitch?.getLatest();
-    const chatMetrics = chat?.getMetrics() ?? null;
-
+    // Twitch Helix metrics — solo si TWITCH_POLL_ENABLED. Sino getter devuelve
+    // null y los campos quedan en null (Stage 1 los skipea graciosamente).
+    const tw = sources.twitch()?.getLatest();
     const viewers = tw?.is_live ? tw.viewers : null;
-    const viewersDelta = lastViewers !== null && viewers !== null ? viewers - lastViewers : null;
+    const viewersDelta =
+      lastViewers !== null && viewers !== null ? viewers - lastViewers : null;
     if (viewers !== null) lastViewers = viewers;
 
-    const audio_text = transcribe?.getAudio30s() || null;
-    const audio_partial = transcribe?.getPartial() || null;
-
-    // Pre-procesa el audio_text con Gemini Flash UNA vez por chunk → ahorra
-    // re-procesamiento por parte de cada brand-agent. Si la call falla o no
-    // hay AI_GATEWAY_API_KEY, el chunk se escribe igual con summary=NULL.
-    const summary = audio_text
-      ? await summarizeAudio(sources.streamKey, {
-          audioText: audio_text,
-          sceneType: frameLatest?.result.scene_type,
-          onScreenText: frameLatest?.result.on_screen_text,
-          gameCategory: tw?.game_category,
-        })
-      : null;
+    // Sin LLM summary. Cuando el flush lo dispara una keyword, populamos
+    // audio_mentions + audio_intent directo (Stage 1 los lee para gate).
+    // Stage 2 (pickBrand) lee audio_text crudo así que no pierde info.
+    const audio_summary = matchedKeyword ? `streamer mencionó: ${matchedKeyword}` : null;
+    const audio_mentions = matchedKeyword ? [matchedKeyword] : null;
+    const audio_intent: ChunkRow['audio_intent'] = matchedKeyword ? 'recommendation' : null;
 
     const chunk: ChunkRow = {
       stream_key: sources.streamKey,
-      stream_id: null, // POC: no creamos fila en streams. Lo llena el handler real en apps/web.
       ts_start: tsStart,
-      duration_s: durationS,
-
       audio_text,
-      audio_partial_at_end: audio_partial,
-      audio_summary: summary?.summary ?? null,
-      audio_topics: summary?.topics ?? null,
-      audio_mentions: summary?.mentions ?? null,
-      audio_intent: summary?.intent ?? null,
-
-      scene_type: frameLatest?.result.scene_type ?? null,
-      energy_level: frameLatest?.result.energy_level ?? null,
-      mood_tags: frameLatest?.result.mood_tags ?? [],
-      on_screen_text: frameLatest?.result.on_screen_text ?? null,
-
-      // Chat (tmi.js — métricas crudas del chat de Twitch en la ventana de 30s).
-      chat_velocity_avg: chatMetrics?.velocity_avg ?? null,
-      chat_velocity_peak: chatMetrics?.velocity_peak ?? null,
-      chat_recent_keywords: chatMetrics?.recent_keywords ?? null,
-      sentiment_avg: chatMetrics?.sentiment ?? null,
-
+      audio_summary,
+      audio_mentions,
+      audio_intent,
       viewers,
       viewers_delta_30s: viewersDelta,
-      game_category: tw?.game_category || null,
-      stream_title: tw?.stream_title || null,
-
-      ticks_aggregated: ticksAggregated,
-      frame_analyses_aggregated: framesAggregated,
     };
 
+    const textPreview = audio_text
+      ? audio_text.slice(0, 80) + (audio_text.length > 80 ? '…' : '')
+      : '—';
     log.success(
-      `[chunk ${sources.streamKey}] #${chunkCount} · ${ticksAggregated} ticks · ${framesAggregated} frames · ` +
-        `viewers=${viewers ?? '—'} (Δ${viewersDelta ?? '—'}) · ` +
-        `chat=${chatMetrics ? `${chatMetrics.velocity_avg.toFixed(1)}msg/s ${chatMetrics.sentiment}` : '—'} · ` +
-        `scene="${chunk.scene_type ?? '—'}" · ` +
-        `audio=${summary ? `${summary.intent} topics=[${summary.topics.join(',')}] mentions=[${summary.mentions.join(',')}]` : '—'}`,
+      `[chunk ${sources.streamKey}] #${chunkCount} (${trigger}) · ${durationS}s · ` +
+        `viewers=${viewers ?? '—'}${viewersDelta != null ? ` (Δ${viewersDelta >= 0 ? '+' : ''}${viewersDelta})` : ''} · ` +
+        `audio=${matchedKeyword ? `keyword="${matchedKeyword}" intent=recommendation` : '—'} · ` +
+        `text="${textPreview}"`,
     );
 
     if (supabase) {
@@ -206,24 +245,73 @@ export function startChunkWriter(sources: ChunkSources): ChunkWriterHandle {
             insert_ms: insertMs,
           }),
         );
+        // Solo si el INSERT pasó disparamos el webhook al manager-tick.
+        inserted = true;
       }
     } else {
       // Log a consola para visibilidad sin DB.
       console.log(`[chunk ${sources.streamKey}] payload:`, JSON.stringify(chunk, null, 2));
     }
+    } finally {
+      // Garantizá liberar el mutex incluso si algo throweó arriba (network blip,
+      // bug en summarizeAudio etc) — sin esto el flag queda colgado y nunca más
+      // se escriben chunks: silent dead pipeline.
+      writing = false;
+    }
+
+    // Push: notificá al manager-tick que hay un chunk nuevo. Solo si el INSERT
+    // efectivo pasó (sino el agent miraría la DB y no encontraría nada nuevo).
+    // Fire-and-forget — el próximo writeChunk no espera a esta call.
+    if (inserted) fireManagerWebhook(sources.streamKey);
   };
 
-  const interval = setInterval(writeChunk, CHUNK_INTERVAL_MS);
+  // Keyword poll — corre cada KEYWORD_POLL_MS si la lista no está vacía. Mira
+  // el partial actual + el committed audio de la ventana. Si encuentra una
+  // keyword no flusheada en los últimos 30s, dispara writeChunk('keyword').
+  const checkKeywords = (): void => {
+    if (!FLUSH_KEYWORDS.length) return;
+    const t = sources.transcribe();
+    if (!t) return;
+    const partial = (t.getPartial() || '').toLowerCase();
+    const committed = (t.getAudio30s() || '').toLowerCase();
+    const combined = `${committed} ${partial}`;
+    if (!combined.trim()) return;
+
+    const ts = Date.now();
+    for (const kw of FLUSH_KEYWORDS) {
+      if (!combined.includes(kw)) continue;
+      const last = lastKeywordFlushAt.get(kw) ?? 0;
+      if (ts - last < KEYWORD_DEBOUNCE_MS) continue;
+      lastKeywordFlushAt.set(kw, ts);
+      log.info(`[chunk ${sources.streamKey}] 🚨 keyword "${kw}" detectada → flush instantáneo`);
+      // Pasamos la keyword matched para que writeChunk pueda populate
+      // audio_mentions sin pegarle al LLM — Stage 1 ya pasa con eso.
+      void writeChunk('keyword', kw);
+      return; // un flush por cycle alcanza
+    }
+  };
+
+  const interval = setInterval(() => void writeChunk('interval'), CHUNK_INTERVAL_MS);
+  const keywordPoll = FLUSH_KEYWORDS.length
+    ? setInterval(checkKeywords, KEYWORD_POLL_MS)
+    : null;
+
+  const webhookHint = process.env.MANAGER_WEBHOOK_URL ? ' · webhook=on' : '';
+  const keywordHint = FLUSH_KEYWORDS.length
+    ? ` · keywords=[${FLUSH_KEYWORDS.join(',')}] poll=${KEYWORD_POLL_MS}ms`
+    : '';
   log.info(
-    `[chunk ${sources.streamKey}] writer arrancado · cada ${CHUNK_INTERVAL_MS}ms${supabase ? ' → Supabase' : ' → console'}`,
+    `[chunk ${sources.streamKey}] writer arrancado · cada ${CHUNK_INTERVAL_MS}ms${supabase ? ' → Supabase' : ' → console'}${webhookHint}${keywordHint}`,
   );
 
   return {
     stop: async () => {
       clearInterval(interval);
-      // Último chunk parcial al cerrar (puede ser <30s pero captura los últimos datos).
+      if (keywordPoll) clearInterval(keywordPoll);
+      // Último chunk parcial al cerrar (puede ser <CHUNK_INTERVAL_MS pero
+      // captura los últimos datos antes del session end).
       try {
-        await writeChunk();
+        await writeChunk('final');
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         log.warn(`[chunk ${sources.streamKey}] final write failed: ${msg}`);

@@ -69,19 +69,22 @@ function makeLiveHooks(rows: PlacementRow[]): DockHooks {
 export default function DockWrapper({
   demo,
   recentPlacements,
+  creatorId,
 }: {
   demo: boolean;
   recentPlacements: PlacementRow[];
+  /** Stream del creator a moderar. Sin esto el dock no abre la SSE de offers
+   *  (queda en modo display-only del historial). */
+  creatorId?: string;
 }) {
   const hooks = useMemo(
     () => (demo ? makeDemoHooks() : makeLiveHooks(recentPlacements)),
     [demo, recentPlacements],
   );
 
-
   return (
     <main className="p-0">
-      <DockClient hooks={hooks} />
+      <DockClient hooks={hooks} creatorId={creatorId} />
     </main>
   );
 }

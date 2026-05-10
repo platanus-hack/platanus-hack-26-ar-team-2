@@ -28,9 +28,11 @@ export interface RenderEventPayload {
    * Tipo de evento:
    *   'render' = mensaje text-only desde POST /render (default)
    *   'raw'    = dump del context_chunk completo (firehose del manager-tick cron, every 5s)
-   *   'brand'  = placement ganado de una subasta (lo que rendereamos en pantalla)
+   *   'offer'  = candidato del agent esperando approve/reject del streamer
+   *              (consumido por /dock, NO por el overlay — el overlay lo filtra)
+   *   'brand'  = placement aprobado, sale en pantalla via overlay SSE
    */
-  kind?: "render" | "raw" | "brand";
+  kind?: "render" | "raw" | "brand" | "offer";
 
   // ─── opcional · text-only mode ────────────────────────────────────
   message?: string;

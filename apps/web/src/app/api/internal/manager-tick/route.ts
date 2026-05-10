@@ -1,25 +1,28 @@
 /**
  * GET /api/internal/manager-tick
  *
- * Vercel-Cron-driven entrypoint for the manager (C-08m-cron). Runs the same
- * Stage1+Stage2 logic as the standalone worker — see `lib/manager/tick.ts`.
+ * Dos modos:
  *
- * Cadence: every tick emits a `raw_chunk` render_event with the full chunk
- * JSON, plus optionally a brand placement when Stage1+Stage2 pass.
- * Vercel Cron's minimum is 60s, so we self-pace inside a single invocation:
- * run tick, wait MANAGER_INTERNAL_GAP_MS (default 5000ms), repeat — until
- * we're close to maxDuration. ~11 ticks per cron invocation @ 5s gap.
+ *   1. Cron (default) — Vercel cron firea cada minuto (apps/web/vercel.json).
+ *      Self-pace adentro de la invocación: run tick, wait
+ *      MANAGER_INTERNAL_GAP_MS (default 5s), repeat hasta MANAGER_RUN_BUDGET_MS
+ *      (default 54s) → ~11 ticks por invocación. Safety net por si el webhook
+ *      del pipeline falla, o para procesar chunks viejos que el agent no
+ *      alcanzó cuando llegó el push.
  *
- * Auth: if `CRON_SECRET` is set in env, the route requires
- *       `Authorization: Bearer <CRON_SECRET>`. Vercel Cron auto-attaches that
- *       header when `CRON_SECRET` is configured. Without the env var the
- *       route is publicly callable — only OK for local smoke / preview.
+ *   2. Single-tick (push-based) — el chunkWriter (poc/pipeline) firea esto
+ *      después de cada INSERT con `?single=1`. Corre UN tick (1-2s) y vuelve.
+ *      Latencia agent baja a <2s desde el INSERT en lugar de los 0-6s del
+ *      cron worst-case. Ver chunkWriter.ts:fireManagerWebhook().
  *
- * Schedule: see apps/web/vercel.json `crons` (every minute on Pro plan).
+ * Auth: si `CRON_SECRET` está en env, requiere `Authorization: Bearer <secret>`.
+ *       Vercel Cron lo attachea solo. El chunkWriter manda el mismo header
+ *       desde MANAGER_WEBHOOK_SECRET. Sin la env var, el route es público
+ *       (solo OK para local smoke / preview).
  *
- * Stream key: `?key=<stream_key>` overrides `MANAGER_STREAM_KEY` env default.
+ * Stream key: `?key=<stream_key>` (default MANAGER_STREAM_KEY env).
  *
- * Returns array of TickResults — Vercel function logs are the audit trail.
+ * Returns array of TickResults — Vercel function logs son el audit trail.
  */
 
 import { randomUUID } from "node:crypto";
@@ -65,6 +68,40 @@ export async function GET(req: Request) {
   }
 
   const streamKey = url.searchParams.get("key") ?? process.env.MANAGER_STREAM_KEY ?? "coscu-test";
+  const singleParam = url.searchParams.get("single");
+  const single = singleParam === "1" || singleParam === "true";
+
+  const config = configFromEnv(streamKey);
+
+  // Single-tick mode (push del chunkWriter) — un solo tick, sin loop. Devuelve
+  // en 1-2s. El cron sigue corriendo cada minuto como safety net por si el
+  // webhook se pierde o queda algo en backlog.
+  if (single) {
+    try {
+      const result = await managerTick(config);
+      console.log(
+        JSON.stringify({ route: "manager-tick", mode: "single", ...result }),
+      );
+      return NextResponse.json({ ticks: [result], count: 1, mode: "single" });
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      console.error(
+        JSON.stringify({
+          route: "manager-tick",
+          mode: "single",
+          decision: "error",
+          stream_key: streamKey,
+          error,
+        }),
+      );
+      return NextResponse.json(
+        { decision: "error" as const, stream_key: streamKey, error },
+        { status: 500 },
+      );
+    }
+  }
+
+  // Cron mode — self-loop hasta agotar el budget.
   const gapMs = envNum("MANAGER_INTERNAL_GAP_MS", 5_000);
   // Stop new ticks once we're within ~6s of maxDuration to leave room for
   // the last tick + response serialization. maxDuration=60s → deadline=54s.
@@ -83,8 +120,6 @@ export async function GET(req: Request) {
 
   const ticks: TickResult[] = [];
   try {
-    const config = configFromEnv(streamKey);
-
     while (Date.now() + gapMs < deadlineMs) {
       const result = await managerTick(config);
       ticks.push(result);

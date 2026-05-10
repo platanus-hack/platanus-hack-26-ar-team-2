@@ -44,11 +44,24 @@ export default function OverlayClient({ creator_id }: { creator_id: string }) {
       es.addEventListener("render", (msgEvent) => {
         try {
           const data = JSON.parse((msgEvent as MessageEvent).data) as RenderEvent;
+          // Filtramos por kind:
+          //   - 'offer'  → es para el /dock (pre-approval), NO para el overlay
+          //   - 'raw'    → debug firehose del manager-tick (chunk JSON), no es ad
+          //   - 'brand'  → ad placement del agent (post-accept). RENDERIZA.
+          //   - 'render' → mensaje text-only manual. RENDERIZA.
+          //   - undefined (rows pre-migration 0010) → asumimos render text-only.
+          // Filter por kind. Offer + raw nunca van al overlay — offer es para
+          // el /dock (pre-approval), raw es debug firehose del manager-tick.
+          // Igual avanzamos lastEventId para que reconnect catch-up no los
+          // traiga de nuevo.
+          if (data.kind === "offer" || data.kind === "raw") {
+            lastEventIdRef.current = data.id;
+            return;
+          }
           lastEventIdRef.current = data.id;
           setCount((c) => c + 1);
-          // Only show brand events that have an asset or a real message.
-          // Skip "raw" diagnostic events and no-match brands (message "...").
-          if (data.kind === "raw") return;
+          // Skip no-match brand events (message "...") y los que no tienen
+          // ni asset ni mensaje real.
           if (!data.asset_url && (!data.message || data.message === "...")) return;
           setCurrent(data);
         } catch {

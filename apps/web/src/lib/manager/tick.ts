@@ -6,26 +6,28 @@
  *    Si dos ticks corren en paralelo, solo uno gana la row; el otro recibe
  *    0 rows y devuelve `skip:already_processed` o `no_chunks`.
  * 2. Emit raw firehose event (dentro de la tx).
- * 3. Apply gate1 (C-08a) — filter brands deterministicamente; emit
- *    structured `gate1:eval` log lines + accumulate skips for the brand
+ * 3. Cooldown lookup contra kind='offer' (NO 'brand' — porque post-0012 las
+ *    brand rows son derivadas del accept, no las usamos como anchor).
+ * 4. Apply gate1 (C-08a) — filter brands deterministicamente; emit
+ *    structured `gate1:eval` log lines + accumulate skips for the offer
  *    event payload.
- * 4. Claude (or stub) picker analyses audio_text against the SURVIVING
+ * 5. Claude (or stub) picker analyses audio_text against the SURVIVING
  *    brands only.
- * 5. ALWAYS emit to SSE: brand display_name if match, "..." if not. The
- *    brand event payload carries `gate_skips[]` so the D-09a feed (and
- *    the C-08test harness) can verify per-brand reasoning.
- * 6. UPDATE processed_at = now() en la misma tx → COMMIT atómico.
+ * 6. Si pick.should_emit && brand_id → INSERT kind='offer' status='pending'
+ *    + pg_notify con payload completo. El dock (/dock?creator_id=X) muestra
+ *    la card con countdown + Accept/Reject. La row kind='brand' SOLO se
+ *    inserta cuando el streamer ✅ desde el endpoint /accept.
+ * 7. UPDATE processed_at = now() en la misma tx → COMMIT atómico.
  *
  * Concurrency contract:
  *   - Todo el tick va en una tx (BEGIN..COMMIT). Si crashea o el LLM tira,
- *     ROLLBACK revierte el claim, los render_events y los pg_notify (los
- *     notifies se entregan recién en COMMIT). Garantiza que no haya brand
- *     event sin processed_at = no hay puerta para re-emisión ni doble pago.
+ *     ROLLBACK revierte el claim, el render_event y los pg_notify (los
+ *     notifies se entregan recién en COMMIT). Garantiza que no haya offer
+ *     event sin processed_at.
  *   - Lock TTL (`processing_locked_until`) es defensa secundaria si la tx
  *     queda idle-in-transaction sin error. Configurable: MANAGER_CHUNK_LOCK_TTL_S.
- *   - Pagos on-chain (C-12) van AFUERA de esta tx — el broadcast a Base no
- *     es transaccional. Para idempotency ahí: usar `event_id` (render_events.id)
- *     como nonce contra el escrow contract.
+ *   - Pagos on-chain (C-12) van AFUERA — el dispatchAuction es opt-in via
+ *     MANAGER_AUCTION_DISPATCH=true y maneja su propio idempotency.
  *
  * No HTTP roundtrip — we hit the DB directly via the shared pg pool.
  */
@@ -115,9 +117,6 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
     await client.query("begin");
     txOpen = true;
 
-    // 1. Atomic claim: SELECT...FOR UPDATE SKIP LOCKED + UPDATE locked_until,
-    //    en una sola CTE. Si otro tick tiene la row lockeada (FOR UPDATE) o
-    //    el column-lock no expiró todavía, esto retorna 0 rows.
     const claimRes = await client.query<ContextChunk>(
       `with claim as (
          select id from context_chunks
@@ -138,9 +137,6 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
     const tClaimQuery = elapsed();
 
     if (claimRes.rows.length === 0) {
-      // No hay chunk claimable. Distinguimos: ¿no hay chunks en absoluto,
-      // o el latest está procesado/lockeado por otro tick? Probe rápido
-      // (read-only, dentro de la misma tx) para log diagnóstico.
       const probe = await client.query<{
         id: string;
         processed_at: string | null;
@@ -224,7 +220,6 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
       }),
     );
 
-    // Emit raw firehose event (dentro de la tx → notify se entrega en COMMIT)
     const rawPayload = {
       type: "raw_chunk",
       tick_at: new Date().toISOString(),
@@ -263,12 +258,41 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
     ]);
     const tRawEmit = elapsed();
 
+    // Cooldown anchor: último OFFER (cualquier status). Si emitimos un offer
+    // hace <cooldownMs, esperamos. Sino podríamos spamear el dock con cards
+    // si el streamer dice keywords en cadena.
+    const lastOfferRes = await client.query<{ created_at: string }>(
+      `select created_at from render_events
+        where creator_id = $1 and kind = 'offer'
+        order by created_at desc
+        limit 1`,
+      [config.creatorId],
+    );
+    const lastOffer = lastOfferRes.rows[0];
+    if (lastOffer) {
+      const sinceEmit = Date.now() - new Date(lastOffer.created_at).getTime();
+      if (sinceEmit < config.cooldownMs) {
+        // Cerramos la tx liberando el claim.
+        await client.query(
+          `update context_chunks
+              set processed_at = now(),
+                  processing_locked_until = null
+            where id = $1`,
+          [chunk.id],
+        );
+        await client.query("commit");
+        txOpen = false;
+        return {
+          decision: "cooldown",
+          stream_key: config.streamKey,
+          ms_remaining: config.cooldownMs - sinceEmit,
+          chunk: toChunkMeta(chunk),
+        };
+      }
+    }
+
     const meta = toChunkMeta(chunk);
 
-    // 2. Gate1 — deterministic mandate filter (C-08a). Splits the YAML
-    //    registry into surviving (LLM picker sees these) and skips
-    //    (logged + persisted to render_events.payload.gate_skips for the
-    //    D-09a feed + harness).
     const allBrands = getLoadedBrands();
     const ladder = applyGateLadder({
       brands: allBrands,
@@ -278,10 +302,6 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
     });
     const tGate1 = elapsed();
 
-    // 3. Claude (or stub) picker decides among surviving brands.
-    //    OJO: la LLM call dura 2-5s y mantiene la tx abierta. La row queda
-    //    lockeada (FOR UPDATE) durante todo ese tiempo → ningún tick paralelo
-    //    la toca. El pool es max=5 conexiones, suficiente para el cron actual.
     const picker: Picker = config.dryRun
       ? makeStubPicker()
       : (() => {
@@ -296,55 +316,62 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
     const pick = await picker(chunk, ladder.surviving);
     const tPicker = elapsed();
 
-    // Always emit: brand display_name if Claude matched, "..." otherwise.
-    const message = pick.message ?? "...";
-
-    // If the matched brand has a pre-uploaded ad asset, emit a full placement
-    // payload so the overlay renders the video/image instead of just text.
+    // Resolver brand info (display_name, color, asset visual) del registry YAML.
     const matchedBrand = pick.brand_id
       ? allBrands.find((b) => b.slug === pick.brand_id)
       : undefined;
     const hasAsset = matchedBrand?.ad.asset_url;
 
-    // Brand event payload always includes `gate_skips[]` (audit trail for
-    // D-09a + C-08test harness verification). Asset fields layer on top
-    // when the matched brand has a pre-uploaded creative.
-    const payload: Record<string, unknown> = {
+    // Construir el payload del offer. Incluye gate_skips para audit + asset
+    // visual (si el YAML tiene ad_asset_url) + bid info para el dock.
+    const bidUsdcCents = pick.bid_usdc != null ? Math.round(pick.bid_usdc * 100) : null;
+    const offerPayload: Record<string, unknown> = {
+      kind: "offer",
+      status: "pending",
+      brand_id: pick.brand_id,
+      brand_label: matchedBrand?.payload.display_name ?? pick.brand_id,
+      brand_color: matchedBrand?.display.color ?? matchedBrand?.payload.color,
+      bid_usdc_cents: bidUsdcCents,
+      bid_usdc: pick.bid_usdc,
+      moment_quality: pick.moment_quality,
+      brand_match: pick.brand_match,
+      reason: pick.reason,
       gate_skips: ladder.skips,
+      // Visual del placement: si la YAML tiene ad_asset_url usamos ese, sino
+      // text-only en lower_third 8s default.
+      zone_id: matchedBrand?.ad.zone ?? "lower_third",
+      duration_ms: matchedBrand?.ad.duration_ms ?? 8_000,
     };
     if (hasAsset) {
-      payload.asset_url = matchedBrand.ad.asset_url;
-      payload.asset_type = matchedBrand.ad.asset_type ?? "video";
-      payload.zone_id = matchedBrand.ad.zone ?? "fullscreen_takeover";
-      payload.duration_ms = matchedBrand.ad.duration_ms ?? 8000;
-      payload.brand_id = matchedBrand.slug;
-      payload.audio = true;
+      offerPayload.asset_url = matchedBrand.ad.asset_url;
+      offerPayload.asset_type = matchedBrand.ad.asset_type ?? "video";
+      offerPayload.audio = true;
     }
 
+    const message = pick.message ?? "...";
     const insert = await client.query<{ id: string; created_at: string }>(
-      `insert into render_events (creator_id, message, kind, payload)
-       values ($1, $2, 'brand', $3)
+      `insert into render_events (creator_id, message, kind, status, bid_usdc_cents, payload)
+       values ($1, $2, 'offer', 'pending', $3, $4)
        returning id, created_at`,
-      [config.creatorId, message.slice(0, 280), JSON.stringify(payload)],
+      [config.creatorId, message.slice(0, 280), bidUsdcCents, offerPayload],
     );
     const event_id = insert.rows[0]!.id;
+    const created_at = insert.rows[0]!.created_at;
 
+    // pg_notify con payload completo — el dock recibe todo en el evento sin
+    // re-fetch a la DB. Format '<creator_id>:<event_id>:<json>'.
     const sseEvent = {
       id: event_id,
       creator_id: config.creatorId,
-      created_at: insert.rows[0]!.created_at,
-      kind: "brand",
+      created_at,
       message,
-      ...payload,
+      ...offerPayload,
     };
     await client.query("select pg_notify('render_events', $1)", [
       `${config.creatorId}:${event_id}:${JSON.stringify(sseEvent)}`,
     ]);
-    const tBrandEmit = elapsed();
+    const tOfferEmit = elapsed();
 
-    // 4. Marcar como procesado en la MISMA tx. COMMIT abajo hace todo atómico.
-    //    Garantía: no hay brand event sin processed_at → no hay puerta para
-    //    re-emitir el mismo chunk → no doble pago downstream.
     await client.query(
       `update context_chunks
           set processed_at = now(),
@@ -356,12 +383,9 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
     await client.query("commit");
     txOpen = false;
 
-    // C-14 dispatch: fire-and-forget auction run for moments where Stage 2
-    // emitted a brand. POST-COMMIT a propósito — la subasta no es transaccional
-    // con el claim del chunk; si runAuction falla, el processed_at sigue
-    // marcado y el chunk no se re-procesa (idempotency vía render_events.id
-    // como nonce on-chain, ver C-12 nota). Gateado por MANAGER_AUCTION_DISPATCH
-    // para no romper flow text-only actual hasta F-05.
+    // Auction dispatch on-chain — opt-in via env. Probablemente queremos que
+    // esto se dispare DESPUÉS del accept (no del offer creation), pero por
+    // ahora respetamos el flag y lo dejamos acá.
     if (
       pick.should_emit &&
       pick.brand_id &&
@@ -387,7 +411,7 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
       raw_emit_ms: tRawEmit - tClaimQuery,
       gate1_ms: tGate1 - tRawEmit,
       picker_ms: tPicker - tGate1,
-      brand_emit_ms: tBrandEmit - tPicker,
+      offer_emit_ms: tOfferEmit - tPicker,
       total_ms: elapsed(),
     };
     console.log(
@@ -397,7 +421,9 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
         stream_key: config.streamKey,
         chunk_id: chunk.id,
         decision: "emit",
+        kind: "offer",
         brand_id: pick.brand_id ?? null,
+        bid_usdc: pick.bid_usdc,
         event_id,
         has_asset: !!hasAsset,
         dry_run: config.dryRun,
@@ -419,9 +445,6 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
     if (txOpen) {
       await client.query("rollback").catch(() => {});
     }
-    // Lock se libera vía rollback (locked_until vuelve a NULL). Si la tx ya
-    // commiteó pero algo más arriba en la stack falló, el chunk queda
-    // processed=true → no se reprocesa (correcto).
     console.error(
       JSON.stringify({
         tag: "manager:tick_error",
@@ -439,9 +462,6 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
   }
 }
 
-// C-14 fire-and-forget dispatch: kicks the auction orchestrator after a Stage 2
-// emit. Logs success/failure to Vercel function logs; never throws back into
-// managerTick (which already returned by the time this resolves).
 async function dispatchAuction(args: {
   chunk: ContextChunk;
   creatorSlug: string;

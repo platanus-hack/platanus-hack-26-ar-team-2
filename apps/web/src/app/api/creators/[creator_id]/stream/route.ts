@@ -20,6 +20,7 @@
  * See DESIGN.md §4 "Event broadcast pattern (C-13a)".
  */
 
+import type { PoolClient } from "pg";
 import { pool } from "@/lib/pg";
 import type { RenderEventPayload } from "@/lib/types/render";
 
@@ -72,12 +73,14 @@ export async function GET(
   const url = new URL(req.url);
   const since = url.searchParams.get("since"); // last event id seen by client
 
-  const client = await pool().connect();
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
     async start(controller) {
       let closed = false;
+      let client: PoolClient | null = null;
+      let heartbeat: ReturnType<typeof setInterval> | null = null;
+
       const safeEnqueue = (chunk: string) => {
         if (closed) return;
         try {
@@ -87,16 +90,80 @@ export async function GET(
         }
       };
 
-      // Helper: push one event to the stream + mark delivered.
-      const pushEvent = async (event: RenderEventPayload) => {
-        safeEnqueue(`id: ${event.id}\n` + `event: render\n` + `data: ${JSON.stringify(event)}\n\n`);
-        await client.query("update render_events set delivered_at = now() where id = $1", [event.id]).catch(() => {});
+      // Cleanup centralizado e idempotente. Se invoca desde:
+      //   - abort del client (cerró el tab, network drop, Vercel mata fn)
+      //   - error en el connect inicial (pool saturado)
+      //   - error en LISTEN (DB desconectó)
+      // Garantiza release del pg client en TODOS los paths para que el pool
+      // (max=20) no se llene de orphans en deploys con muchos overlays
+      // abiertos al mismo tiempo.
+      const cleanup = async () => {
+        if (closed) return;
+        closed = true;
+        if (heartbeat) clearInterval(heartbeat);
+        if (client) {
+          try {
+            await client.query("UNLISTEN render_events");
+          } catch {
+            // ignore
+          }
+          try {
+            client.release();
+          } catch {
+            // ignore
+          }
+        }
+        try {
+          controller.close();
+        } catch {
+          // already closed
+        }
       };
 
-      // 1. Greet — confirms the connection is alive immediately.
+      // 1. Saludo INMEDIATO. Antes de tocar el pool. El iframe ve los headers
+      // + el primer byte al toque y EventSource pasa a `readyState=OPEN` aunque
+      // el pg client todavía no esté listo. Sin esto, si `pool().connect()`
+      // tardaba >30s (pool saturado, cold start, supabase-pooler con cola)
+      // el browser veía la request colgada y la mataba con timeout.
       safeEnqueue(`event: hello\ndata: ${JSON.stringify({ creator_id, ts: Date.now() })}\n\n`);
 
-      // 2. Catch-up: replay anything created after `since` (or undelivered).
+      // 2. Heartbeat arranca YA — keepalive del proxy/Vercel mientras esperamos
+      // al pool. Cada 25s tira `: heartbeat <ts>\n\n` (comentario SSE, ignorado
+      // por el client pero suficiente para que el proxy no haga idle-disconnect).
+      heartbeat = setInterval(() => {
+        safeEnqueue(`: heartbeat ${Date.now()}\n\n`);
+      }, HEARTBEAT_MS);
+
+      // 3. Abort listener ANTES de cualquier await del connect. Si el user
+      // cierra el tab mientras el pool está esperando, no nos quedamos colgados.
+      req.signal.addEventListener("abort", () => {
+        void cleanup();
+      });
+
+      // 4. Recién ahora pedimos un client al pool. Con connectionTimeoutMillis=5s
+      // (lib/pg.ts), si no hay slot libre tira error en 5s en vez de quedar
+      // pending hasta que el proxy mate la response.
+      try {
+        client = await pool().connect();
+      } catch (e) {
+        const message = e instanceof Error ? e.message : "pool connect failed";
+        safeEnqueue(
+          `event: error\ndata: ${JSON.stringify({ code: "pool_connect_failed", message })}\n\n`,
+        );
+        await cleanup();
+        return;
+      }
+
+      // Helper: push one event to the stream + mark delivered.
+      const pushEvent = async (event: RenderEventPayload) => {
+        if (!client || closed) return;
+        safeEnqueue(`id: ${event.id}\n` + `event: render\n` + `data: ${JSON.stringify(event)}\n\n`);
+        await client
+          .query("update render_events set delivered_at = now() where id = $1", [event.id])
+          .catch(() => {});
+      };
+
+      // 5. Catch-up: replay anything created after `since` (or undelivered).
       // Incluimos `payload` jsonb desde migration 0011 → reconnects recuperan
       // placements visuales completos (asset_url, qr_url, zone_id, etc),
       // no solo el text del message.
@@ -121,10 +188,23 @@ export async function GET(
         // Don't block live stream on catch-up failure.
       }
 
-      // 3. LISTEN for new events. Notification payload is '<creator_id>:<event_id>'.
-      await client.query("LISTEN render_events");
+      // 6. LISTEN for new events. Notification payload es '<creator_id>:<event_id>:<json>'.
+      // Si LISTEN falla (DB caída, pooler en transaction-mode), mandamos error
+      // event y cleanup → el iframe reconecta en 2s (OverlayClient) en vez de
+      // quedar suscripto a un canal que nunca va a emitir.
+      try {
+        await client.query("LISTEN render_events");
+      } catch (e) {
+        const message = e instanceof Error ? e.message : "LISTEN failed";
+        safeEnqueue(
+          `event: error\ndata: ${JSON.stringify({ code: "listen_failed", message })}\n\n`,
+        );
+        await cleanup();
+        return;
+      }
+
       client.on("notification", async (n) => {
-        if (closed || !n.payload) return;
+        if (closed || !n.payload || !client) return;
         const colonIdx = n.payload.indexOf(":");
         const colonIdx2 = n.payload.indexOf(":", colonIdx + 1);
         const cid = n.payload.slice(0, colonIdx);
@@ -141,7 +221,7 @@ export async function GET(
           }
         }
 
-        // Fallback: fetch from DB (catches old-format notifications)
+        // Fallback: fetch from DB (catches old-format notifications).
         const eventId = n.payload.slice(colonIdx + 1, colonIdx2 > -1 ? colonIdx2 : undefined);
         try {
           const r = await client.query<RenderEventRow>(
@@ -154,31 +234,16 @@ export async function GET(
         }
       });
 
-      // 4. Heartbeat keeps the connection alive through proxies.
-      const heartbeat = setInterval(() => {
-        safeEnqueue(`: heartbeat ${Date.now()}\n\n`);
-      }, HEARTBEAT_MS);
-
-      // 5. Cleanup on client disconnect (browser closes tab, network drops).
-      const cleanup = async () => {
-        if (closed) return;
-        closed = true;
-        clearInterval(heartbeat);
-        try {
-          await client.query("UNLISTEN render_events");
-        } catch {
-          // ignore
-        }
-        client.release();
-        try {
-          controller.close();
-        } catch {
-          // already closed
-        }
-      };
-
-      req.signal.addEventListener("abort", () => {
-        void cleanup();
+      // pg client emite 'error' si la conn al server muere mid-LISTEN (típico
+      // con poolers en sleep o resume de Supabase). Sin handler explícito el
+      // event se propaga como uncaught → la function muere sin cleanup. Acá
+      // disparamos cleanup ordenado y el iframe reconecta solo.
+      client.on("error", async (err) => {
+        const message = err instanceof Error ? err.message : "pg client error";
+        safeEnqueue(
+          `event: error\ndata: ${JSON.stringify({ code: "pg_error", message })}\n\n`,
+        );
+        await cleanup();
       });
     },
   });

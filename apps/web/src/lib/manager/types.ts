@@ -59,6 +59,10 @@ export type BrandPick = {
   moment_quality: number;
   /** 0..1 — how well the picked brand fits THIS moment specifically. */
   brand_match: number;
+  /** USDC bid (decimal, p.ej. 1.20). El agent lo elige dentro de
+   *  [brand.min_bid_usdc, brand.max_bid_usdc]. Null si SKIP. Convertido a
+   *  cents al insert (render_events.bid_usdc_cents). */
+  bid_usdc: number | null;
   /** Spanish, ≤2 sentences, audit-friendly. */
   reason: string;
   /** Spanish, ≤25 words, in brand voice. Null if SKIP. */
