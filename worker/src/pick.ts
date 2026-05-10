@@ -174,9 +174,20 @@ export function makeClaudePicker(apiKey: string, model: string): Picker {
   };
 }
 
+/**
+ * Normalize: lowercase + strip diacríticos. Sin esto, "platanús" no matchea
+ * "platanus" — Scribe v2 a veces agrega tildes espurios en brand names
+ * inventados, y términos reales como "plátano" no matchearían "platano".
+ * Aplicamos a ambos lados (text + kw) para no acoplar el match a la
+ * representación Unicode exacta.
+ */
+function normalize(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
 export function makeStubPicker(): Picker {
   return async function pickBrand(chunk, brands) {
-    const text = (chunk.audio_text ?? "").toLowerCase();
+    const text = normalize(chunk.audio_text ?? "");
     if (!text) {
       return {
         should_emit: true,
@@ -188,7 +199,7 @@ export function makeStubPicker(): Picker {
       };
     }
     const match = brands.find((b) =>
-      b.match_keywords.some((kw) => text.includes(kw.toLowerCase())),
+      b.match_keywords.some((kw) => text.includes(normalize(kw))),
     );
     if (!match) {
       return {

@@ -16,7 +16,8 @@ color: "#5d8a3a"
 tagline: "Compartí la ronda, compartí la victoria."
 tracking_url: "https://matebros.demo/addie"
 description: "Yerba comunitaria. Mostrá este ad cuando el speaker mencione mate, yerba, ronda, fogón o equipo. Calza en momentos sociales, festejos grupales, charlas relajadas de comunidad. NO en clutchs individuales ni audiencias masivas — es ronda íntima, no estadio."
-match_keywords: ["mate", "yerba", "ronda", "fogón", "fogon", "equipo"]
+# Normalize en pickBrand.ts → "fogón" matchea "fogon" automático.
+match_keywords: ["mate", "mates", "yerba", "yerbas", "ronda", "fogon", "equipo", "equipos", "matecito", "tereré", "terere"]
 
 # ─── BrandMandate (legal/financial → mandates.payload jsonb) ─────────
 daily_cap_usdc: 40

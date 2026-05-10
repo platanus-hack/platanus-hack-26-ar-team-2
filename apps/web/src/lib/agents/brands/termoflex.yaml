@@ -13,7 +13,8 @@ color: "#3b7a98"
 tagline: "El termo que siempre está."
 tracking_url: "https://termoflex.demo/addie"
 description: "Termo cotidiano, default bidder. Mostrá este ad siempre que no haya otro brand que calce mejor. Es el fallback — cubre pausas, charlas tranquilas, silencios. Si el speaker menciona termo, termito o agua caliente, es match directo."
-match_keywords: ["termo", "termito", "agua caliente"]
+# Normalize en pickBrand.ts ya cubre acentos. Variantes con/sin guion.
+match_keywords: ["termo", "termos", "termito", "termoflex", "termo flex", "termo-flex", "mate", "mates", "agua caliente", "agua hirviendo"]
 
 # ─── BrandMandate (legal/financial → mandates.payload jsonb) ─────────
 daily_cap_usdc: 100

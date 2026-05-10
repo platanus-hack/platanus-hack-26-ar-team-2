@@ -29,9 +29,19 @@ const CHUNK_INTERVAL_MS = Number(process.env.CHUNK_INTERVAL_MS ?? 15_000);
 // Debounce per-keyword 30s (KEYWORD_DEBOUNCE_MS) — matchea el cooldown del
 // manager-tick. Una segunda mención dentro de 30s se ignora porque igual el
 // agent estaría en cooldown y no emitiría placement.
+/**
+ * Normalize: lowercase + strip diacríticos. "platanús" matchea "platanus"
+ * (Scribe v2 a veces agrega tildes espurios). Tiene que matchear el
+ * normalize() de pick.ts del worker para que keyword-flush + brand-pick
+ * compartan semántica.
+ */
+function normalizeKeyword(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
 const FLUSH_KEYWORDS = (process.env.INSTANT_FLUSH_KEYWORDS ?? '')
   .split(',')
-  .map((s) => s.trim().toLowerCase())
+  .map((s) => normalizeKeyword(s.trim()))
   .filter((s) => s.length > 0);
 const KEYWORD_POLL_MS = Number(process.env.KEYWORD_POLL_MS ?? 500);
 const KEYWORD_DEBOUNCE_MS = 30_000;
@@ -290,8 +300,8 @@ export function startChunkWriter(sources: ChunkSources): ChunkWriterHandle {
     if (!FLUSH_KEYWORDS.length) return;
     const t = sources.transcribe();
     if (!t) return;
-    const partial = (t.getPartial() || '').toLowerCase();
-    const committed = (t.getAudio30s() || '').toLowerCase();
+    const partial = normalizeKeyword(t.getPartial() || '');
+    const committed = normalizeKeyword(t.getAudio30s() || '');
     const combined = `${committed} ${partial}`;
     if (!combined.trim()) return;
 

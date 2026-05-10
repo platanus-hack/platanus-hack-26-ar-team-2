@@ -118,6 +118,15 @@ function buildTool(brands: LoadedBrand[]): Anthropic.Tool {
 const TOOL_NAME = "emit_decision";
 
 /**
+ * Normalize: lowercase + strip diacríticos. Sin esto, "platanús" no matchea
+ * "platanus" (Scribe v2 a veces agrega tildes espurios en brand names, y
+ * términos reales como "plátano" no matchearían "platano").
+ */
+function normalizeKeyword(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
+/**
  * Picker signature. `brands` is OPTIONAL — if omitted, the picker reads
  * the full cached YAML registry via `getLoadedBrands()`. If provided,
  * the picker only considers that list. This is the integration point
@@ -246,7 +255,7 @@ export function makeStubPicker(): Picker {
         message: "...",
       };
     }
-    const text = (chunk.audio_text ?? "").toLowerCase();
+    const text = normalizeKeyword(chunk.audio_text ?? "");
     if (!text) {
       return {
         should_emit: true,
@@ -259,7 +268,7 @@ export function makeStubPicker(): Picker {
       };
     }
     const match = brands.find((b) =>
-      b.match_keywords.some((kw) => text.includes(kw.toLowerCase())),
+      b.match_keywords.some((kw) => text.includes(normalizeKeyword(kw))),
     );
     if (!match) {
       return {
