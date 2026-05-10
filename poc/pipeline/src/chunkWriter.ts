@@ -156,12 +156,21 @@ export function startChunkWriter(sources: ChunkSources): ChunkWriterHandle {
     try {
     chunkCount += 1;
     const now = Date.now();
-    const tsStart = new Date(windowStartedAt).toISOString();
-    const durationS = Math.round((now - windowStartedAt) / 1000);
+    // Capturamos prevWindowStart ANTES de mover windowStartedAt — es el ts
+    // que pasamos a getCommittedSince() para traer SOLO audio nuevo desde el
+    // último chunk (sin redundancia con el rolling window de transcribe).
+    const prevWindowStart = windowStartedAt;
+    const tsStart = new Date(prevWindowStart).toISOString();
+    const durationS = Math.round((now - prevWindowStart) / 1000);
     windowStartedAt = now;
 
     const transcribe = sources.transcribe();
-    const audio_text = transcribe?.getAudio30s() || null;
+    // audio_text = SOLO commits dentro de (prevWindowStart, now). Si el
+    // anterior chunk persistió "che, una banana" hace 5s, este chunk NO lo
+    // re-incluye — solo lo nuevo. El rolling window de transcribe sigue
+    // usándose para keyword detection (checkKeywords abajo) que sí necesita
+    // mirar un toque atrás.
+    const audio_text = transcribe?.getCommittedSince(prevWindowStart) || null;
 
     // Twitch Helix metrics — solo si TWITCH_POLL_ENABLED. Sino getter devuelve
     // null y los campos quedan en null (Stage 1 los skipea graciosamente).

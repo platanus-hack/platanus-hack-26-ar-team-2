@@ -37,7 +37,13 @@ interface CommittedEntry {
 }
 
 export interface TranscribeHandle {
+  /** Rolling window de últimos AUDIO_ROLLING_WINDOW_MS de committed transcripts.
+   *  Útil para keyword detection (mira "atrás un toque") y para display en tick. */
   getAudio30s(): string;
+  /** Solo committed transcripts con ts >= sinceMs. Útil para chunkWriter:
+   *  cada chunk escribe SOLO el audio nuevo desde el chunk anterior, sin
+   *  redundancia con el rolling window. */
+  getCommittedSince(sinceMs: number): string;
   getPartial(): string;
   isActive(): boolean;
   stop(): Promise<void>;
@@ -158,6 +164,13 @@ export async function startTranscribe(streamKey: string): Promise<TranscribeHand
       const cutoff = Date.now() - ROLLING_WINDOW_MS;
       return entries
         .filter((e) => e.ts >= cutoff)
+        .map((e) => e.text)
+        .join(' ')
+        .trim();
+    },
+    getCommittedSince: (sinceMs: number) => {
+      return entries
+        .filter((e) => e.ts >= sinceMs)
         .map((e) => e.text)
         .join(' ')
         .trim();
