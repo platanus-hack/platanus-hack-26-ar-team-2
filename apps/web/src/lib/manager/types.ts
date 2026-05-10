@@ -7,6 +7,7 @@
  */
 
 import type { GateSkipReason } from "@/lib/agents/types";
+import type { BrandThought } from "./multiAgentPicker";
 
 export type ContextChunk = {
   id: string;
@@ -117,5 +118,17 @@ export type TickResult =
        * passed gate1.
        */
       gate_skips: GateSkipReason[];
+      /**
+       * UUID que agrupa todos los render_events del tick (raw + N
+       * brand_thoughts + offer). Indexed por la vista SQL
+       * `agent_deliberations` para audit/replay. Mirror en payload
+       * de cada render_event del mismo tick.
+       */
+      deliberation_id: string;
+      /**
+       * Brand-agent decisions paralelas (C-08m-multiagent). Una entry por
+       * brand sobreviviente al gate1, en el mismo orden que `ladder.surviving`.
+       */
+      thoughts: BrandThought[];
     }
   | { decision: "error"; stream_key: string; error: string };

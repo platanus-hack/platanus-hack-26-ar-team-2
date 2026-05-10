@@ -39,7 +39,7 @@ type RenderEventRow = {
   creator_id: string;
   message: string;
   created_at: string;
-  kind?: "render" | "raw" | "brand";
+  kind?: "render" | "raw" | "brand_thought" | "brand" | "offer";
   payload?: Omit<RenderEventPayload, "id" | "creator_id" | "created_at" | "kind" | "message"> | null;
 };
 

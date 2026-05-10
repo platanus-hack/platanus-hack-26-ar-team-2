@@ -5,23 +5,31 @@
  *    `FOR UPDATE SKIP LOCKED` + setea `processing_locked_until = now()+TTL`.
  *    Si dos ticks corren en paralelo, solo uno gana la row; el otro recibe
  *    0 rows y devuelve `skip:already_processed` o `no_chunks`.
- * 2. Emit raw firehose event (dentro de la tx).
+ * 2. Emit raw firehose event (dentro de la tx) con deliberation_id.
  * 3. Cooldown lookup contra kind='offer' (NO 'brand' — porque post-0012 las
  *    brand rows son derivadas del accept, no las usamos como anchor).
  * 4. Apply gate1 (C-08a) — filter brands deterministicamente; emit
  *    structured `gate1:eval` log lines + accumulate skips for the offer
  *    event payload.
- * 5. Claude (or stub) picker analyses audio_text against the SURVIVING
- *    brands only.
- * 6. Si pick.should_emit && brand_id → INSERT kind='offer' status='pending'
+ * 5. Multi-agent picker (C-08m-multiagent): N Haikus paralelas, una por brand
+ *    sobreviviente. Cada brand-agent decide en primera persona si pautar +
+ *    pitch + bid_usdc. Cada respuesta se INSERTea como kind='brand_thought'
+ *    en la misma tx (visible vía SSE post-COMMIT como deliberación cascada).
+ * 6. Ganador determinista por max-score → INSERT kind='offer' status='pending'
  *    + pg_notify con payload completo. El dock (/dock?creator_id=X) muestra
  *    la card con countdown + Accept/Reject. La row kind='brand' SOLO se
  *    inserta cuando el streamer ✅ desde el endpoint /accept.
  * 7. UPDATE processed_at = now() en la misma tx → COMMIT atómico.
  *
+ * Trazabilidad:
+ *   - tick_id (8-char) en cada log del manager.
+ *   - deliberation_id (UUID) en `payload` de TODOS los events del tick
+ *     (raw + N brand_thoughts + offer) → vista SQL `agent_deliberations`
+ *     agrupa toda la deliberación de un chunk en una row para audit/replay.
+ *
  * Concurrency contract:
  *   - Todo el tick va en una tx (BEGIN..COMMIT). Si crashea o el LLM tira,
- *     ROLLBACK revierte el claim, el render_event y los pg_notify (los
+ *     ROLLBACK revierte el claim, todos los render_events y pg_notify (los
  *     notifies se entregan recién en COMMIT). Garantiza que no haya offer
  *     event sin processed_at.
  *   - Lock TTL (`processing_locked_until`) es defensa secundaria si la tx
@@ -40,7 +48,13 @@ import { applyGateLadder } from "@/lib/agents/brand/gates/applyGateLadder";
 import { runAuction } from "@/lib/auctions/runAuction";
 import type { ManagerDecisionSummary } from "@/lib/agents/brand/huntForBrand";
 
-import { getLoadedBrands, makeClaudePicker, makeStubPicker, type Picker } from "./pickBrand";
+import { getLoadedBrands } from "./pickBrand";
+import {
+  makeMultiAgentClaudePicker,
+  makeMultiAgentStubPicker,
+  type BrandThought,
+  type MultiAgentPicker,
+} from "./multiAgentPicker";
 import type { ChunkMeta, ContextChunk, TickResult } from "./types";
 
 function toChunkMeta(chunk: ContextChunk): ChunkMeta {
@@ -95,6 +109,10 @@ export function configFromEnv(streamKey: string): ManagerConfig {
 
 export async function managerTick(config: ManagerConfig): Promise<TickResult> {
   const tickId = randomUUID().slice(0, 8);
+  // deliberation_id (UUID completo) viaja en el payload de raw + N
+  // brand_thoughts + offer del mismo tick → la vista SQL agent_deliberations
+  // los reune. tick_id queda separado (8-char) para grep en logs.
+  const deliberationId = randomUUID();
   const t0 = Date.now();
   const elapsed = () => Date.now() - t0;
 
@@ -102,6 +120,7 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
     JSON.stringify({
       tag: "manager:tick_start",
       tick_id: tickId,
+      deliberation_id: deliberationId,
       stream_key: config.streamKey,
       lock_ttl_s: config.chunkLockTtlS,
     }),
@@ -223,6 +242,7 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
     const rawPayload = {
       type: "raw_chunk",
       tick_at: new Date().toISOString(),
+      deliberation_id: deliberationId,
       chunk: {
         id: chunk.id,
         ts_start: chunk.ts_start,
@@ -302,19 +322,68 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
     });
     const tGate1 = elapsed();
 
-    const picker: Picker = config.dryRun
-      ? makeStubPicker()
+    const picker: MultiAgentPicker = config.dryRun
+      ? makeMultiAgentStubPicker()
       : (() => {
           if (!config.anthropicKey) {
             throw new Error(
               "ANTHROPIC_API_KEY missing — set it on Vercel or set MANAGER_DRY_RUN=true",
             );
           }
-          return makeClaudePicker(config.anthropicKey, config.anthropicModel);
+          return makeMultiAgentClaudePicker(config.anthropicKey, config.anthropicModel);
         })();
 
-    const pick = await picker(chunk, ladder.surviving);
+    const multiAgentResult = await picker(chunk, ladder.surviving);
+    const pick = multiAgentResult.winner;
+    const thoughts = multiAgentResult.thoughts;
     const tPicker = elapsed();
+
+    // INSERT cada brand_thought como render_event en la MISMA tx + pg_notify.
+    // Los notifies se entregan recién en COMMIT, así que /demo-display los ve
+    // todos juntos al final del tick (no streaming durante la deliberación —
+    // por diseño, atomicidad > liveness para el thought feed).
+    const thoughtEventIds: string[] = [];
+    for (const thought of thoughts) {
+      const thoughtPayload = {
+        kind: "brand_thought" as const,
+        deliberation_id: deliberationId,
+        brand_id: thought.brand_slug,
+        brand_label: thought.brand_label,
+        brand_color: thought.brand_color,
+        interested: thought.interested,
+        score: thought.score,
+        bid_usdc: thought.bid_usdc,
+        pitch: thought.pitch,
+        reasoning: thought.reasoning,
+        latency_ms: thought.latency_ms,
+        error: thought.error,
+      };
+      const thoughtRow = await client.query<{ id: string; created_at: string }>(
+        `insert into render_events (creator_id, message, kind, payload)
+         values ($1, $2, 'brand_thought', $3)
+         returning id, created_at`,
+        [
+          config.creatorId,
+          (thought.pitch || thought.reasoning || thought.brand_label).slice(0, 280),
+          thoughtPayload,
+        ],
+      );
+      const thoughtId = thoughtRow.rows[0]!.id;
+      const thoughtCreatedAt = thoughtRow.rows[0]!.created_at;
+      thoughtEventIds.push(thoughtId);
+
+      const sseThought = {
+        id: thoughtId,
+        creator_id: config.creatorId,
+        created_at: thoughtCreatedAt,
+        message: (thought.pitch || thought.reasoning || thought.brand_label).slice(0, 280),
+        ...thoughtPayload,
+      };
+      await client.query("select pg_notify('render_events', $1)", [
+        `${config.creatorId}:${thoughtId}:${JSON.stringify(sseThought)}`,
+      ]);
+    }
+    const tThoughtsEmit = elapsed();
 
     // Resolver brand info (display_name, color, asset visual) del registry YAML.
     const matchedBrand = pick.brand_id
@@ -328,6 +397,7 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
     const offerPayload: Record<string, unknown> = {
       kind: "offer",
       status: "pending",
+      deliberation_id: deliberationId,
       brand_id: pick.brand_id,
       brand_label: matchedBrand?.payload.display_name ?? pick.brand_id,
       brand_color: matchedBrand?.display.color ?? matchedBrand?.payload.color,
@@ -337,6 +407,14 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
       brand_match: pick.brand_match,
       reason: pick.reason,
       gate_skips: ladder.skips,
+      // Resumen de la deliberación para que el dock/auditor pueda ver
+      // qué brands compitieron sin re-fetch.
+      thought_summary: thoughts.map((t) => ({
+        brand_id: t.brand_slug,
+        interested: t.interested,
+        score: t.score,
+        bid_usdc: t.bid_usdc,
+      })),
       // Visual del placement: si la YAML tiene ad_asset_url usamos ese, sino
       // text-only en lower_third 8s default.
       zone_id: matchedBrand?.ad.zone ?? "lower_third",
@@ -414,13 +492,15 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
       raw_emit_ms: tRawEmit - tClaimQuery,
       gate1_ms: tGate1 - tRawEmit,
       picker_ms: tPicker - tGate1,
-      offer_emit_ms: tOfferEmit - tPicker,
+      thoughts_emit_ms: tThoughtsEmit - tPicker,
+      offer_emit_ms: tOfferEmit - tThoughtsEmit,
       total_ms: elapsed(),
     };
     console.log(
       JSON.stringify({
         tag: "manager:claim_released",
         tick_id: tickId,
+        deliberation_id: deliberationId,
         stream_key: config.streamKey,
         chunk_id: chunk.id,
         decision: "emit",
@@ -428,6 +508,9 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
         brand_id: pick.brand_id ?? null,
         bid_usdc: pick.bid_usdc,
         event_id,
+        thought_count: thoughts.length,
+        thought_event_ids: thoughtEventIds,
+        n_interested: thoughts.filter((t) => t.interested).length,
         has_asset: !!hasAsset,
         dry_run: config.dryRun,
         surviving_count: ladder.surviving.length,
@@ -443,6 +526,8 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
       pick,
       event_id,
       gate_skips: ladder.skips,
+      deliberation_id: deliberationId,
+      thoughts,
     };
   } catch (err) {
     if (txOpen) {

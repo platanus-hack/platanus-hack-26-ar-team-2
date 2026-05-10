@@ -26,13 +26,24 @@ export interface RenderEventPayload {
 
   /**
    * Tipo de evento:
-   *   'render' = mensaje text-only desde POST /render (default)
-   *   'raw'    = dump del context_chunk completo (firehose del manager-tick cron, every 5s)
-   *   'offer'  = candidato del agent esperando approve/reject del streamer
-   *              (consumido por /dock, NO por el overlay — el overlay lo filtra)
-   *   'brand'  = placement aprobado, sale en pantalla via overlay SSE
+   *   'render'        = mensaje text-only desde POST /render (default)
+   *   'raw'           = dump del context_chunk completo (firehose del manager-tick cron)
+   *   'brand_thought' = decisión per-brand del multi-agent picker (C-08m-multiagent).
+   *                     Una row por brand sobreviviente al gate1; agrupadas por
+   *                     `payload.deliberation_id`. Visibles en /demo-display como
+   *                     deliberación cascada antes del offer ganador.
+   *   'offer'         = candidato del agent esperando approve/reject del streamer
+   *                     (consumido por /dock, NO por el overlay — el overlay lo filtra)
+   *   'brand'         = placement aprobado, sale en pantalla via overlay SSE
    */
-  kind?: "render" | "raw" | "brand" | "offer";
+  kind?: "render" | "raw" | "brand_thought" | "brand" | "offer";
+
+  /**
+   * UUID que agrupa todos los render_events de un mismo tick del manager
+   * (raw + N brand_thoughts + offer). La vista SQL `agent_deliberations`
+   * lo usa como key. Llenado por C-08m-multiagent.
+   */
+  deliberation_id?: string;
 
   // ─── opcional · text-only mode ────────────────────────────────────
   message?: string;
