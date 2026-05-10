@@ -125,6 +125,27 @@ export default function BrandConsoleClient({ brandId, initial }: { brandId: stri
           </div>
         </section>
 
+        {/* Video preview */}
+        {brand.ad_asset_url && (
+          <section className="rounded-xl border border-[var(--line)] bg-[var(--card)] overflow-hidden">
+            <div className="px-5 py-4 border-b border-[var(--line)]">
+              <h2 className="text-sm font-semibold">Creative preview</h2>
+            </div>
+            <div className="p-5">
+              <video
+                src={brand.ad_asset_url}
+                controls
+                muted
+                loop
+                playsInline
+                className="w-full rounded-lg border border-[var(--line)]"
+                style={{ maxHeight: 300 }}
+              />
+              <p className="text-[10px] text-[var(--text-4)] mt-2 font-mono truncate">{brand.ad_asset_url}</p>
+            </div>
+          </section>
+        )}
+
         {/* Ad library */}
         <section>
           <p className="text-[10px] uppercase tracking-wider text-[var(--text-4)] font-medium mb-3">Ad library</p>

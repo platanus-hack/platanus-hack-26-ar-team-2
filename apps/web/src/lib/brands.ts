@@ -10,6 +10,7 @@ export type Brand = {
   allowed_zones: string[];
   preferred_zones: string[];
   target_moods: string[];
+  ad_asset_url?: string;
 };
 
 // Client registry — keep in sync with worker/brands/*.yaml
@@ -22,6 +23,7 @@ export const BRANDS: readonly Brand[] = [
     allowed_zones: ["lower_third", "bottom_right_corner", "fullscreen_takeover"],
     preferred_zones: ["lower_third"],
     target_moods: ["high_energy", "celebration", "community", "social"],
+    ad_asset_url: "https://tcbljbmedl5ntsz1.public.blob.vercel-storage.com/banana.mp4",
   },
   {
     id: "doritos",
@@ -31,6 +33,7 @@ export const BRANDS: readonly Brand[] = [
     allowed_zones: ["lower_third", "bottom_right_corner", "fullscreen_takeover"],
     preferred_zones: ["lower_third"],
     target_moods: ["high_energy", "hype", "celebration", "party", "gaming", "social"],
+    ad_asset_url: "https://tcbljbmedl5ntsz1.public.blob.vercel-storage.com/doritos.mp4",
   },
   {
     id: "monster",
@@ -40,6 +43,7 @@ export const BRANDS: readonly Brand[] = [
     allowed_zones: ["lower_third", "fullscreen_takeover", "bottom_right_corner"],
     preferred_zones: ["lower_third"],
     target_moods: ["high_energy", "clutch", "celebration", "hype", "epic", "party"],
+    ad_asset_url: "https://tcbljbmedl5ntsz1.public.blob.vercel-storage.com/monster.mp4",
   },
 ];
 
