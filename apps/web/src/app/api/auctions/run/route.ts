@@ -9,7 +9,6 @@
  *                    →  streamerEvaluate (single-shot al deadline)
  *                    →  INSERT placements (best-effort) + escrow.lock
  *                    →  POST /render con asset metadata (visible en OBS)
- *                    →  fire-and-forget /api/audit/clip
  *
  * Runtime budget: ~5–8s (huntForBrand × 5 paralelo, ~3s; streamer Sonnet ~2s).
  *
@@ -75,7 +74,6 @@ export async function POST(req: Request) {
       creator_id: body.creator_id,
       base_url: resolveBaseUrl(req),
       cron_secret: process.env.CRON_SECRET,
-      audit_clip_url: process.env.AUDIT_CLIP_URL,
       anthropic_api_key: apiKey,
       dry_run: dryRun,
     });

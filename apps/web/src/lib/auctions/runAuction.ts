@@ -11,7 +11,6 @@
  *   7. INSERT placements row with full audit (agent_reasoning, transcript, terms)
  *   8. attempt escrow.lock — A-12 kill-switch is honored; runner-up retry on real failures
  *   9. POST /api/creators/<creator>/render with asset metadata (visible in OBS)
- *  10. fire-and-forget POST /api/audit/clip — pipeline returns clip_url for UPDATE
  *
  * The HTTP wrapper lives in `app/api/auctions/run/route.ts`; this module is
  * the unit `sim-orchestrator.ts` (C-08test) and `smoke-auction-run.ts` will
@@ -83,11 +82,6 @@ export type RunAuctionArgs = {
   base_url?: string;
   /** Bearer secret reusado para POSTs internos (mismo CRON_SECRET). */
   cron_secret?: string;
-  /**
-   * Endpoint del POC pipeline para el audit clip (B-11).
-   * Default: AUDIT_CLIP_URL → http://localhost:3000/api/audit/clip.
-   */
-  audit_clip_url?: string;
   /** ANTHROPIC_API_KEY — requerido a menos que `dry_run: true`. */
   anthropic_api_key?: string;
   /**
@@ -121,7 +115,6 @@ export type RunAuctionResult = {
     lock_tx_hash: Hex | null;
     lock_error?: string;
     runner_up_used?: boolean;
-    audit_clip_kicked: boolean;
   };
   total_ms: number;
 };
@@ -135,7 +128,6 @@ export async function runAuction(args: RunAuctionArgs): Promise<RunAuctionResult
   const auctionId = randomUUID();
   const creatorSlug = args.creator_id ?? args.tick.stream_key;
   const baseUrl = args.base_url ?? defaultBaseUrl();
-  const auditClipUrl = args.audit_clip_url ?? `${baseUrl.replace(/\/$/, "")}/api/audit/clip`;
 
   log("auction:start", {
     auction_id: auctionId,
@@ -324,28 +316,6 @@ export async function runAuction(args: RunAuctionArgs): Promise<RunAuctionResult
     terms: placementResult.terms,
   });
 
-  // 10. Fire-and-forget audit clip request to the POC pipeline.
-  const auditKicked = kickAuditClip({
-    audit_clip_url: auditClipUrl,
-    stream_key: args.tick.stream_key,
-    placement_id: placementResult.placement_id,
-    duration_s: 10,
-    on_resolved: async (clipUrl) => {
-      try {
-        await pool().query("update placements set clip_url = $1 where id = $2", [
-          clipUrl,
-          placementResult.placement_id,
-        ]);
-      } catch (err) {
-        log("auction:clip_url_update_error", {
-          auction_id: auctionId,
-          placement_id: placementResult.placement_id,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-    },
-  });
-
   return {
     auction_id: auctionId,
     decision: placementResult.decision,
@@ -361,7 +331,6 @@ export async function runAuction(args: RunAuctionArgs): Promise<RunAuctionResult
       lock_tx_hash: placementResult.lock_tx_hash,
       lock_error: placementResult.lock_error,
       runner_up_used: placementResult.runner_up_used,
-      audit_clip_kicked: auditKicked,
     },
     total_ms: (args.now ?? Date.now)() - t0,
   };
@@ -754,49 +723,6 @@ async function broadcastAssetRender(args: {
       error: err?.message,
     }),
   );
-}
-
-function kickAuditClip(args: {
-  audit_clip_url: string;
-  stream_key: string;
-  placement_id: string;
-  duration_s: number;
-  on_resolved: (clipUrl: string) => Promise<void>;
-}): boolean {
-  // Fire-and-forget: do NOT await. We do however attach a then/catch so the
-  // pipeline's clip_url eventually lands in placements.clip_url.
-  (async () => {
-    try {
-      const res = await fetch(args.audit_clip_url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          stream_key: args.stream_key,
-          placement_id: args.placement_id,
-          duration_s: args.duration_s,
-        }),
-      });
-      if (res.status === 503) {
-        const body = await res.json().catch(() => ({}));
-        if (body?.code === "BLOB_TOKEN_MISSING") {
-          log("auction:audit_clip_blob_missing", { placement_id: args.placement_id });
-          return;
-        }
-      }
-      if (!res.ok) {
-        log("auction:audit_clip_error", { placement_id: args.placement_id, status: res.status });
-        return;
-      }
-      const body = (await res.json()) as { clip_url?: string };
-      if (body.clip_url) await args.on_resolved(body.clip_url);
-    } catch (err) {
-      log("auction:audit_clip_exception", {
-        placement_id: args.placement_id,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
-  })();
-  return true;
 }
 
 // ─── Misc helpers ────────────────────────────────────────────────────

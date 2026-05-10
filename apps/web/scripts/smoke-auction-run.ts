@@ -5,9 +5,9 @@
 //   - dry_run=true → stub picker for hunts, stub streamer evaluator
 //   - CHAIN_LIVE_TXS unset → kill-switch short-circuit (decision: lock_skipped_killswitch)
 //   - no DB writes (resolveOnchainIds returns empty in dry_run)
-//   - /render + /audit/clip fetches WILL fail (no server running) but their
-//     errors are swallowed by .catch — the orchestrator must still return a
-//     coherent AuctionResult.
+//   - /render fetches WILL fail (no server running) but their errors are
+//     swallowed by .catch — the orchestrator must still return a coherent
+//     AuctionResult.
 //
 // Run from apps/web:
 //   pnpm smoke:auction-run

@@ -6,7 +6,6 @@ import { startTwitchPoll, type TwitchHandle } from './twitch.js';
 import { startChat, type ChatHandle, type ChatMetrics } from './chat.js';
 import { startRealtimeBus, type RealtimeBus } from './realtimeBus.js';
 import { startChunkWriter, type ChunkWriterHandle } from './chunkWriter.js';
-import { startRecorder, type RecorderHandle } from './recorder.js';
 import { log } from './log.js';
 
 const POLL_INTERVAL_MS = Number(process.env.STAT_POLL_MS ?? 1000);
@@ -23,7 +22,6 @@ interface ActiveSession {
   chat: ChatHandle | null;
   realtime: RealtimeBus | null;
   chunkWriter: ChunkWriterHandle | null;
-  recorder: RecorderHandle | null;
 }
 
 const sessions = new Map<string, ActiveSession>();
@@ -136,7 +134,6 @@ export function startSession(session: StreamSession, opts?: StartSessionOptions)
     chat: null,
     realtime: null,
     chunkWriter: null,
-    recorder: null,
     interval: setInterval(async () => {
       state.pollCount += 1;
       const stats = await fetchStreamStats(key);
@@ -252,20 +249,6 @@ export function startSession(session: StreamSession, opts?: StartSessionOptions)
     getTickCount: () => state.pollCount,
     getFrameCount: () => state.frame?.getAnalysisCount() ?? 0,
   });
-
-  // Recorder rolling para audit clips (B-08). ffmpeg long-lived que mantiene
-  // los últimos ~20s del stream en disco como segmentos rotativos. Lo consume
-  // POST /api/audit/clip (B-11) cuando llega un placement.
-  state.recorder = startRecorder(key);
-}
-
-/**
- * Devuelve el directorio donde el recorder está escribiendo segmentos para
- * la sesión activa, o null si no hay sesión o el recorder aún no arrancó.
- * Lo usa el endpoint POST /api/audit/clip para localizar los .ts a concatenar.
- */
-export function getSessionRecordDir(streamKey: string): string | null {
-  return sessions.get(streamKey)?.recorder?.getRecordDir() ?? null;
 }
 
 export function stopSession(streamKey: string): void {
@@ -284,7 +267,6 @@ export function stopSession(streamKey: string): void {
   if (active.twitch) cleanups.push(active.twitch.stop().catch(() => {}));
   if (active.chat) cleanups.push(active.chat.stop().catch(() => {}));
   if (active.realtime) cleanups.push(active.realtime.stop().catch(() => {}));
-  if (active.recorder) cleanups.push(active.recorder.stop().catch(() => {}));
   void Promise.all(cleanups);
 
   sessions.delete(streamKey);
