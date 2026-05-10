@@ -12,35 +12,8 @@ export type Brand = {
   target_moods: string[];
 };
 
-// Client registry — keep in sync with apps/web/src/lib/agents/brands/*.yaml
+// Client registry — keep in sync with worker/brands/*.yaml
 export const BRANDS: readonly Brand[] = [
-  {
-    id: "cafetito",
-    display_name: "☕ CafetITO",
-    brand_color: "#6f4e37",
-    default_persona: "Café premium argentino — energía para momentos épicos.",
-    allowed_zones: ["lower_third", "bottom_right_corner"],
-    preferred_zones: ["lower_third"],
-    target_moods: ["high_energy", "celebration", "clutch"],
-  },
-  {
-    id: "termoflex",
-    display_name: "🧊 TermoFlex",
-    brand_color: "#3b7a98",
-    default_persona: "Tu termo inteligente para el mate perfecto.",
-    allowed_zones: ["lower_third", "bottom_right_corner"],
-    preferred_zones: ["lower_third"],
-    target_moods: ["calm", "chat_active", "social"],
-  },
-  {
-    id: "pancho-rex",
-    display_name: "🌭 Pancho Rex",
-    brand_color: "#d2691e",
-    default_persona: "Los mejores panchos del stream. Hambre = Pancho Rex.",
-    allowed_zones: ["lower_third", "bottom_right_corner", "fullscreen_takeover"],
-    preferred_zones: ["lower_third"],
-    target_moods: ["high_energy", "social", "celebration"],
-  },
   {
     id: "platanus",
     display_name: "🍌 Platanus",
@@ -51,13 +24,22 @@ export const BRANDS: readonly Brand[] = [
     target_moods: ["high_energy", "celebration", "community", "social"],
   },
   {
-    id: "matebros",
-    display_name: "🧉 MateBros",
-    brand_color: "#5d8a3a",
-    default_persona: "Yerba premium para la ronda infinita.",
-    allowed_zones: ["lower_third", "bottom_right_corner"],
+    id: "doritos",
+    display_name: "🔺 Doritos",
+    brand_color: "#e3000b",
+    default_persona: "For the Bold — snack de los momentos intensos.",
+    allowed_zones: ["lower_third", "bottom_right_corner", "fullscreen_takeover"],
     preferred_zones: ["lower_third"],
-    target_moods: ["calm", "social", "chat_active"],
+    target_moods: ["high_energy", "hype", "celebration", "party", "gaming", "social"],
+  },
+  {
+    id: "monster",
+    display_name: "🟢 Monster Energy",
+    brand_color: "#95d600",
+    default_persona: "Unleash the Beast — energía para momentos épicos.",
+    allowed_zones: ["lower_third", "fullscreen_takeover", "bottom_right_corner"],
+    preferred_zones: ["lower_third"],
+    target_moods: ["high_energy", "clutch", "celebration", "hype", "epic", "party"],
   },
 ];
 

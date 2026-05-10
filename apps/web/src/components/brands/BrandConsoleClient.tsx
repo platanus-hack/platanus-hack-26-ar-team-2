@@ -13,11 +13,26 @@ export type BrandInitial = {
 
 export type BrandMeta = Brand;
 
-const AD_VARIANTS = [
-  { name: "epic_goal_lower",  zone: "lower_third",         duration_ms: 6000,  mood_tags: ["high_energy", "celebration", "victory"] },
-  { name: "premium_takeover", zone: "fullscreen_takeover", duration_ms: 30000, mood_tags: ["storytelling", "brand_moment"] },
-  { name: "persistent_logo",  zone: "bottom_right_corner", duration_ms: 60000, mood_tags: ["any"] },
-  { name: "calm_chat_lower",  zone: "lower_third",         duration_ms: 5000,  mood_tags: ["calm", "chat_active"] },
+const AD_VARIANTS_BY_BRAND: Record<string, { name: string; zone: string; duration_ms: number; mood_tags: string[] }[]> = {
+  platanus: [
+    { name: "platanus_lower",     zone: "lower_third",         duration_ms: 8000,  mood_tags: ["high_energy", "community"] },
+  ],
+  doritos: [
+    { name: "doritos_lower",      zone: "lower_third",         duration_ms: 8000,  mood_tags: ["high_energy", "hype", "gaming"] },
+    { name: "doritos_fullscreen", zone: "fullscreen_takeover", duration_ms: 6000,  mood_tags: ["epic", "celebration"] },
+    { name: "doritos_corner",     zone: "bottom_right_corner", duration_ms: 30000, mood_tags: ["social", "party"] },
+  ],
+  monster: [
+    { name: "epic_lower",         zone: "lower_third",         duration_ms: 8000,  mood_tags: ["high_energy", "clutch", "epic"] },
+    { name: "fullscreen_takeover",zone: "fullscreen_takeover", duration_ms: 6000,  mood_tags: ["epic", "hype", "celebration"] },
+    { name: "hype_corner",        zone: "bottom_right_corner", duration_ms: 30000, mood_tags: ["high_energy", "party"] },
+  ],
+};
+
+const DEFAULT_AD_VARIANTS = [
+  { name: "lower_ad",    zone: "lower_third",         duration_ms: 8000,  mood_tags: ["high_energy"] },
+  { name: "fullscreen",  zone: "fullscreen_takeover", duration_ms: 6000,  mood_tags: ["epic"] },
+  { name: "corner_ad",   zone: "bottom_right_corner", duration_ms: 30000, mood_tags: ["social"] },
 ];
 
 const ZONE_LABELS: Record<string, string> = {
@@ -120,7 +135,7 @@ export default function BrandConsoleClient({ brandId, initial }: { brandId: stri
               duration_ms: ad.duration_ms ?? 0,
               mood_tags: ad.mood_tags,
               asset_url: ad.asset_url,
-            })) : AD_VARIANTS).map((ad) => {
+            })) : (AD_VARIANTS_BY_BRAND[brandId] ?? DEFAULT_AD_VARIANTS)).map((ad) => {
               const zoneOk = brand.allowed_zones.includes(ad.zone);
               const preferred = brand.preferred_zones.includes(ad.zone);
               return (
