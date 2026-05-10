@@ -83,31 +83,27 @@ export interface ChunkWriterHandle {
   stop(): Promise<void>;
 }
 
+// Schema reducido — del row anterior con 22 columnas, solo persistimos las
+// 7 que el agent realmente lee. El resto de las columnas en context_chunks
+// quedan en NULL (todas nullable salvo ticks/frame_aggregated que tienen
+// default 0 a nivel DB).
+//
+// Lo que NO escribimos y por qué:
+//   - stream_id              → siempre null en POC (no creamos fila en streams)
+//   - audio_partial_at_end   → solo debug, nadie lo lee
+//   - audio_topics           → frame/summary apagados → nadie lo populate
+//   - scene_type, energy_level, mood_tags, on_screen_text → frame off
+//   - chat_velocity_*, chat_recent_keywords, sentiment_avg → chat off
+//   - viewers, viewers_delta_30s, game_category, stream_title → twitch off
+//   - duration_s             → tiene default 30 en DB, no nos importa el valor real
+//   - ticks_aggregated, frame_analyses_aggregated → tienen default 0 en DB
 interface ChunkRow {
   stream_key: string;
-  stream_id: string | null;
   ts_start: string;
-  duration_s: number;
   audio_text: string | null;
-  audio_partial_at_end: string | null;
   audio_summary: string | null;
-  audio_topics: string[] | null;
   audio_mentions: string[] | null;
   audio_intent: 'discussion' | 'recommendation' | 'complaint' | 'question' | 'reaction' | 'silence' | null;
-  scene_type: string | null;
-  energy_level: 'calm' | 'medium' | 'high' | 'epic' | null;
-  mood_tags: string[];
-  on_screen_text: string | null;
-  chat_velocity_avg: number | null;
-  chat_velocity_peak: number | null;
-  chat_recent_keywords: string[] | null;
-  sentiment_avg: 'positive' | 'neutral' | 'negative' | 'hype' | null;
-  viewers: number | null;
-  viewers_delta_30s: number | null;
-  game_category: string | null;
-  stream_title: string | null;
-  ticks_aggregated: number;
-  frame_analyses_aggregated: number;
 }
 
 /**
@@ -131,9 +127,6 @@ export function startChunkWriter(sources: ChunkSources): ChunkWriterHandle {
 
   let active = true;
   let chunkCount = 0;
-  let lastTickCount = 0;
-  let lastFrameCount = 0;
-  let lastViewers: number | null = null;
   let windowStartedAt = Date.now();
   // Mutex — los dos triggers (setInterval CHUNK_INTERVAL_MS + keyword poll)
   // pueden firear al mismo tiempo. Sin esto, dos writeChunk concurrentes
@@ -159,86 +152,31 @@ export function startChunkWriter(sources: ChunkSources): ChunkWriterHandle {
     windowStartedAt = now;
 
     const transcribe = sources.transcribe();
-    const frame = sources.frame();
-    const twitch = sources.twitch();
-    const chat = sources.chat();
-
-    const ticksNow = sources.getTickCount();
-    const framesNow = sources.getFrameCount();
-    const ticksAggregated = ticksNow - lastTickCount;
-    const framesAggregated = framesNow - lastFrameCount;
-    lastTickCount = ticksNow;
-    lastFrameCount = framesNow;
-
-    const frameLatest = frame?.getLatest();
-    const tw = twitch?.getLatest();
-    const chatMetrics = chat?.getMetrics() ?? null;
-
-    const viewers = tw?.is_live ? tw.viewers : null;
-    const viewersDelta = lastViewers !== null && viewers !== null ? viewers - lastViewers : null;
-    if (viewers !== null) lastViewers = viewers;
-
     const audio_text = transcribe?.getAudio30s() || null;
-    const audio_partial = transcribe?.getPartial() || null;
 
     // Sin LLM summary. Cuando el flush lo dispara una keyword, populamos
-    // audio_mentions + audio_intent + audio_summary directo desde lo que ya
-    // sabemos — esos 3 campos los lee Stage 1 (intensity.ts) para decidir si
-    // el chunk es "auctionable". Stage 2 (pickBrand) usa audio_text crudo
-    // así que no pierde info.
-    //
-    // Para chunks de interval (sin keyword): audio_mentions=null, intent=null
-    // → Stage 1 falla → no ad. Es el comportamiento deseado: el demo solo
-    // emite cuando el streamer dice una palabra trigger. El cron del manager
-    // sigue corriendo como safety net por si llega un viewers_delta_30s>100
-    // que también dispara Stage 1.
-    const audio_summary = matchedKeyword
-      ? `streamer mencionó: ${matchedKeyword}`
-      : null;
+    // audio_mentions + audio_intent directo (Stage 1 los lee para gate).
+    // Stage 2 (pickBrand) lee audio_text crudo así que no pierde info.
+    const audio_summary = matchedKeyword ? `streamer mencionó: ${matchedKeyword}` : null;
     const audio_mentions = matchedKeyword ? [matchedKeyword] : null;
-    const audio_intent: ChunkRow['audio_intent'] = matchedKeyword
-      ? 'recommendation'
-      : null;
+    const audio_intent: ChunkRow['audio_intent'] = matchedKeyword ? 'recommendation' : null;
 
     const chunk: ChunkRow = {
       stream_key: sources.streamKey,
-      stream_id: null, // POC: no creamos fila en streams. Lo llena el handler real en apps/web.
       ts_start: tsStart,
-      duration_s: durationS,
-
       audio_text,
-      audio_partial_at_end: audio_partial,
       audio_summary,
-      audio_topics: null,
       audio_mentions,
       audio_intent,
-
-      scene_type: frameLatest?.result.scene_type ?? null,
-      energy_level: frameLatest?.result.energy_level ?? null,
-      mood_tags: frameLatest?.result.mood_tags ?? [],
-      on_screen_text: frameLatest?.result.on_screen_text ?? null,
-
-      // Chat (tmi.js — métricas crudas del chat de Twitch en la ventana de 30s).
-      chat_velocity_avg: chatMetrics?.velocity_avg ?? null,
-      chat_velocity_peak: chatMetrics?.velocity_peak ?? null,
-      chat_recent_keywords: chatMetrics?.recent_keywords ?? null,
-      sentiment_avg: chatMetrics?.sentiment ?? null,
-
-      viewers,
-      viewers_delta_30s: viewersDelta,
-      game_category: tw?.game_category || null,
-      stream_title: tw?.stream_title || null,
-
-      ticks_aggregated: ticksAggregated,
-      frame_analyses_aggregated: framesAggregated,
     };
 
+    const textPreview = audio_text
+      ? audio_text.slice(0, 80) + (audio_text.length > 80 ? '…' : '')
+      : '—';
     log.success(
-      `[chunk ${sources.streamKey}] #${chunkCount} (${trigger}) · ${durationS}s · ${ticksAggregated} ticks · ${framesAggregated} frames · ` +
-        `viewers=${viewers ?? '—'} (Δ${viewersDelta ?? '—'}) · ` +
-        `chat=${chatMetrics ? `${chatMetrics.velocity_avg.toFixed(1)}msg/s ${chatMetrics.sentiment}` : '—'} · ` +
-        `scene="${chunk.scene_type ?? '—'}" · ` +
-        `audio=${matchedKeyword ? `keyword="${matchedKeyword}" intent=recommendation` : '—'}`,
+      `[chunk ${sources.streamKey}] #${chunkCount} (${trigger}) · ${durationS}s · ` +
+        `audio=${matchedKeyword ? `keyword="${matchedKeyword}" intent=recommendation` : '—'} · ` +
+        `text="${textPreview}"`,
     );
 
     if (supabase) {

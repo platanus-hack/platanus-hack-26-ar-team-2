@@ -205,19 +205,34 @@ export function startSession(session: StreamSession, opts?: StartSessionOptions)
     log.info(`[frame ${key}] disabled (FRAME_ANALYSIS_ENABLED!=true) — pipeline 100% audio-driven`);
   }
 
-  startTwitchPoll(key, twitchChannel)
-    .then((handle) => {
-      const active = sessions.get(key);
-      if (active && handle) active.twitch = handle;
-    })
-    .catch((e) => log.warn(`[twitch ${key}] start failed: ${e instanceof Error ? e.message : e}`));
+  // Twitch Helix poll (viewers, game_category, stream_title) está apagado por
+  // default desde 2026-05-09. El chunkWriter ya no lee estos campos — Stage 1
+  // gatea por audio_mentions del keyword match, no por viewers_delta_30s.
+  // Encender:  TWITCH_POLL_ENABLED=true
+  if (process.env.TWITCH_POLL_ENABLED === 'true') {
+    startTwitchPoll(key, twitchChannel)
+      .then((handle) => {
+        const active = sessions.get(key);
+        if (active && handle) active.twitch = handle;
+      })
+      .catch((e) => log.warn(`[twitch ${key}] start failed: ${e instanceof Error ? e.message : e}`));
+  } else {
+    log.info(`[twitch ${key}] disabled (TWITCH_POLL_ENABLED!=true)`);
+  }
 
-  startChat(key, twitchChannel)
-    .then((handle) => {
-      const active = sessions.get(key);
-      if (active && handle) active.chat = handle;
-    })
-    .catch((e) => log.warn(`[chat ${key}] start failed: ${e instanceof Error ? e.message : e}`));
+  // Chat (tmi.js IRC anonymous read-only) está apagado por default desde
+  // 2026-05-09. El chunkWriter ya no lee chat_velocity / sentiment / etc.
+  // Encender:  CHAT_ENABLED=true
+  if (process.env.CHAT_ENABLED === 'true') {
+    startChat(key, twitchChannel)
+      .then((handle) => {
+        const active = sessions.get(key);
+        if (active && handle) active.chat = handle;
+      })
+      .catch((e) => log.warn(`[chat ${key}] start failed: ${e instanceof Error ? e.message : e}`));
+  } else {
+    log.info(`[chat ${key}] disabled (CHAT_ENABLED!=true)`);
+  }
 
   startRealtimeBus(key)
     .then((handle) => {
