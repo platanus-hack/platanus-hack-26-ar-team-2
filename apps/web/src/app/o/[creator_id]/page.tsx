@@ -20,7 +20,7 @@ export default async function CreatorOverlayPage({
 }) {
   const { creator_id } = await params;
   return (
-    <main className="flex min-h-screen items-center justify-center bg-transparent">
+    <main className="w-screen h-screen overflow-hidden" style={{ background: "transparent" }}>
       <OverlayClient creator_id={creator_id} />
     </main>
   );
