@@ -16,6 +16,7 @@
  */
 
 import http from "node:http";
+import { timingSafeEqual } from "node:crypto";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client, Pool } from "pg";
@@ -24,6 +25,8 @@ import { managerTick, configFromEnv } from "./tick.js";
 import { startSettlementLoop } from "./settlement.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
+const WORKER_ALLOWED_ORIGIN = process.env.WORKER_ALLOWED_ORIGIN;
+const WORKER_TRIGGER_SECRET = process.env.WORKER_TRIGGER_SECRET ?? process.env.MANAGER_WEBHOOK_SECRET;
 const rawDbUrl = process.env.DATABASE_URL;
 if (!rawDbUrl) {
   console.error("[worker] DATABASE_URL is required");
@@ -57,6 +60,32 @@ function broadcastSSE(creatorId: string, eventName: string, data: string) {
       clients.delete(c);
     }
   }
+}
+
+function constantTimeEqual(a: string, b: string): boolean {
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
+function requireTriggerAuth(req: http.IncomingMessage, res: http.ServerResponse): boolean {
+  if (!WORKER_TRIGGER_SECRET) {
+    if (process.env.NODE_ENV === "production") {
+      res.writeHead(503, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "WORKER_TRIGGER_SECRET must be configured" }));
+      return false;
+    }
+    return true;
+  }
+
+  const header = req.headers.authorization ?? "";
+  const token = header.startsWith("Bearer ") ? header.slice("Bearer ".length) : "";
+  if (!token || !constantTimeEqual(token, WORKER_TRIGGER_SECRET)) {
+    res.writeHead(401, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "unauthorized" }));
+    return false;
+  }
+  return true;
 }
 
 // ─── Main ───────────────────────────────────────────────────────────
@@ -164,10 +193,16 @@ async function main() {
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url!, `http://localhost:${PORT}`);
 
-    // CORS headers for all responses
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    // CORS headers for browser-accessed read endpoints. Set WORKER_ALLOWED_ORIGIN
+    // in production to avoid reflecting the worker to arbitrary web origins.
+    const origin = req.headers.origin;
+    if (WORKER_ALLOWED_ORIGIN && origin === WORKER_ALLOWED_ORIGIN) {
+      res.setHeader("Access-Control-Allow-Origin", WORKER_ALLOWED_ORIGIN);
+    } else if (!WORKER_ALLOWED_ORIGIN) {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+    }
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
     if (req.method === "OPTIONS") {
       res.writeHead(204);
@@ -223,6 +258,8 @@ async function main() {
     // POST /trigger/:stream_key — manual tick trigger
     const triggerMatch = url.pathname.match(/^\/trigger\/(.+)$/);
     if (triggerMatch && req.method === "POST") {
+      if (!requireTriggerAuth(req, res)) return;
+
       const streamKey = decodeURIComponent(triggerMatch[1]);
       const t0 = Date.now();
       try {

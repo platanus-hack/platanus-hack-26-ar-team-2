@@ -19,6 +19,7 @@
 import { NextResponse } from "next/server";
 
 import { runAuction } from "@/lib/auctions/runAuction";
+import { requireInternalBearer } from "@/lib/route-security";
 import type { ContextChunk } from "@/lib/manager/types";
 import type { ManagerDecisionSummary } from "@/lib/agents/brand/huntForBrand";
 
@@ -34,14 +35,8 @@ type Body = {
 };
 
 export async function POST(req: Request) {
-  // Bearer auth (only enforced if CRON_SECRET is set).
-  const expected = process.env.CRON_SECRET;
-  if (expected) {
-    const got = req.headers.get("authorization");
-    if (got !== `Bearer ${expected}`) {
-      return new NextResponse("unauthorized", { status: 401 });
-    }
-  }
+  const authError = requireInternalBearer(req);
+  if (authError) return authError;
 
   let body: Body;
   try {
@@ -88,7 +83,7 @@ export async function POST(req: Request) {
 export function GET() {
   return NextResponse.json({
     endpoint: "POST /api/auctions/run",
-    auth: "Bearer CRON_SECRET (only enforced if env var is set)",
+    auth: "Bearer CRON_SECRET",
     body: {
       tick: "ContextChunk — required, must include id + stream_key",
       manager_decision: "ManagerDecisionSummary — required",

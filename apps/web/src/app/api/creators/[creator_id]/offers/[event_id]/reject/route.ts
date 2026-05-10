@@ -11,6 +11,7 @@
 
 import { NextResponse } from "next/server";
 import { transactPool } from "@/lib/pg";
+import { requireInternalBearer } from "@/lib/route-security";
 
 export const runtime = "nodejs";
 
@@ -25,9 +26,12 @@ type OfferRow = {
 };
 
 export async function POST(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ creator_id: string; event_id: string }> },
 ) {
+  const authError = requireInternalBearer(req);
+  if (authError) return authError;
+
   const { creator_id, event_id } = await params;
 
   const client = await transactPool().connect();
@@ -71,9 +75,8 @@ export async function POST(
     );
 
     return NextResponse.json({ ok: true, offer_id: offer.id, status: finalStatus });
-  } catch (err) {
-    const error = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ ok: false, error }, { status: 500 });
+  } catch {
+    return NextResponse.json({ ok: false, error: "database error" }, { status: 500 });
   } finally {
     client.release();
   }

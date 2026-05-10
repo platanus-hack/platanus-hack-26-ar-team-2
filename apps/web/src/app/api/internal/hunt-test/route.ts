@@ -6,9 +6,7 @@
  * observation: nothing is inserted into `render_events` and `tick.ts` is
  * untouched. C-14 will replace this once `POST /api/auctions/run` lands.
  *
- * Auth: same Bearer pattern as `manager-tick` — required iff `CRON_SECRET`
- *       is set in env. Without that var the route is publicly callable
- *       (intended only for local smoke).
+ * Auth: same Bearer pattern as `manager-tick`.
  *
  * Inputs (query string):
  *   - `chunk_id` (required) — UUID of a row in `context_chunks`. 404 if missing.
@@ -31,6 +29,7 @@ import { NextResponse } from "next/server";
 
 import { getLoadedBrands } from "@/lib/manager/pickBrand";
 import { pool } from "@/lib/pg";
+import { requireInternalBearer } from "@/lib/route-security";
 
 import {
   huntForBrand,
@@ -79,14 +78,8 @@ const MOCK_MANAGER_DECISION: ManagerDecisionSummary = {
 };
 
 async function handle(req: Request): Promise<Response> {
-  // Bearer auth (only enforced if CRON_SECRET is set)
-  const expected = process.env.CRON_SECRET;
-  if (expected) {
-    const got = req.headers.get("authorization");
-    if (got !== `Bearer ${expected}`) {
-      return new NextResponse("unauthorized", { status: 401 });
-    }
-  }
+  const authError = requireInternalBearer(req);
+  if (authError) return authError;
 
   const url = new URL(req.url);
   const chunkId = url.searchParams.get("chunk_id");

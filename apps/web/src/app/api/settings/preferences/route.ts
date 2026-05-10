@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDemoCreatorId, getStreamerPrefs, upsertStreamerPrefs } from "@/lib/db";
+import { requireInternalBearer } from "@/lib/route-security";
 
 export async function GET() {
   try {
@@ -13,6 +14,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const authError = requireInternalBearer(request);
+  if (authError) return authError;
+
   try {
     const body = (await request.json()) as {
       approvedBrands: string[];
@@ -25,8 +29,7 @@ export async function POST(request: Request) {
       hard_floor_usdc: 0.10,
     });
     return new NextResponse(null, { status: 204 });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: msg }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: "database error" }, { status: 500 });
   }
 }

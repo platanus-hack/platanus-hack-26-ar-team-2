@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getBrandAccountId, upsertBrandMandateData } from "@/lib/db";
+import { requireInternalBearer } from "@/lib/route-security";
 
 const BRAND_DISPLAY_NAMES: Record<string, string> = {
   adidas:   "Adidas Argentina",
@@ -16,6 +17,9 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ brandId: string }> },
 ) {
+  const authError = requireInternalBearer(request);
+  if (authError) return authError;
+
   try {
     const { brandId } = await params;
     const body = (await request.json()) as {
@@ -39,8 +43,7 @@ export async function POST(
     });
 
     return new NextResponse(null, { status: 204 });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: msg }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: "database error" }, { status: 500 });
   }
 }
