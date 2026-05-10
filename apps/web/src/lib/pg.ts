@@ -33,9 +33,16 @@ export function pool(): Pool {
   _pool = new Pool({
     connectionString: buildConnectionString(),
     ssl: { rejectUnauthorized: false },
-    // Conservative — each Vercel function instance has its own pool.
-    max: 5,
+    // Cada SSE retiene un client por hasta `maxDuration` (5min) → con max=5 y
+    // 5 iframes abiertos + el cron del manager-tick, el pool se satura y la
+    // 6ta request queda esperando hasta que algún client se libere. Subido a
+    // 20 para aguantar varios overlays + cron + bursts del render endpoint.
+    max: 20,
     idleTimeoutMillis: 30_000,
+    // Si pool().connect() cuelga >5s (pool saturado, network blip, Supabase
+    // pooler con cola), preferimos que tire error y la SSE devuelva un evento
+    // `error` al iframe en vez de quedarse colgada hasta el timeout del proxy.
+    connectionTimeoutMillis: 5_000,
   });
   return _pool;
 }
