@@ -48,6 +48,11 @@ export type LoadedBrand = {
   display_name: string;
   description: string;
   match_keywords: string[];
+  /** Floor de bid en USDC. El single-agent picker del worker no negocia bid;
+   *  tick.ts usa este valor como bid efectivo del offer (lo persiste en
+   *  bid_usdc_cents para que el settlement loop lo firme). */
+  min_bid_usdc: number | null;
+  max_bid_usdc: number | null;
   ad: {
     asset_url?: string;
     asset_type?: "video" | "image";

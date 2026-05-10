@@ -14,6 +14,8 @@ type RawBrandYaml = {
   brand_voice?: string;
   description?: string;
   match_keywords?: string[];
+  min_bid_usdc?: number;
+  max_bid_usdc?: number;
   ad_asset_url?: string;
   ad_asset_type?: "video" | "image";
   ad_zone?: string;
@@ -37,6 +39,8 @@ export function loadBrands(brandsDir: string): LoadedBrand[] {
       display_name: raw.display_name,
       description: raw.description ?? raw.brand_voice ?? "",
       match_keywords: raw.match_keywords ?? [],
+      min_bid_usdc: typeof raw.min_bid_usdc === "number" ? raw.min_bid_usdc : null,
+      max_bid_usdc: typeof raw.max_bid_usdc === "number" ? raw.max_bid_usdc : null,
       ad: {
         asset_url: raw.ad_asset_url,
         asset_type: raw.ad_asset_type,

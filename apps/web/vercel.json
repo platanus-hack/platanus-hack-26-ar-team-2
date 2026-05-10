@@ -1,15 +1,5 @@
 {
   "installCommand": "npm install --legacy-peer-deps",
   "buildCommand": "npx next build",
-  "framework": "nextjs",
-  "crons": [
-    {
-      "path": "/api/internal/manager-worker",
-      "schedule": "*/4 * * * *"
-    },
-    {
-      "path": "/api/internal/manager-tick",
-      "schedule": "*/5 * * * *"
-    }
-  ]
+  "framework": "nextjs"
 }

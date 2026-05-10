@@ -156,14 +156,28 @@ export async function managerTick(
       : undefined;
     const hasAsset = matchedBrand?.ad.asset_url;
 
+    // Resolver bid: el single-agent picker del worker no negocia, así que
+    // usamos min_bid_usdc del YAML como floor del offer. settlement.ts lee
+    // bid_usdc_cents de la columna (no del payload) para firmar el transfer
+    // USDC brand→creator post-accept; sin esto, settlement falla con
+    // payment_error='bid_usdc_cents=0'. Si la YAML no define floor, dejamos
+    // null y la row va a fallar en settlement con error explícito (lo que
+    // tampoco queremos, pero es mejor que un 0 silencioso).
+    const bidUsdc = matchedBrand?.min_bid_usdc ?? null;
+    const bidUsdcCents = bidUsdc != null ? Math.round(bidUsdc * 100) : null;
+
     // Construir payload del offer. Incluye chunk_id (audit dedup), brand info
-    // para el dock, y placement visual si el YAML tiene ad_asset_url.
+    // para el dock, bid info (espejo de la columna para que el accept endpoint
+    // pueda heredar al brand event sin re-fetch), y placement visual si el
+    // YAML tiene ad_asset_url.
     const payload: Record<string, unknown> = {
       kind: "offer",
       status: "pending",
       chunk_id: chunk.id,
       brand_id: pick.brand_id,
       brand_label: matchedBrand?.display_name ?? pick.brand_id,
+      bid_usdc_cents: bidUsdcCents,
+      bid_usdc: bidUsdc,
       moment_quality: pick.moment_quality,
       brand_match: pick.brand_match,
       reason: pick.reason,
@@ -184,12 +198,14 @@ export async function managerTick(
 
     // 4. Insert OFFER render_event (status='pending') + pg_notify. La row
     // kind='brand' SOLO se inserta cuando el streamer ✅ desde el endpoint
-    // POST /api/creators/[id]/offers/[event_id]/accept (ver apps/web).
+    // POST /api/creators/[id]/offers/[event_id]/accept (ver apps/web). El
+    // accept endpoint copia bid_usdc_cents (columna) directo al brand event
+    // → de ahí lo lee settlement.ts para firmar el transfer USDC.
     const insert = await client.query<{ id: string; created_at: string }>(
-      `insert into render_events (creator_id, message, kind, status, payload)
-       values ($1, $2, 'offer', 'pending', $3)
+      `insert into render_events (creator_id, message, kind, status, bid_usdc_cents, payload)
+       values ($1, $2, 'offer', 'pending', $3, $4)
        returning id, created_at`,
-      [config.creatorId, message.slice(0, 280), JSON.stringify(payload)],
+      [config.creatorId, message.slice(0, 280), bidUsdcCents, JSON.stringify(payload)],
     );
     const event_id = insert.rows[0]!.id;
 
@@ -220,6 +236,8 @@ export async function managerTick(
       chunk_id: chunk.id,
       kind: "offer",
       brand_id: pick.brand_id ?? null,
+      bid_usdc: bidUsdc,
+      bid_usdc_cents: bidUsdcCents,
       has_asset: !!hasAsset,
       dry_run: config.dryRun,
       timing,
