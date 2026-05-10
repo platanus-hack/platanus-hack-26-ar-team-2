@@ -38,8 +38,6 @@ interface DockState {
   balanceUsdc: number | null;
   placements: RecentPlacement[];
   pendingOffers: PendingOffer[];
-  forceEventPending: boolean;
-  fullBreakPending: boolean;
   lastAction: string | null;
 }
 
@@ -51,7 +49,6 @@ type Action =
   | { type: "SET_OFFER_LOCAL_STATUS"; event_id: string; local_status: PendingOffer["local_status"] }
   | { type: "REMOVE_OFFER"; event_id: string }
   | { type: "EXPIRE_STALE_OFFERS"; now_ms: number; ttl_ms: number }
-  | { type: "SET_PENDING"; key: "forceEventPending" | "fullBreakPending"; value: boolean }
   | { type: "SET_LAST_ACTION"; msg: string };
 
 function reducer(state: DockState, action: Action): DockState {
@@ -92,8 +89,6 @@ function reducer(state: DockState, action: Action): DockState {
             : o
         ),
       };
-    case "SET_PENDING":
-      return { ...state, [action.key]: action.value };
     case "SET_LAST_ACTION":
       return { ...state, lastAction: action.msg };
   }
@@ -103,8 +98,6 @@ const INITIAL: DockState = {
   balanceUsdc: null,
   placements: [],
   pendingOffers: [],
-  forceEventPending: false,
-  fullBreakPending: false,
   lastAction: null,
 };
 
@@ -278,52 +271,6 @@ export default function DockClient({
     return () => timers.forEach(clearTimeout);
   }, [state.pendingOffers]);
 
-  // Hotkeys (existente).
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      if (e.key === "f" || e.key === "F") triggerForceEvent();
-      if (e.key === "b" || e.key === "B") triggerFullBreak();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.forceEventPending, state.fullBreakPending]);
-
-  async function triggerForceEvent() {
-    if (state.forceEventPending) return;
-    dispatch({ type: "SET_PENDING", key: "forceEventPending", value: true });
-    try {
-      await fetch("/api/auctions/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "epic_moment" }),
-      });
-      flash("⚡ Force event dispatched");
-    } catch {
-      flash("⚠️ Force event failed — check server");
-    } finally {
-      dispatch({ type: "SET_PENDING", key: "forceEventPending", value: false });
-    }
-  }
-
-  async function triggerFullBreak() {
-    if (state.fullBreakPending) return;
-    dispatch({ type: "SET_PENDING", key: "fullBreakPending", value: true });
-    try {
-      await fetch("/api/auctions/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "fullscreen_takeover" }),
-      });
-      flash("🎬 Full break dispatched");
-    } catch {
-      flash("⚠️ Full break failed — check server");
-    } finally {
-      dispatch({ type: "SET_PENDING", key: "fullBreakPending", value: false });
-    }
-  }
-
   async function acceptOffer(offer: PendingOffer) {
     if (!creatorId || offer.local_status !== "pending") return;
     dispatch({ type: "SET_OFFER_LOCAL_STATUS", event_id: offer.event_id, local_status: "accepting" });
@@ -396,32 +343,6 @@ export default function DockClient({
           ))}
         </section>
       )}
-
-      {/* Hotkeys */}
-      <section className="flex flex-col gap-2">
-        <button
-          onClick={triggerForceEvent}
-          disabled={state.forceEventPending}
-          className="w-full rounded-lg py-2.5 px-3 font-semibold bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-between text-white"
-        >
-          <div className="flex flex-col items-start text-left">
-            <span>⚡ AD momento</span>
-            <span className="text-[10px] opacity-60 font-normal">Dispara un aviso en el momento actual</span>
-          </div>
-          <kbd className="text-[10px] bg-[#4f46e5] rounded px-1.5 py-0.5 opacity-70 shrink-0">F</kbd>
-        </button>
-        <button
-          onClick={triggerFullBreak}
-          disabled={state.fullBreakPending}
-          className="w-full rounded-lg py-2.5 px-3 font-semibold bg-[#ef4444] hover:bg-[#dc2626] disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-between text-white"
-        >
-          <div className="flex flex-col items-start text-left">
-            <span>🎬 Corte publicitario</span>
-            <span className="text-[10px] opacity-60 font-normal">Pantalla completa para una marca</span>
-          </div>
-          <kbd className="text-[10px] bg-[#dc2626] rounded px-1.5 py-0.5 opacity-70 shrink-0">B</kbd>
-        </button>
-      </section>
 
       {/* Last action flash */}
       {state.lastAction && (
