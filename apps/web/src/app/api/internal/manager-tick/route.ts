@@ -41,19 +41,22 @@ function envNum(name: string, fallback: number, min = 0): number {
 }
 
 export async function GET(req: Request) {
-  // Bearer auth (only enforced if CRON_SECRET is set)
-  const expected = process.env.CRON_SECRET;
-  if (expected) {
-    const got = req.headers.get("authorization");
-    if (got !== `Bearer ${expected}`) {
-      return new NextResponse("unauthorized", { status: 401 });
+  const url = new URL(req.url);
+  // ?once=1 → single-tick mode (mock page / manual trigger), skips auth
+  const singleTick = url.searchParams.get("once") === "1";
+
+  // Bearer auth (only enforced if CRON_SECRET is set AND not single-tick mode)
+  if (!singleTick) {
+    const expected = process.env.CRON_SECRET;
+    if (expected) {
+      const got = req.headers.get("authorization");
+      if (got !== `Bearer ${expected}`) {
+        return new NextResponse("unauthorized", { status: 401 });
+      }
     }
   }
 
-  const url = new URL(req.url);
   const streamKey = url.searchParams.get("key") ?? process.env.MANAGER_STREAM_KEY ?? "coscu-test";
-  // ?once=1 or x-single-tick header → run exactly one tick and return (for mock page)
-  const singleTick = url.searchParams.get("once") === "1" || req.headers.get("x-single-tick") === "1";
   const gapMs = envNum("MANAGER_INTERNAL_GAP_MS", 5_000);
   // Stop new ticks once we're within ~6s of maxDuration to leave room for
   // the last tick + response serialization. maxDuration=60s → deadline=54s.

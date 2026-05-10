@@ -74,6 +74,16 @@ export default function MockPage() {
       const tickRes = await fetch(
         `/api/internal/manager-tick?key=${encodeURIComponent(streamKey)}&once=1`,
       );
+      if (!tickRes.ok) {
+        const errText = await tickRes.text();
+        const tTick = Date.now() - tickT0;
+        setResults((prev) => [{
+          text, chunk: chunkData, tick: null,
+          timing: { chunk_ms: tChunk, tick_ms: tTick, total_ms: Date.now() - t0 },
+          ts: Date.now(), error: `manager-tick ${tickRes.status}: ${errText}`,
+        }, ...prev].slice(0, 20));
+        return;
+      }
       const tickData = (await tickRes.json()) as TickResponse;
       const tTick = Date.now() - tickT0;
       const lastTick = tickData.ticks?.[tickData.ticks.length - 1] ?? null;
