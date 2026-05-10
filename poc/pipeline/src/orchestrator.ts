@@ -187,12 +187,23 @@ export function startSession(session: StreamSession, opts?: StartSessionOptions)
     })
     .catch((e) => log.warn(`[transcribe ${key}] start failed: ${e instanceof Error ? e.message : e}`));
 
-  startFrameAnalysis(key)
-    .then((handle) => {
-      const active = sessions.get(key);
-      if (active && handle) active.frame = handle;
-    })
-    .catch((e) => log.warn(`[frame ${key}] start failed: ${e instanceof Error ? e.message : e}`));
+  // Frame analysis (Claude Haiku vision @ FRAME_FPS) está apagado por default
+  // desde 2026-05-09 para el demo: el agent es 100% audio-driven (keyword en
+  // partial transcript → flush instantáneo del chunk → manager-tick). El frame
+  // analysis era info extra para el picker (scene_type, mood_tags) pero su
+  // costo (RPM Anthropic + ~$0.001 por frame) no se justifica si el match ya
+  // pega solo con keyword + audio_text. Encendelo si querés que el picker
+  // tenga contexto visual:  FRAME_ANALYSIS_ENABLED=true
+  if (process.env.FRAME_ANALYSIS_ENABLED === 'true') {
+    startFrameAnalysis(key)
+      .then((handle) => {
+        const active = sessions.get(key);
+        if (active && handle) active.frame = handle;
+      })
+      .catch((e) => log.warn(`[frame ${key}] start failed: ${e instanceof Error ? e.message : e}`));
+  } else {
+    log.info(`[frame ${key}] disabled (FRAME_ANALYSIS_ENABLED!=true) — pipeline 100% audio-driven`);
+  }
 
   startTwitchPoll(key, twitchChannel)
     .then((handle) => {
