@@ -39,8 +39,28 @@ export type BrandPick = {
   brand_id: string | null;
   moment_quality: number;
   brand_match: number;
+  /** USDC decimal del bid del winner (null si nadie quiso pautar). El single-agent
+   *  picker no setea esto; el multi-agent sí lo emite por brand-agent. */
+  bid_usdc?: number | null;
   reason: string;
   message: string | null;
+};
+
+/** Output de cada brand-agent en la deliberación multi-agente.
+ *  Se persiste como render_event kind='brand_thought' con deliberation_id
+ *  común por tick — para auditar POR QUÉ cada brand entró/pasó, no solo
+ *  el ganador. */
+export type BrandThought = {
+  brand_slug: string;
+  brand_label: string;
+  brand_color?: string;
+  interested: boolean;
+  score: number;
+  bid_usdc: number | null;
+  pitch: string;
+  reasoning: string;
+  latency_ms: number;
+  error?: string;
 };
 
 export type LoadedBrand = {
@@ -48,9 +68,15 @@ export type LoadedBrand = {
   display_name: string;
   description: string;
   match_keywords: string[];
+  /** Tono que cada brand-agent usa para hablar en primera persona en su pitch
+   *  (worker-multiagent). Opcional — si falta el system prompt cae en "neutra". */
+  brand_voice?: string;
+  /** Hex color para el dock UI / brand_thought events. */
+  color?: string;
   /** Floor de bid en USDC. El single-agent picker del worker no negocia bid;
    *  tick.ts usa este valor como bid efectivo del offer (lo persiste en
-   *  bid_usdc_cents para que el settlement loop lo firme). */
+   *  bid_usdc_cents para que el settlement loop lo firme). El multi-agent
+   *  picker permite al brand-agent decidir bid dentro de [min, max]. */
   min_bid_usdc: number | null;
   max_bid_usdc: number | null;
   ad: {

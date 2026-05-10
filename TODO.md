@@ -23,7 +23,6 @@ Las tareas con `[INFRA]` son cuentas / deploys / fondos / hardware — hacelas *
 | Dev | Task ID | Scope | Started |
 |---|---|---|---|
 | Andy | C-08m-cron | Variante Vercel Cron del manager — port de la lógica Stage1+Stage2 a `apps/web/src/lib/manager/` + route `GET /api/internal/manager-tick` con Bearer auth + cron 1/min en `vercel.json`. Sin Fly/Railway, todo Vercel. Trade-off: latencia 0–60s vs <1s del worker local. Co-existe con `apps/manager-worker/` — pick-at-deploy-time. **⚠ pending C-08m-cron-5s upgrade:** demo SLA pide polling cada 5s, no cada 1min — Vercel Cron nativo no permite sub-minute. Opciones documentadas en `DESIGN.md §2` (latencia note): (1) cron `* * * * *` que internamente itera 12×5s con sleeps dentro del timeout (alcanza con 60s en Pro, 10s en Hobby ≠ alcanza), (2) self-invoking edge function con setTimeout+fetch, (3) QStash/Inngest scheduler externo. Decidir post-MVP — el demo del domingo arranca con cron 1/min y se cuenta como "el sistema piensa cada minuto" si no llegamos al upgrade. | 2026-05-09 |
-| Franco | worker-multiagent | Port del multi-agent picker (`apps/web/src/lib/manager/multiAgentPicker.ts`) al worker Fly. Cada brand corre su propia Haiku en paralelo y decide `{interested, score, bid_usdc, pitch, reasoning}` en primera persona. INSERTea N rows `kind='brand_thought'` (con `deliberation_id`) antes del offer + propaga `deliberation_id` al offer. Bid dinámico clamp `[min, max]` del YAML (red de seguridad). Sin gates por ahora (gate ladder no se portea). | 2026-05-10 |
 
 ---
 

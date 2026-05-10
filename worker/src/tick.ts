@@ -3,9 +3,14 @@
  * Same logic as apps/web/src/lib/manager/tick.ts but without Next.js imports.
  */
 
+import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import type { ContextChunk, LoadedBrand, TickResult } from "./types.js";
-import { makeClaudePicker, makeStubPicker, type Picker } from "./pick.js";
+import {
+  makeMultiAgentClaudePicker,
+  makeMultiAgentStubPicker,
+  type MultiAgentPicker,
+} from "./pick.js";
 
 export type ManagerConfig = {
   streamKey: string;
@@ -82,28 +87,98 @@ export async function managerTick(
       };
     }
 
-    // 2. Claude (or stub) picker
-    const picker: Picker = config.dryRun
-      ? makeStubPicker()
+    // 2. Multi-agent picker — N Haikus paralelas, una por brand. Cada
+    // brand-agent decide en primera persona {interested, score, bid_usdc,
+    // pitch, reasoning}. Persistimos cada thought como render_event antes
+    // de cualquier decisión de offer/cooldown — el dock ve la deliberación
+    // siempre, no solo los offers que ganaron.
+    const deliberationId = randomUUID();
+    const picker: MultiAgentPicker = config.dryRun
+      ? makeMultiAgentStubPicker()
       : (() => {
           if (!config.anthropicKey) {
             throw new Error("ANTHROPIC_API_KEY missing — set it or use MANAGER_DRY_RUN=true");
           }
-          return makeClaudePicker(config.anthropicKey, config.anthropicModel);
+          return makeMultiAgentClaudePicker(config.anthropicKey, config.anthropicModel);
         })();
 
-    const pick = await picker(chunk, brands);
+    const multiResult = await picker(chunk, brands);
+    const pick = multiResult.winner;
+    const thoughts = multiResult.thoughts;
     const tPicker = elapsed();
 
-    // Si el picker no eligió ninguna brand, salimos sin emitir. No tiene
-    // sentido meter una card "marca:—" en el dock — es un chunk procesado
-    // que no matcheó nada, no algo accionable.
+    // 2b. Persistir N brand_thought rows + pg_notify cada una. Comparten
+    // deliberation_id con el offer (si sale) — el dock las agrupa por ese
+    // ID. Hay que persistirlas SIEMPRE (incluso si no hay winner): es la
+    // visibilidad agentic central del producto.
+    //
+    // Optimización: 1 query por thought (CTE + pg_notify en el SELECT).
+    // El payload SSE se construye server-side con jsonb_build_object || $3
+    // — así no necesitamos un round-trip extra para leer el id antes de
+    // notify. Promise.all → cada lambda toma su propia connection del pool,
+    // las N queries corren en paralelo. Para 3-6 brands baja
+    // thoughts_emit_ms de ~2s (secuencial × 2 queries) a ~500ms (paralelo
+    // × 1 query). Ordering del feed lo da created_at del row.
+    const thoughtEventIds = await Promise.all(
+      thoughts.map(async (thought) => {
+        const thoughtPayload: Record<string, unknown> = {
+          kind: "brand_thought",
+          deliberation_id: deliberationId,
+          chunk_id: chunk.id,
+          brand_id: thought.brand_slug,
+          brand_label: thought.brand_label,
+          brand_color: thought.brand_color,
+          interested: thought.interested,
+          score: thought.score,
+          bid_usdc: thought.bid_usdc,
+          pitch: thought.pitch,
+          reasoning: thought.reasoning,
+          latency_ms: thought.latency_ms,
+          error: thought.error,
+        };
+        const thoughtMessage = (
+          thought.pitch ||
+          thought.reasoning ||
+          thought.brand_label
+        ).slice(0, 280);
+        const thoughtRow = await pool.query<{ id: string }>(
+          `with inserted as (
+             insert into render_events (creator_id, message, kind, payload)
+             values ($1::text, $2::text, 'brand_thought', $3::jsonb)
+             returning id, created_at
+           )
+           select
+             id,
+             pg_notify(
+               'render_events',
+               $1 || ':' || id::text || ':' || (
+                 jsonb_build_object(
+                   'id', id,
+                   'creator_id', $1,
+                   'created_at', created_at,
+                   'message', $2
+                 ) || $3::jsonb
+               )::text
+             ) as _notified
+           from inserted`,
+          [config.creatorId, thoughtMessage, JSON.stringify(thoughtPayload)],
+        );
+        return thoughtRow.rows[0]!.id;
+      }),
+    );
+    const tThoughtsEmit = elapsed();
+
+    // Si nadie quiso pautar, salimos. Los thoughts ya quedaron persisted.
     if (!pick.brand_id) {
       console.log(JSON.stringify({
         tag: "worker:no_match",
         stream_key: config.streamKey,
         chunk_id: chunk.id,
+        deliberation_id: deliberationId,
         moment_quality: pick.moment_quality,
+        n_thoughts: thoughts.length,
+        n_interested: thoughts.filter((t) => t.interested).length,
+        thoughts_emit_ms: tThoughtsEmit - tPicker,
         reason: pick.reason ?? null,
       }));
       return {
@@ -156,31 +231,46 @@ export async function managerTick(
       : undefined;
     const hasAsset = matchedBrand?.ad.asset_url;
 
-    // Resolver bid: el single-agent picker del worker no negocia, así que
-    // usamos min_bid_usdc del YAML como floor del offer. settlement.ts lee
-    // bid_usdc_cents de la columna (no del payload) para firmar el transfer
-    // USDC brand→creator post-accept; sin esto, settlement falla con
-    // payment_error='bid_usdc_cents=0'. Si la YAML no define floor, dejamos
-    // null y la row va a fallar en settlement con error explícito (lo que
-    // tampoco queremos, pero es mejor que un 0 silencioso).
-    const bidUsdc = matchedBrand?.min_bid_usdc ?? null;
+    // Resolver bid: el multi-agent picker emite bid_usdc por brand-agent
+    // (clamped en pick.ts al rango YAML). Acá clampeamos otra vez como red
+    // de seguridad por si el winner llegó con un valor inesperado, y
+    // fallback al min del YAML si el agent erróneamente devolvió null en
+    // un winner (no debería pasar — pickWinnerDeterministic filtra null).
+    let bidUsdc: number | null = pick.bid_usdc ?? null;
+    if (bidUsdc != null && matchedBrand) {
+      const min = matchedBrand.min_bid_usdc ?? 0.10;
+      const max = matchedBrand.max_bid_usdc ?? 1.00;
+      bidUsdc = Math.max(min, Math.min(max, bidUsdc));
+    }
+    if (bidUsdc == null && matchedBrand?.min_bid_usdc != null) {
+      bidUsdc = matchedBrand.min_bid_usdc;
+    }
     const bidUsdcCents = bidUsdc != null ? Math.round(bidUsdc * 100) : null;
 
     // Construir payload del offer. Incluye chunk_id (audit dedup), brand info
     // para el dock, bid info (espejo de la columna para que el accept endpoint
-    // pueda heredar al brand event sin re-fetch), y placement visual si el
-    // YAML tiene ad_asset_url.
+    // pueda heredar al brand event sin re-fetch), deliberation_id (link a las
+    // N brand_thought rows), thought_summary (resumen de la deliberación) y
+    // placement visual si el YAML tiene ad_asset_url.
     const payload: Record<string, unknown> = {
       kind: "offer",
       status: "pending",
+      deliberation_id: deliberationId,
       chunk_id: chunk.id,
       brand_id: pick.brand_id,
       brand_label: matchedBrand?.display_name ?? pick.brand_id,
+      brand_color: matchedBrand?.color,
       bid_usdc_cents: bidUsdcCents,
       bid_usdc: bidUsdc,
       moment_quality: pick.moment_quality,
       brand_match: pick.brand_match,
       reason: pick.reason,
+      thought_summary: thoughts.map((t) => ({
+        brand_id: t.brand_slug,
+        interested: t.interested,
+        score: t.score,
+        bid_usdc: t.bid_usdc,
+      })),
       // Default para text-only — overrideado abajo si la brand tiene asset.
       zone_id: matchedBrand?.ad.zone ?? "lower_third",
       duration_ms: matchedBrand?.ad.duration_ms ?? 8000,
@@ -226,7 +316,8 @@ export async function managerTick(
       chunk_query_ms: tChunkQuery - tPool,
       dedup_ms: tDedup - tChunkQuery,
       picker_ms: tPicker - tDedup,
-      brand_emit_ms: tBrandEmit - tPicker,
+      thoughts_emit_ms: tThoughtsEmit - tPicker,
+      brand_emit_ms: tBrandEmit - tThoughtsEmit,
       total_ms: tBrandEmit,
     };
 
@@ -234,10 +325,13 @@ export async function managerTick(
       tag: "worker:tick_done",
       stream_key: config.streamKey,
       chunk_id: chunk.id,
+      deliberation_id: deliberationId,
       kind: "offer",
       brand_id: pick.brand_id ?? null,
       bid_usdc: bidUsdc,
       bid_usdc_cents: bidUsdcCents,
+      n_thoughts: thoughts.length,
+      n_interested: thoughts.filter((t) => t.interested).length,
       has_asset: !!hasAsset,
       dry_run: config.dryRun,
       timing,

@@ -12,6 +12,7 @@ type RawBrandYaml = {
   brand_id: string;
   display_name: string;
   brand_voice?: string;
+  color?: string;
   description?: string;
   match_keywords?: string[];
   min_bid_usdc?: number;
@@ -39,6 +40,8 @@ export function loadBrands(brandsDir: string): LoadedBrand[] {
       display_name: raw.display_name,
       description: raw.description ?? raw.brand_voice ?? "",
       match_keywords: raw.match_keywords ?? [],
+      brand_voice: raw.brand_voice,
+      color: raw.color,
       min_bid_usdc: typeof raw.min_bid_usdc === "number" ? raw.min_bid_usdc : null,
       max_bid_usdc: typeof raw.max_bid_usdc === "number" ? raw.max_bid_usdc : null,
       ad: {
