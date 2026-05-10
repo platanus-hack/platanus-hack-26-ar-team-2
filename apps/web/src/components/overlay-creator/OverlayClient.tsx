@@ -110,10 +110,12 @@ export default function OverlayClient({ creator_id }: { creator_id: string }) {
             ad_url: current!.asset_url!,
             qr_url: current!.qr_url ?? "",
             duration_ms: current!.duration_ms ?? 8000,
-            zone_id: "fullscreen_takeover",
+            zone_id: resolveZoneId(current!.zone_id ?? current!.zone),
+            position: current!.position,
             max_duration_ms: current!.max_duration_ms,
             audio: current!.audio,
             brand_id: current!.brand_id,
+            asset_type: current!.asset_type ?? inferAssetType(current!.asset_url!),
           }}
           onExpire={() => setCurrent(null)}
         />
@@ -142,4 +144,15 @@ function resolveZoneId(raw?: string): ZoneId {
     console.warn(`[overlay] zone desconocida "${raw}" → fallback bottom_right_corner`);
   }
   return "bottom_right_corner";
+}
+
+/**
+ * Si el publisher no setea asset_type, inferimos por extension. Cubre el caso
+ * común: SVG/PNG placeholders (D-10b stub) que se mandan sin asset_type
+ * explícito. Default 'video' para mantener backwards-compat con D-10 (mp4s).
+ */
+function inferAssetType(url: string): "image" | "video" {
+  const lower = url.split("?")[0]!.toLowerCase();
+  if (/\.(svg|png|jpe?g|webp|gif|avif)$/.test(lower)) return "image";
+  return "video";
 }

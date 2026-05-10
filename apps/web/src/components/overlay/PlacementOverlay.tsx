@@ -29,6 +29,8 @@ export interface Placement {
   /** Default según ZONE_AUDIO_DEFAULT[zone_id], placement puede overrider. */
   audio?: boolean;
   brand_id?: string;
+  /** Default 'video' (backwards compat). 'image' usa <img> + timer-driven expire. */
+  asset_type?: "video" | "image";
 }
 
 interface Props {
@@ -130,6 +132,7 @@ export default function PlacementOverlay({
   }, [initialPlacement, expire]);
 
   useEffect(() => {
+    if (current?.asset_type === "image") return;
     if (current && videoRef.current) {
       videoRef.current.load();
       // Browsers block autoplay of unmuted video. Try unmuted first,
@@ -229,7 +232,6 @@ function FullscreenInner({
   const noUrl = !placement.ad_url;
   const brand = placement.brand_id ? getBrand(placement.brand_id) : undefined;
   const accent = brand?.brand_color ?? "#6366f1";
-  const audioEnabled = placement.audio ?? ZONE_AUDIO_DEFAULT.fullscreen_takeover;
 
   return (
     <div
@@ -239,15 +241,12 @@ function FullscreenInner({
       {noUrl || errored ? (
         <FallbackAd placement={placement} className="w-full h-full" />
       ) : (
-        <video
-          ref={videoRef}
-          src={placement.ad_url}
-          className="w-full h-full object-cover"
-          autoPlay
-          muted
-          playsInline
+        <AssetMedia
+          placement={placement}
+          videoRef={videoRef}
+          fit="cover"
           onError={() => setErrored(true)}
-          onEnded={onExpire}
+          onVideoEnded={onExpire}
         />
       )}
       {placement.qr_url && <QrCorner qrUrl={placement.qr_url} />}
@@ -271,7 +270,6 @@ function ZonedAd({
   const noUrl = !placement.ad_url;
   const brand = placement.brand_id ? getBrand(placement.brand_id) : undefined;
   const bg = brand?.brand_color ?? "#111118";
-  const audioEnabled = placement.audio ?? ZONE_AUDIO_DEFAULT[placement.zone_id];
   const isCorner = placement.zone_id === "bottom_right_corner";
   const qrSize = isCorner ? 48 : 80;
 
@@ -289,21 +287,61 @@ function ZonedAd({
       {noUrl || errored ? (
         <FallbackAd placement={placement} className="w-full h-full" />
       ) : (
-        <video
-          ref={videoRef}
-          src={placement.ad_url}
-          // object-contain en lower-third / corner → el ad se ve completo,
-          // sin crop. El brand color rellena los bordes.
-          className="w-full h-full object-contain"
-          autoPlay
-          muted
-          playsInline
+        <AssetMedia
+          placement={placement}
+          videoRef={videoRef}
+          fit="contain"
           onError={() => setErrored(true)}
-          onEnded={onExpire}
+          onVideoEnded={onExpire}
         />
       )}
       {placement.qr_url && <QrCorner qrUrl={placement.qr_url} position="bottom-right" size={qrSize} />}
     </div>
+  );
+}
+
+// ─── Img/video chooser por asset_type ─────────────────────────────────
+//
+// Default 'video' (backwards compat con todo lo que ya emitía sin asset_type).
+// 'image' renderea con <img>; el setTimeout del PlacementOverlay raíz dispara
+// onExpire al cumplirse effectiveDuration — los <img> no tienen 'ended' event.
+
+function AssetMedia({
+  placement,
+  videoRef,
+  fit,
+  onError,
+  onVideoEnded,
+}: {
+  placement: Placement;
+  videoRef: React.RefObject<HTMLVideoElement | null>;
+  fit: "contain" | "cover";
+  onError: () => void;
+  onVideoEnded: () => void;
+}) {
+  const cls = `w-full h-full object-${fit}`;
+  if (placement.asset_type === "image") {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={placement.ad_url}
+        alt={placement.brand_id ?? "ad"}
+        className={cls}
+        onError={onError}
+      />
+    );
+  }
+  return (
+    <video
+      ref={videoRef}
+      src={placement.ad_url}
+      className={cls}
+      autoPlay
+      muted
+      playsInline
+      onError={onError}
+      onEnded={onVideoEnded}
+    />
   );
 }
 
