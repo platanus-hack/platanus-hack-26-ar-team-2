@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { resolveModel } from './aiModel.js';
 import { log } from './log.js';
 
-const MODEL = resolveModel(process.env.AUDIO_SUMMARY_MODEL ?? 'gemini-3.1-flash-lite');
+const MODEL = resolveModel(process.env.AUDIO_SUMMARY_MODEL ?? 'claude-haiku-4-5');
 
 // Schema agnóstico al contenido. El modelo NO debe asumir gaming, IRL, cocina,
 // charla — solo extraer qué se está diciendo. Los brand-agents consumen estos
@@ -43,20 +43,21 @@ interface SummarizeInput {
 }
 
 /**
- * Resume el audio_text de la ventana de 30s con Gemini Flash via AI Gateway.
- * Usa contexto del frame (scene_type, on_screen_text, game_category) como prior
- * para desambiguar referencias del transcript ("ese jugador" → nombre del HUD).
+ * Resume el audio_text de la ventana de 30s con Claude Haiku (provider directo
+ * Anthropic o AI Gateway). Usa contexto del frame (scene_type, on_screen_text,
+ * game_category) como prior para desambiguar referencias del transcript
+ * ("ese jugador" → nombre del HUD).
  *
- * Devuelve null si no hay AI_GATEWAY_API_KEY o si la call falla — el chunk se
- * persiste igual con audio_text crudo, solo pierde el summary IA.
+ * Devuelve null si no hay ANTHROPIC_API_KEY ni AI_GATEWAY_API_KEY o si la call
+ * falla — el chunk se persiste igual con audio_text crudo, solo pierde el
+ * summary IA.
  */
 export async function summarizeAudio(
   streamKey: string,
   input: SummarizeInput,
 ): Promise<AudioSummaryResult | null> {
   const hasKey =
-    process.env.GEMINI_API_KEY ||
-    process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
+    process.env.ANTHROPIC_API_KEY ||
     process.env.AI_GATEWAY_API_KEY;
   if (!hasKey) return null;
 

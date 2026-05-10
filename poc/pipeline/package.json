@@ -14,7 +14,7 @@
     "smoke:clip": "tsx scripts/smoke-clip.ts"
   },
   "dependencies": {
-    "@ai-sdk/google": "^3.0.71",
+    "@ai-sdk/anthropic": "^3.0.0",
     "@elevenlabs/elevenlabs-js": "^2.46.0",
     "@supabase/supabase-js": "^2.105.4",
     "@vercel/blob": "^2.3.3",

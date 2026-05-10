@@ -1,6 +1,6 @@
 /**
  * Smoke test del audio summary — llama summarizeAudio con un transcript fake
- * y muestra el output. Valida que el provider directo (GEMINI_API_KEY) +
+ * y muestra el output. Valida que el provider directo (ANTHROPIC_API_KEY) +
  * model name + Zod schema funcionen end-to-end SIN necesitar OBS ni RTMP.
  *
  * Uso: npm run smoke:summary
@@ -18,8 +18,8 @@ async function main() {
   console.log('→ smoke test audio summary');
   console.log('   transcript:', FAKE_TRANSCRIPT);
   console.log('');
-  console.log('   provider:', process.env.GEMINI_API_KEY ? 'google-direct (GEMINI_API_KEY)' : 'ai-gateway (AI_GATEWAY_API_KEY)');
-  console.log('   model:', process.env.AUDIO_SUMMARY_MODEL ?? 'gemini-3.1-flash-lite');
+  console.log('   provider:', process.env.ANTHROPIC_API_KEY ? 'anthropic-direct (ANTHROPIC_API_KEY)' : 'ai-gateway (AI_GATEWAY_API_KEY)');
+  console.log('   model:', process.env.AUDIO_SUMMARY_MODEL ?? 'claude-haiku-4-5');
   console.log('');
 
   const t0 = Date.now();
@@ -32,7 +32,7 @@ async function main() {
   const ms = Date.now() - t0;
 
   if (!result) {
-    console.error(`✗ summarizeAudio devolvió null después de ${ms}ms — ¿falta GEMINI_API_KEY/AI_GATEWAY_API_KEY?`);
+    console.error(`✗ summarizeAudio devolvió null después de ${ms}ms — ¿falta ANTHROPIC_API_KEY/AI_GATEWAY_API_KEY?`);
     process.exit(1);
   }
 

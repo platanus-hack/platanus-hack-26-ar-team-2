@@ -4,11 +4,13 @@ import { z } from 'zod';
 import { resolveModel, isUsingDirectProvider } from './aiModel.js';
 import { log } from './log.js';
 
-const MODEL_STRING = process.env.FRAME_MODEL ?? 'gemini-3.1-flash-lite';
+const MODEL_STRING = process.env.FRAME_MODEL ?? 'claude-haiku-4-5';
 const MODEL = resolveModel(MODEL_STRING);
-// Frames por segundo capturados del stream. Default 0.5 (1 cada 2s) por el
-// rate limit del free tier de Google AI Studio (15 RPM en Flash-Lite). Con 1
-// FPS chocábamos. Subí esto si usás un tier pagado.
+// Frames por segundo capturados del stream. Default 0.5 (1 cada 2s). El
+// trade-off es costo + rate limit del provider: con Anthropic directo y
+// FPS=1 estás en ~60 RPM, factible si tenés tier 2+; con tier 1 (50 RPM)
+// te quedás justo. Subí FPS si pagás un tier alto y querés más resolución
+// temporal en el frame analysis.
 const FPS = Number(process.env.FRAME_FPS ?? 0.5);
 
 // Schema agnóstico al contenido. El modelo NO debe asumir gaming, IRL, cocina,
@@ -62,11 +64,10 @@ async function analyzeFrame(jpegBuffer: Buffer): Promise<FrameAnalysisResult> {
 
 export async function startFrameAnalysis(streamKey: string): Promise<FrameHandle | null> {
   const hasKey =
-    process.env.GEMINI_API_KEY ||
-    process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
+    process.env.ANTHROPIC_API_KEY ||
     process.env.AI_GATEWAY_API_KEY;
   if (!hasKey) {
-    log.warn(`[frame ${streamKey}] no GEMINI_API_KEY ni AI_GATEWAY_API_KEY → frame pipe disabled`);
+    log.warn(`[frame ${streamKey}] no ANTHROPIC_API_KEY ni AI_GATEWAY_API_KEY → frame pipe disabled`);
     return null;
   }
 
@@ -157,7 +158,7 @@ export async function startFrameAnalysis(streamKey: string): Promise<FrameHandle
   });
 
   log.success(
-    `[frame ${streamKey}] pipe arrancado · model=${MODEL_STRING} · provider=${isUsingDirectProvider() ? 'google-direct' : 'ai-gateway'} · fps=${FPS}`,
+    `[frame ${streamKey}] pipe arrancado · model=${MODEL_STRING} · provider=${isUsingDirectProvider() ? 'anthropic-direct' : 'ai-gateway'} · fps=${FPS}`,
   );
 
   return {
