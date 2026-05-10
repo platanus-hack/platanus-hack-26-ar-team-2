@@ -3,8 +3,15 @@ import type { TranscribeHandle } from './transcribe.js';
 import type { FrameHandle } from './frame.js';
 import type { TwitchHandle } from './twitch.js';
 import type { ChatHandle } from './chat.js';
-import { summarizeAudio } from './audioSummary.js';
 import { log } from './log.js';
+
+// audio_summary IA fue removido del fast-path el 2026-05-09 — mataba 1-3s
+// por chunk en una call a Claude Haiku que solo se usaba para que Stage 1
+// (intensity.ts) tuviera audio_mentions / audio_intent. Como el chunkWriter
+// YA sabe qué keyword disparó el flush instantáneo, podemos populate esos
+// campos sin LLM. El picker (Stage 2) lee audio_text crudo directamente y
+// extrae lo que necesita on-demand. summarizeAudio.ts queda en disco por si
+// hace falta volver a habilitarlo, pero NO se importa.
 
 // Default 15s — bajado desde 30s el 2026-05-09. Es el techo del worst-case:
 // con instant-flush por keyword (abajo) la mayoría de los chunks salen mucho
@@ -134,7 +141,10 @@ export function startChunkWriter(sources: ChunkSources): ChunkWriterHandle {
   let writing = false;
   const lastKeywordFlushAt = new Map<string, number>();
 
-  const writeChunk = async (trigger: 'interval' | 'keyword' | 'final' = 'interval'): Promise<void> => {
+  const writeChunk = async (
+    trigger: 'interval' | 'keyword' | 'final' = 'interval',
+    matchedKeyword?: string,
+  ): Promise<void> => {
     if (!active && chunkCount > 0) return; // evita doble write en stop()
     if (writing) return; // otro writeChunk en curso, este trigger se descarta
     writing = true;
@@ -171,16 +181,23 @@ export function startChunkWriter(sources: ChunkSources): ChunkWriterHandle {
     const audio_text = transcribe?.getAudio30s() || null;
     const audio_partial = transcribe?.getPartial() || null;
 
-    // Pre-procesa el audio_text con Gemini Flash UNA vez por chunk → ahorra
-    // re-procesamiento por parte de cada brand-agent. Si la call falla o no
-    // hay AI_GATEWAY_API_KEY, el chunk se escribe igual con summary=NULL.
-    const summary = audio_text
-      ? await summarizeAudio(sources.streamKey, {
-          audioText: audio_text,
-          sceneType: frameLatest?.result.scene_type,
-          onScreenText: frameLatest?.result.on_screen_text,
-          gameCategory: tw?.game_category,
-        })
+    // Sin LLM summary. Cuando el flush lo dispara una keyword, populamos
+    // audio_mentions + audio_intent + audio_summary directo desde lo que ya
+    // sabemos — esos 3 campos los lee Stage 1 (intensity.ts) para decidir si
+    // el chunk es "auctionable". Stage 2 (pickBrand) usa audio_text crudo
+    // así que no pierde info.
+    //
+    // Para chunks de interval (sin keyword): audio_mentions=null, intent=null
+    // → Stage 1 falla → no ad. Es el comportamiento deseado: el demo solo
+    // emite cuando el streamer dice una palabra trigger. El cron del manager
+    // sigue corriendo como safety net por si llega un viewers_delta_30s>100
+    // que también dispara Stage 1.
+    const audio_summary = matchedKeyword
+      ? `streamer mencionó: ${matchedKeyword}`
+      : null;
+    const audio_mentions = matchedKeyword ? [matchedKeyword] : null;
+    const audio_intent: ChunkRow['audio_intent'] = matchedKeyword
+      ? 'recommendation'
       : null;
 
     const chunk: ChunkRow = {
@@ -191,10 +208,10 @@ export function startChunkWriter(sources: ChunkSources): ChunkWriterHandle {
 
       audio_text,
       audio_partial_at_end: audio_partial,
-      audio_summary: summary?.summary ?? null,
-      audio_topics: summary?.topics ?? null,
-      audio_mentions: summary?.mentions ?? null,
-      audio_intent: summary?.intent ?? null,
+      audio_summary,
+      audio_topics: null,
+      audio_mentions,
+      audio_intent,
 
       scene_type: frameLatest?.result.scene_type ?? null,
       energy_level: frameLatest?.result.energy_level ?? null,
@@ -221,7 +238,7 @@ export function startChunkWriter(sources: ChunkSources): ChunkWriterHandle {
         `viewers=${viewers ?? '—'} (Δ${viewersDelta ?? '—'}) · ` +
         `chat=${chatMetrics ? `${chatMetrics.velocity_avg.toFixed(1)}msg/s ${chatMetrics.sentiment}` : '—'} · ` +
         `scene="${chunk.scene_type ?? '—'}" · ` +
-        `audio=${summary ? `${summary.intent} topics=[${summary.topics.join(',')}] mentions=[${summary.mentions.join(',')}]` : '—'}`,
+        `audio=${matchedKeyword ? `keyword="${matchedKeyword}" intent=recommendation` : '—'}`,
     );
 
     if (supabase) {
@@ -267,7 +284,9 @@ export function startChunkWriter(sources: ChunkSources): ChunkWriterHandle {
       if (ts - last < KEYWORD_DEBOUNCE_MS) continue;
       lastKeywordFlushAt.set(kw, ts);
       log.info(`[chunk ${sources.streamKey}] 🚨 keyword "${kw}" detectada → flush instantáneo`);
-      void writeChunk('keyword');
+      // Pasamos la keyword matched para que writeChunk pueda populate
+      // audio_mentions sin pegarle al LLM — Stage 1 ya pasa con eso.
+      void writeChunk('keyword', kw);
       return; // un flush por cycle alcanza
     }
   };
