@@ -24,6 +24,7 @@ import type { Address } from "viem";
 import { signTransferUsdc } from "./chain/privy.js";
 import { usdcAmount } from "./chain/escrow.js";
 import { getCreatorWallet } from "./chain/wallets.js";
+import { isChainLiveTxsEnabled } from "./chain/env.js";
 
 const INTERVAL_MS = Number(process.env.SETTLEMENT_INTERVAL_MS ?? 2000);
 const BATCH = Number(process.env.SETTLEMENT_BATCH ?? 5);
@@ -261,7 +262,7 @@ export function startSettlementLoop(pool: Pool): () => void {
       tag: "settlement:start",
       interval_ms: INTERVAL_MS,
       batch: BATCH,
-      live: process.env.CHAIN_LIVE_TXS === "true",
+      live: isChainLiveTxsEnabled(),
     }),
   );
   // primera corrida ya — no esperamos el primer interval.
