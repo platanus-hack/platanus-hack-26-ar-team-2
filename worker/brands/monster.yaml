@@ -89,6 +89,7 @@ ad_asset_url: "https://tcbljbmedl5ntsz1.public.blob.vercel-storage.com/monster.m
 ad_asset_type: "video"
 ad_zone: "lower_third"
 ad_duration_ms: 8000
+ad_position: "bottom"
 
 ad_variants:
   - name: epic_lower

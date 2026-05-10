@@ -14,6 +14,7 @@ ad_asset_url: "https://tcbljbmedl5ntsz1.public.blob.vercel-storage.com/doritos.m
 ad_asset_type: "video"
 ad_zone: "lower_third"
 ad_duration_ms: 8000
+ad_position: "top"
 
 # ─── BrandMandate (legal/financial → mandates.payload jsonb) ─────────
 daily_cap_usdc: 50

@@ -53,6 +53,7 @@ export type LoadedBrand = {
     asset_type?: "video" | "image";
     zone?: string;
     duration_ms?: number;
+    position?: "top" | "center" | "bottom";
   };
 };
 

@@ -105,10 +105,15 @@ export default function OverlayClient({ creator_id }: { creator_id: string }) {
   if (!current?.asset_url) return null;
 
   const isImage = (current.asset_type ?? inferAssetType(current.asset_url)) === "image";
+  const position = (current as RenderEvent & { ad_position?: string }).ad_position ?? "center";
+  const alignClass =
+    position === "top" ? "items-start" :
+    position === "bottom" ? "items-end" :
+    "items-center";
 
   return (
     <div
-      className="fixed inset-0 flex items-center justify-center"
+      className={`fixed inset-0 flex justify-center ${alignClass}`}
       style={{
         opacity: visible ? 1 : 0,
         transition: `opacity ${FADE_MS}ms ease-in-out`,

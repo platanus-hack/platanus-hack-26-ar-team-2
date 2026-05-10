@@ -177,6 +177,9 @@ export async function managerTick(
       payload.zone_id = matchedBrand.ad.zone ?? "fullscreen_takeover";
       payload.duration_ms = matchedBrand.ad.duration_ms ?? 8000;
       payload.audio = true;
+      if (matchedBrand.ad.position) {
+        payload.ad_position = matchedBrand.ad.position;
+      }
     }
 
     // 4. Insert OFFER render_event (status='pending') + pg_notify. La row

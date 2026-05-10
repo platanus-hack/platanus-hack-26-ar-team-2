@@ -346,6 +346,9 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
       offerPayload.asset_url = matchedBrand.ad.asset_url;
       offerPayload.asset_type = matchedBrand.ad.asset_type ?? "video";
       offerPayload.audio = true;
+      if (matchedBrand.ad.position) {
+        offerPayload.ad_position = matchedBrand.ad.position;
+      }
     }
 
     const message = pick.message ?? "...";

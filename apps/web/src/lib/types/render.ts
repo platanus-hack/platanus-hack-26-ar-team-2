@@ -54,6 +54,8 @@ export interface RenderEventPayload {
   /** Default según ZONE_AUDIO_DEFAULT[zone_id]. */
   audio?: boolean;
   brand_id?: string;
+  /** Vertical position of the ad: top, center, or bottom. */
+  ad_position?: "top" | "center" | "bottom";
 }
 
 /**

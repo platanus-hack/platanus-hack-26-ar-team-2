@@ -18,6 +18,7 @@ type RawBrandYaml = {
   ad_asset_type?: "video" | "image";
   ad_zone?: string;
   ad_duration_ms?: number;
+  ad_position?: "top" | "center" | "bottom";
 };
 
 let _cache: LoadedBrand[] | null = null;
@@ -41,6 +42,7 @@ export function loadBrands(brandsDir: string): LoadedBrand[] {
         asset_type: raw.ad_asset_type,
         zone: raw.ad_zone,
         duration_ms: raw.ad_duration_ms,
+        position: raw.ad_position,
       },
     };
   });

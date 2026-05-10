@@ -58,6 +58,7 @@ export type LoadedBrand = {
     asset_type?: "video" | "image";
     zone?: string;
     duration_ms?: number;
+    position?: "top" | "center" | "bottom";
   };
   /** UI/log helpers — surfaced to dashboard widgets, not persisted. */
   display: {
@@ -89,6 +90,7 @@ type RawBrandYaml = {
   ad_asset_type?: "video" | "image";
   ad_zone?: string;
   ad_duration_ms?: number;
+  ad_position?: "top" | "center" | "bottom";
 
   // BrandMandate fields
   daily_cap_usdc: number;
@@ -222,6 +224,7 @@ function mapBrandYaml(slug: string, raw: RawBrandYaml): LoadedBrand {
       asset_type: raw.ad_asset_type,
       zone: raw.ad_zone,
       duration_ms: raw.ad_duration_ms,
+      position: raw.ad_position,
     },
     display: {
       color: raw.color,
