@@ -13,15 +13,21 @@ export type ManagerConfig = {
   dryRun: boolean;
   anthropicKey: string;
   anthropicModel: string;
+  /** ms mínimos entre offers consecutivos para el mismo creator. Anchored
+   *  contra kind='offer' (no 'brand') porque los brand events solo se
+   *  emiten post-accept y nos haría perder la cadencia visual del dock. */
+  cooldownMs: number;
 };
 
 export function configFromEnv(streamKey: string): ManagerConfig {
+  const cooldownS = Number(process.env.MANAGER_COOLDOWN_S ?? 30);
   return {
     streamKey,
     creatorId: streamKey,
     dryRun: process.env.MANAGER_DRY_RUN === "true" || process.env.MANAGER_DRY_RUN === "1",
     anthropicKey: process.env.ANTHROPIC_API_KEY ?? "",
     anthropicModel: process.env.ANTHROPIC_MODEL ?? "claude-haiku-4-5",
+    cooldownMs: (Number.isFinite(cooldownS) ? cooldownS : 30) * 1000,
   };
 }
 
@@ -74,6 +80,35 @@ export async function managerTick(
       };
     }
 
+    // 1c. Cooldown — si emitimos un offer hace <cooldownMs, ni corremos el
+    // picker. Sino el dock se llena de cards (worker corre cada 2-3s) y no
+    // se distingue cuál vale la pena moderar.
+    const lastOfferRes = await client.query<{ created_at: string }>(
+      `select created_at from render_events
+        where creator_id = $1 and kind = 'offer'
+        order by created_at desc
+        limit 1`,
+      [config.creatorId],
+    );
+    const lastOffer = lastOfferRes.rows[0];
+    if (lastOffer) {
+      const sinceEmit = Date.now() - new Date(lastOffer.created_at).getTime();
+      if (sinceEmit < config.cooldownMs) {
+        console.log(JSON.stringify({
+          tag: "worker:cooldown",
+          stream_key: config.streamKey,
+          chunk_id: chunk.id,
+          since_last_offer_ms: sinceEmit,
+          cooldown_ms: config.cooldownMs,
+        }));
+        return {
+          decision: "cooldown",
+          stream_key: config.streamKey,
+          chunk_id: chunk.id,
+        };
+      }
+    }
+
     // 2. Claude (or stub) picker
     const picker: Picker = config.dryRun
       ? makeStubPicker()
@@ -86,6 +121,26 @@ export async function managerTick(
 
     const pick = await picker(chunk, brands);
     const tPicker = elapsed();
+
+    // Si el picker no eligió ninguna brand, salimos sin emitir. No tiene
+    // sentido meter una card "marca:—" en el dock — es un chunk procesado
+    // que no matcheó nada, no algo accionable. El log queda igual para
+    // observability.
+    if (!pick.brand_id) {
+      console.log(JSON.stringify({
+        tag: "worker:no_match",
+        stream_key: config.streamKey,
+        chunk_id: chunk.id,
+        moment_quality: pick.moment_quality,
+        reason: pick.reason ?? null,
+      }));
+      return {
+        decision: "no_match",
+        stream_key: config.streamKey,
+        chunk_id: chunk.id,
+        pick,
+      };
+    }
 
     const message = pick.message ?? "...";
 

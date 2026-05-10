@@ -198,12 +198,16 @@ export default function DockClient({
           const data = JSON.parse((msgEvent as MessageEvent).data) as SSEOfferEvent;
           lastEventId = data.id;
 
-          if (data.kind === "offer" && data.status === "pending") {
+          // Solo metemos al dock offers con brand_id real. Los offers con
+          // brand_id=null son chunks procesados que no matchearon ninguna
+          // brand (audio vacío, sin keyword, gates rechazaron, etc) — son
+          // ruido del firehose, no algo para moderar.
+          if (data.kind === "offer" && data.status === "pending" && data.brand_id) {
             dispatch({
               type: "ADD_OFFER",
               offer: {
                 event_id: data.id,
-                brand_id: data.brand_id ?? null,
+                brand_id: data.brand_id,
                 brand_label: data.brand_label ?? data.brand_id ?? "marca",
                 brand_color: data.brand_color,
                 bid_usdc: data.bid_usdc ?? null,
