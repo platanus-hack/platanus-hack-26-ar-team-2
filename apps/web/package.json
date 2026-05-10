@@ -21,6 +21,7 @@
     "smoke:streamer": "node --experimental-strip-types scripts/smoke-streamer.mts",
     "smoke:negotiation": "node --experimental-strip-types scripts/smoke-negotiation.mts",
     "smoke:auction-run": "node --import tsx scripts/smoke-auction-run.ts",
+    "smoke:multiagent": "node --env-file=.env.local --import tsx scripts/smoke-multiagent-payment.ts",
     "sim:orch": "node --env-file=.env.local --import tsx scripts/sim-orchestrator.ts"
   },
   "dependencies": {
