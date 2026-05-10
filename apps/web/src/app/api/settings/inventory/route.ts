@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDemoCreatorId, getInventory, upsertInventory } from "@/lib/db";
+import { requireInternalBearer } from "@/lib/route-security";
 import type { InventoryRow } from "@/lib/db";
 import type { Zone } from "@/components/settings/InventoryClient";
 
@@ -26,13 +27,15 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const authError = requireInternalBearer(request);
+  if (authError) return authError;
+
   try {
     const body = (await request.json()) as { zones: Zone[] };
     const creatorId = await getDemoCreatorId();
     await upsertInventory(creatorId, body.zones.map(zoneToRow));
     return new NextResponse(null, { status: 204 });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: msg }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: "database error" }, { status: 500 });
   }
 }

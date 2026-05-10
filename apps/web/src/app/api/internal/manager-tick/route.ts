@@ -15,10 +15,9 @@
  *      Latencia agent baja a <2s desde el INSERT en lugar de los 0-6s del
  *      cron worst-case. Ver chunkWriter.ts:fireManagerWebhook().
  *
- * Auth: si `CRON_SECRET` está en env, requiere `Authorization: Bearer <secret>`.
- *       Vercel Cron lo attachea solo. El chunkWriter manda el mismo header
- *       desde MANAGER_WEBHOOK_SECRET. Sin la env var, el route es público
- *       (solo OK para local smoke / preview).
+ * Auth: requiere `Authorization: Bearer <CRON_SECRET>` cuando CRON_SECRET existe,
+ *       y exige CRON_SECRET en producción. En dev local sin secret queda abierto
+ *       para smoke tests.
  *
  * Stream key: `?key=<stream_key>` (default MANAGER_STREAM_KEY env).
  *
@@ -30,6 +29,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { configFromEnv, managerTick } from "@/lib/manager/tick";
+import { requireInternalBearer } from "@/lib/route-security";
 import type { TickResult } from "@/lib/manager/types";
 
 export const runtime = "nodejs";          // pg requires Node, not Edge
@@ -53,19 +53,11 @@ export async function GET(req: Request) {
   const invocationStartedAt = Date.now();
 
   const url = new URL(req.url);
-  // ?once=1 → single-tick mode (mock page / manual trigger), skips auth
+  // ?once=1 → single-tick mode (mock page / manual trigger)
   const singleTick = url.searchParams.get("once") === "1";
 
-  // Bearer auth (only enforced if CRON_SECRET is set AND not single-tick mode)
-  if (!singleTick) {
-    const expected = process.env.CRON_SECRET;
-    if (expected) {
-      const got = req.headers.get("authorization");
-      if (got !== `Bearer ${expected}`) {
-        return new NextResponse("unauthorized", { status: 401 });
-      }
-    }
-  }
+  const authError = requireInternalBearer(req);
+  if (authError) return authError;
 
   const streamKey = url.searchParams.get("key") ?? process.env.MANAGER_STREAM_KEY ?? "coscu-test";
   const singleParam = url.searchParams.get("single");
@@ -95,7 +87,7 @@ export async function GET(req: Request) {
         }),
       );
       return NextResponse.json(
-        { decision: "error" as const, stream_key: streamKey, error },
+        { decision: "error" as const, stream_key: streamKey, error: "manager tick failed" },
         { status: 500 },
       );
     }
@@ -177,7 +169,7 @@ export async function GET(req: Request) {
         invocation_id: invocationId,
         decision: "error" as const,
         stream_key: streamKey,
-        error,
+        error: "manager tick failed",
         ticks,
       },
       { status: 500 },

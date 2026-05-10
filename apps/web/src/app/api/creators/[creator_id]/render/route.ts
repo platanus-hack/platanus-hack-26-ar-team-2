@@ -26,6 +26,7 @@
 
 import { NextResponse } from "next/server";
 import { transactPool } from "@/lib/pg";
+import { requireInternalBearer } from "@/lib/route-security";
 import { isZoneId, ZONE_MAX_DURATION_MS, type ZoneId } from "@/lib/types/zones";
 import type { RenderEventPayload, RenderPostBody } from "@/lib/types/render";
 
@@ -52,6 +53,9 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ creator_id: string }> },
 ) {
+  const authError = requireInternalBearer(req);
+  if (authError) return authError;
+
   const { creator_id } = await params;
   if (!/^[a-zA-Z0-9_-]{1,80}$/.test(creator_id)) {
     return NextResponse.json(

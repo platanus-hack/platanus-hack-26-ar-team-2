@@ -8,8 +8,12 @@
  */
 
 import { supabaseAdmin } from "@/lib/supabase";
+import { requireInternalBearer } from "@/lib/route-security";
 
 export async function POST(req: Request) {
+  const authError = requireInternalBearer(req);
+  if (authError) return authError;
+
   const body = await req.json().catch(() => null);
   if (!body || typeof body !== "object") {
     return Response.json({ error: "invalid JSON body" }, { status: 400 });
@@ -53,7 +57,7 @@ export async function POST(req: Request) {
     .single();
 
   if (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ error: "database error" }, { status: 500 });
   }
 
   return Response.json({ ok: true, chunk_id: data.id, ts_start: data.ts_start });
