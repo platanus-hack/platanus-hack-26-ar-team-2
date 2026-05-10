@@ -1,0 +1,118 @@
+# 🔺 Doritos — snack/gaming/hype
+# Rol en el demo: matchea en momentos de hype, gaming, snacks,
+# cuando el speaker menciona doritos, snack, picante, crunch, o nacho.
+
+brand_id: doritos
+display_name: "🔺 Doritos"
+brand_voice: "bold, intenso, crunch, gamer energy"
+color: "#e3000b"
+tagline: "For the Bold."
+tracking_url: "https://doritos.demo/addie"
+description: "Doritos — el snack de los momentos intensos. Mostrá este ad cuando el speaker mencione doritos, snack, picante, crunch, nacho, o cuando haya momentos de gaming intenso, hype, o reacciones fuertes."
+match_keywords: ["doritos", "snack", "picante", "crunch", "nacho", "chip", "chips"]
+ad_asset_url: "https://tcbljbmedl5ntsz1.public.blob.vercel-storage.com/doritos.mp4"
+ad_asset_type: "video"
+ad_zone: "lower_third"
+ad_duration_ms: 8000
+
+# ─── BrandMandate (legal/financial → mandates.payload jsonb) ─────────
+daily_cap_usdc: 50
+min_bid_usdc: 0.40
+max_bid_usdc: 4.00
+always_bid_floor: false
+
+concession_step_pct: 12
+max_turns: 3
+
+allowed_zones:
+  - lower_third
+  - bottom_right_corner
+  - fullscreen_takeover
+preferred_zones:
+  - lower_third
+
+target_moods:
+  - high_energy
+  - hype
+  - celebration
+  - party
+  - gaming
+  - social
+avoid_moods:
+  - boring
+  - calm
+  - solo_grind
+
+# ─── Gate ladder (C-02b) ─────────────────────────────────────────────
+event_filters:
+  required_any_tag:
+    - high_energy
+    - hype
+    - celebration
+    - party
+    - gaming
+    - social
+  preferred_categories:
+    - gaming
+    - just_chatting
+    - irl
+  min_viewers: 0
+
+brand_safety:
+  blocked_keywords:
+    - menor
+    - droga
+    - violencia
+    - "concha de"
+  blocked_categories:
+    - politics
+    - nsfw
+    - gambling
+  blocked_competitor_brands:
+    - pringles
+    - lays
+
+dayparts:
+  active:
+    - "00:00-23:59 ART"
+
+ideal_contexts:
+  - "Speaker en gaming intenso, hype, reacción fuerte"
+  - "Momento de snack break, charla relajada con comida"
+  - "Chat explotando, momento divertido, party mode"
+  - "Speaker menciona doritos, snack, picante, crunch"
+
+# ─── Catálogo de creatives (D-10) ────────────────────────────────────
+ad_variants:
+  - name: doritos_lower
+    zone: lower_third
+    duration_ms: 8000
+    mood_tags: [high_energy, hype, gaming]
+  - name: doritos_fullscreen
+    zone: fullscreen_takeover
+    duration_ms: 6000
+    mood_tags: [epic, celebration]
+  - name: doritos_corner
+    zone: bottom_right_corner
+    duration_ms: 30000
+    mood_tags: [social, party]
+
+# ─── BrandPrompt (C-02 → mandates.prompt jsonb) ──────────────────────
+prompt:
+  system_persona: >
+    Sos el brand-agent de Doritos. Voz bold, intensa, con actitud. Entrás
+    en momentos de hype, gaming, reacciones fuertes, party. Doritos es para
+    los que se atreven. Hablás con energía, como si acabaras de comerte
+    un Doritos picante.
+  voice_examples:
+    - "Momento bold, esto es Doritos. $1.80 lower 8s."
+    - "Hype al máximo, crunch time. Doritos entra. $2.20 lower 8s."
+    - "Gaming intenso, Doritos banca el momento. $1.50 corner 30s."
+  dont_say:
+    - aburrido
+    - tranquilo
+    - suave
+  dont_do:
+    - bidear en momentos tranquilos o aburridos
+    - tono corporativo o formal
+    - hablar de subasta
