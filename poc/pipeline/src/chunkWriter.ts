@@ -172,6 +172,24 @@ export function startChunkWriter(sources: ChunkSources): ChunkWriterHandle {
     // mirar un toque atrás.
     const audio_text = transcribe?.getCommittedSince(prevWindowStart) || null;
 
+    // Skip insert si Scribe no commiteó nada Y no hay keyword detectada.
+    // Caso típico: silencio del streamer, o vos hablaste pero Scribe todavía
+    // no terminó (commit tarda 1-2s post-vocalización). Sin esto la tabla
+    // se llena de rows null que el worker procesa al pedo.
+    //
+    // CRÍTICO: si skipeamos, restauramos windowStartedAt al valor previo —
+    // sino el próximo chunk arranca su ventana en `now` y perdemos el audio
+    // que Scribe commitee en este intervalo. Con restore, el próximo chunk
+    // tiene una ventana más larga (prev → next) que recoge todo el commit
+    // pendiente. windowStartedAt avanza recién cuando insertamos.
+    if (!audio_text && !matchedKeyword) {
+      windowStartedAt = prevWindowStart;
+      log.info(
+        `[chunk ${sources.streamKey}] skip · sin commit de Scribe (window preservada)`,
+      );
+      return;
+    }
+
     // Twitch Helix metrics — solo si TWITCH_POLL_ENABLED. Sino getter devuelve
     // null y los campos quedan en null (Stage 1 los skipea graciosamente).
     const tw = sources.twitch()?.getLatest();
