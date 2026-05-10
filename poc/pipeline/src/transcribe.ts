@@ -17,6 +17,14 @@ const ROLLING_WINDOW_MS = Number(process.env.AUDIO_ROLLING_WINDOW_MS ?? 15_000);
 const MODEL_ID = process.env.ELEVENLABS_STT_MODEL ?? 'scribe_v2_realtime';
 const LANGUAGE_CODE = process.env.ELEVENLABS_STT_LANGUAGE ?? 'es';
 
+// VAD tuning — defaults de ElevenLabs son 1.5s de silencio y threshold 0.4,
+// pensados para precisión sobre velocidad. Para nuestro caso (live streamer +
+// detección instant de keywords) bajamos ambos: el committed sale en ~400ms
+// post-vocalización en vez de ~1500ms. Si la transcripción se siente
+// agresiva (corta frases, falsos cortes), subir vad_silence_s a 0.6-0.8.
+const VAD_SILENCE_S = Number(process.env.ELEVENLABS_STT_VAD_SILENCE_S ?? 0.4);
+const VAD_THRESHOLD = Number(process.env.ELEVENLABS_STT_VAD_THRESHOLD ?? 0.3);
+
 // Keyterms: lista (coma-separada) de palabras que sesgan al modelo. Útil para slang
 // rioplatense, nombres de streamers, marcas. Max 50, cada una max 20 chars (limite
 // de la API). Si una keyterm supera 20 chars, ElevenLabs la rechaza la sesión entera.
@@ -83,6 +91,8 @@ export async function startTranscribe(streamKey: string): Promise<TranscribeHand
       audioFormat: AudioFormat.PCM_16000,
       sampleRate: 16000,
       commitStrategy: CommitStrategy.VAD,
+      vadSilenceThresholdSecs: VAD_SILENCE_S,
+      vadThreshold: VAD_THRESHOLD,
       languageCode: LANGUAGE_CODE,
       ...(keyterms ? { keyterms } : {}),
     });
@@ -94,7 +104,10 @@ export async function startTranscribe(streamKey: string): Promise<TranscribeHand
 
   conn.on(RealtimeEvents.SESSION_STARTED, () => {
     const ktSummary = keyterms ? ` · keyterms=${keyterms.length}` : '';
-    log.success(`[transcribe ${streamKey}] WS open · model=${MODEL_ID} · lang=${LANGUAGE_CODE}${ktSummary}`);
+    log.success(
+      `[transcribe ${streamKey}] WS open · model=${MODEL_ID} · lang=${LANGUAGE_CODE} · ` +
+        `vad_silence=${VAD_SILENCE_S}s · vad_threshold=${VAD_THRESHOLD}${ktSummary}`,
+    );
   });
 
   conn.on(RealtimeEvents.PARTIAL_TRANSCRIPT, (msg) => {
