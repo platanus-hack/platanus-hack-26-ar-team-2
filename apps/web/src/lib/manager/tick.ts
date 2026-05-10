@@ -18,6 +18,8 @@
 import { pool } from "@/lib/pg";
 
 import { applyGateLadder } from "@/lib/agents/brand/gates/applyGateLadder";
+import { runAuction } from "@/lib/auctions/runAuction";
+import type { ManagerDecisionSummary } from "@/lib/agents/brand/huntForBrand";
 
 import { getLoadedBrands, makeClaudePicker, makeStubPicker, type Picker } from "./pickBrand";
 import type { ChunkMeta, ContextChunk, TickResult } from "./types";
@@ -254,6 +256,28 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
     ]);
     const tBrandEmit = elapsed();
 
+    // C-14 dispatch: fire-and-forget auction run for moments where Stage 2
+    // emitted a brand. Gated by MANAGER_AUCTION_DISPATCH so Andy's mock-page
+    // / smoke flows that just want the brand event keep working unchanged.
+    if (
+      pick.should_emit &&
+      pick.brand_id &&
+      process.env.MANAGER_AUCTION_DISPATCH === "true"
+    ) {
+      void dispatchAuction({
+        chunk,
+        creatorSlug: config.creatorId,
+        manager_decision: {
+          should_emit: pick.should_emit,
+          moment_quality: pick.moment_quality,
+          brand_match: pick.brand_match,
+          reason: pick.reason ?? "",
+        },
+        dryRun: config.dryRun,
+        anthropicKey: config.anthropicKey,
+      });
+    }
+
     const timing = {
       pool_ms: tPool,
       chunk_query_ms: tChunkQuery - tPool,
@@ -289,5 +313,50 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
     };
   } finally {
     client.release();
+  }
+}
+
+// C-14 fire-and-forget dispatch: kicks the auction orchestrator after a Stage 2
+// emit. Logs success/failure to Vercel function logs; never throws back into
+// managerTick (which already returned by the time this resolves).
+async function dispatchAuction(args: {
+  chunk: ContextChunk;
+  creatorSlug: string;
+  manager_decision: ManagerDecisionSummary;
+  dryRun: boolean;
+  anthropicKey: string;
+}): Promise<void> {
+  const t0 = Date.now();
+  try {
+    const result = await runAuction({
+      tick: args.chunk,
+      manager_decision: args.manager_decision,
+      creator_id: args.creatorSlug,
+      anthropic_api_key: args.anthropicKey || undefined,
+      dry_run: args.dryRun || !args.anthropicKey,
+    });
+    console.log(
+      JSON.stringify({
+        tag: "manager:auction_dispatched",
+        stream_key: args.creatorSlug,
+        chunk_id: args.chunk.id,
+        auction_id: result.auction_id,
+        decision: result.decision,
+        bid_count: result.hunt_summary.bid_count,
+        winner: result.placement?.brand_slug ?? null,
+        lock_tx: result.placement?.lock_tx_hash ?? null,
+        total_ms: Date.now() - t0,
+      }),
+    );
+  } catch (err) {
+    console.error(
+      JSON.stringify({
+        tag: "manager:auction_dispatch_error",
+        stream_key: args.creatorSlug,
+        chunk_id: args.chunk.id,
+        error: err instanceof Error ? err.message : String(err),
+        total_ms: Date.now() - t0,
+      }),
+    );
   }
 }
