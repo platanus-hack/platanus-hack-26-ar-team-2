@@ -52,6 +52,8 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const streamKey = url.searchParams.get("key") ?? process.env.MANAGER_STREAM_KEY ?? "coscu-test";
+  // ?once=1 or x-single-tick header → run exactly one tick and return (for mock page)
+  const singleTick = url.searchParams.get("once") === "1" || req.headers.get("x-single-tick") === "1";
   const gapMs = envNum("MANAGER_INTERNAL_GAP_MS", 5_000);
   // Stop new ticks once we're within ~6s of maxDuration to leave room for
   // the last tick + response serialization. maxDuration=60s → deadline=54s.
@@ -74,6 +76,9 @@ export async function GET(req: Request) {
 
       // Early-exit on errors — don't burn the rest of the budget retrying a broken state.
       if (result.decision === "error") break;
+
+      // Single-tick mode: return immediately after the first tick.
+      if (singleTick) break;
 
       if (Date.now() + gapMs < deadlineMs) await sleep(gapMs);
     }
