@@ -1,0 +1,141 @@
+# 🧉 MateBros — community/casual_chat
+# Rol en el demo:
+#   - Mención de café (audio_mentions=[café], intent=reaction): SKIP — la persona
+#     de MateBros es ronda comunitaria, no clutch individual. Brand_match bajo.
+#   - Mención de mate/equipo/fogón con intent ∈ {discussion, recommendation}:
+#     MATCH directo. El speaker armando arquitectura "los cuatro tomando mate,
+#     fogón de hackathon" cae acá.
+#   - Si la audiencia (viewers) supera max_viewers, SKIP por viewers_above_max
+#     — el speaker puede narrar "audiencia muy grande para su mandate" (didáctico).
+# Fictional brand — ver docs/PITCH.md, docs/GATES.md §4.4.
+
+brand_id: matebros
+display_name: "🧉 MateBros"
+brand_voice: "comunitario, fogón, ronda, cálido"
+color: "#5d8a3a"
+tagline: "Compartí la ronda, compartí la victoria."
+tracking_url: "https://matebros.demo/addie"
+description: "Yerba comunitaria. Mostrá este ad cuando el speaker mencione mate, yerba, ronda, fogón o equipo. Calza en momentos sociales, festejos grupales, charlas relajadas de comunidad. NO en clutchs individuales ni audiencias masivas — es ronda íntima, no estadio."
+match_keywords: ["mate", "yerba", "ronda", "fogón", "fogon", "equipo"]
+
+# ─── BrandMandate (legal/financial → mandates.payload jsonb) ─────────
+daily_cap_usdc: 40
+min_bid_usdc: 0.30
+max_bid_usdc: 3.50
+always_bid_floor: false
+
+concession_step_pct: 15
+max_turns: 3
+
+allowed_zones:
+  - lower_third
+  - bottom_right_corner
+preferred_zones:
+  - bottom_right_corner
+
+# IMPORTANTE: NO incluye high_energy/clutch. MateBros es momentos sociales/casual,
+# no momentos de adrenalina individual. Esto da el SKIP del trigger 1 del Bloque 3.
+target_moods:
+  - casual_chat
+  - social
+  - chat_active
+  - celebration
+  - party
+  - community
+  - fogón
+avoid_moods:
+  - boring
+  - solo_grind
+  - rage
+  - clutch
+  - high_energy
+
+# ─── Gate ladder (C-02b) ─────────────────────────────────────────────
+event_filters:
+  required_any_tag:
+    - casual_chat
+    - social
+    - chat_active
+    - celebration
+    - party
+    - community
+    - fogón
+  preferred_categories:
+    - gaming
+    - just_chatting
+    - irl
+  min_viewers: 0
+  # max_viewers: campo NUEVO (extensión a EventFilters de docs/GATES.md §3).
+  # Razón: el PITCH Bloque 3 dice literalmente "MateBros porque la audiencia es muy
+  # grande para su mandate" — necesitamos que el GateSkipReason coincida con la
+  # narrativa del speaker. MateBros prefiere comunidades chicas/íntimas (fogón).
+  # Calibrado a 2: durante un demo de hackathon la audiencia EN TWITCH es
+  # minúscula (jurados miran físicamente, no por stream). 2 personas = ronda
+  # íntima, MateBros calza. >2 = ya es "muy grande para su mandate" → SKIP.
+  # Ver streams/demo.yaml audience.expected_viewers_max para baseline.
+  max_viewers: 2
+
+brand_safety:
+  blocked_keywords:
+    - menor
+    - droga
+    - violencia
+    - "concha de"
+  blocked_categories:
+    - politics
+    - nsfw
+    - gambling
+  blocked_competitor_brands:
+    - coca
+    - fanta
+    - pepsi
+
+dayparts:
+  active:
+    - "11:00-23:59 ART"   # cubre demo time + tarde-noche fogón
+
+ideal_contexts:
+  - "Speaker menciona mate/yerba/ronda/fogón explícitamente (audio_mentions match)"
+  - "Speaker arma arquitectura/diseña/explica un sistema con el equipo: 'los cuatro tomando mate', 'fogón de hackathon'"
+  - "audio_intent=discussion sostenido en charla relajada de equipo, chat conocido, sin spike de energía individual"
+  - "Festejo grupal post-deploy/post-merge — comunidad celebrando logro común"
+
+# ─── Catálogo de creatives (D-10) ────────────────────────────────────
+ad_variants:
+  - name: fogon_corner
+    zone: bottom_right_corner
+    duration_ms: 60000
+    mood_tags: [casual_chat, social, fogón]
+  - name: community_celebration_lower
+    zone: lower_third
+    duration_ms: 6000
+    mood_tags: [celebration, party, community]
+  - name: ronda_corner_short
+    zone: bottom_right_corner
+    duration_ms: 30000
+    mood_tags: [social, chat_active]
+
+# ─── BrandPrompt (C-02 → mandates.prompt jsonb) ──────────────────────
+prompt:
+  system_persona: >
+    Sos el brand-agent de MateBros. Voz cálida, comunitaria, fogón, primera
+    persona del plural ("nosotros", "compartamos"). Entrás en momentos sociales:
+    festejos grupales, charlas relajadas, comunidad celebrando junta. NO bideas
+    en clutchs individuales ni high_energy de un solo jugador — esos no son
+    nuestros, son de otra marca. Tampoco bideas en audiencias masivas: MateBros
+    es ronda, no estadio. Hablás como un mate compartido.
+  voice_examples:
+    - "Ronda completa, festejo común — MateBros calza. $1.20 lower 6s."
+    - "Comunidad celebrando junta, esto es fogón. Cierro a $0.90 corner 30s."
+    - "Charla cálida, chat conocido — MateBros es esto. $0.80 lower 5s."
+  dont_say:
+    - estadio
+    - "audiencia masiva"
+    - viral
+    - "los más"
+    - mejor
+  dont_do:
+    - bidear en clutchs individuales
+    - bidear cuando la audiencia es masiva (no es fogón)
+    - hablar de subasta o puja
+    - tono de marca premium aspiracional

@@ -5,7 +5,11 @@ worktrees/
 skills-lock.json
 .agents/
 
+node_modules/
+worker/dist/
+
 # secrets — never commit
 .env
 .env.local
 .env.*.local
+.vercel

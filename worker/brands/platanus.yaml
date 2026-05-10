@@ -1,0 +1,90 @@
+# 🍌 Platanus — hackathon sponsor
+# Rol en el demo: matchea cuando el speaker dice "banana" o menciona "platanus/hackathon".
+# Tiene un video pre-cargado en Vercel Blob que se muestra como ad overlay.
+
+brand_id: platanus
+display_name: "🍌 Platanus"
+brand_voice: "enérgico, comunitario, builder culture, tech"
+color: "#f5c400"
+tagline: "Build it in 24hs."
+tracking_url: "https://platanus.demo/addie"
+description: "Platanus Hack — la hackathon donde las mejores ideas se construyen en 24hs. Mostrá este ad cuando el speaker diga banana, platanus, hackathon, o hack. Builder culture, energía comunitaria."
+match_keywords: ["banana", "platanus", "hackathon", "hack"]
+ad_asset_url: "https://tcbljbmedl5ntsz1.public.blob.vercel-storage.com/audit-clips/platanus.mp4"
+ad_asset_type: "video"
+ad_zone: "lower_third"
+ad_duration_ms: 8000
+
+# ─── BrandMandate (legal/financial → mandates.payload jsonb) ─────────
+daily_cap_usdc: 50
+min_bid_usdc: 0.50
+max_bid_usdc: 5.00
+always_bid_floor: false
+
+concession_step_pct: 10
+max_turns: 3
+
+allowed_zones:
+  - lower_third
+  - bottom_right_corner
+  - fullscreen_takeover
+preferred_zones:
+  - lower_third
+
+target_moods:
+  - high_energy
+  - celebration
+  - community
+  - social
+avoid_moods:
+  - toxic
+  - controversial
+
+# ─── Gate ladder (C-02b) ─────────────────────────────────────────────
+event_filters:
+  required_any_tag: []
+  preferred_categories:
+    - tech-pitch
+    - just_chatting
+  min_viewers: 0
+
+brand_safety:
+  blocked_keywords:
+    - droga
+    - violencia
+    - muerte
+  blocked_categories:
+    - nsfw
+    - gambling
+  blocked_competitor_brands: []
+
+dayparts:
+  active:
+    - "00:00-23:59 ART"
+
+ideal_contexts:
+  - "Speaker dice banana o menciona Platanus"
+  - "Hablando de hackathon, building, coding"
+
+# ─── Catálogo de creatives (D-10) ────────────────────────────────────
+ad_variants:
+  - name: platanus_lower
+    zone: lower_third
+    duration_ms: 8000
+    mood_tags: [high_energy, community]
+
+# ─── BrandPrompt (C-02 → mandates.prompt jsonb) ──────────────────────
+prompt:
+  system_persona: >
+    Sos el brand-agent de Platanus Hack. Voz enérgica, comunitaria, builder
+    culture. Entrás cuando se menciona "banana" o hackathon. Representás la
+    comunidad de builders que construyen en 24hs.
+  voice_examples:
+    - "Banana detected — Platanus Hack al aire. $1.50 lower 8s."
+    - "Hackathon mode ON. Platanus banca el momento. $2.00 lower 8s."
+  dont_say:
+    - aburrido
+    - fácil
+  dont_do:
+    - tono corporativo
+    - hablar de subasta

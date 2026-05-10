@@ -1,0 +1,142 @@
+# ☕ CafetITO — premium episodic
+# Rol en el demo: matchea cuando el speaker MENCIONA café/cafetito (audio_mentions[]),
+# o cuando audio_intent=reaction durante analogías deportivas sobre tech (clutch
+# técnico, comeback de un build/deploy, breakthrough en vivo). Ver PITCH Bloque 3
+# Notas de calibración → "Detección semántica, no acústica".
+# Fictional brand — ver docs/PITCH.md, docs/GATES.md §4.1.
+
+brand_id: cafetito
+display_name: "☕ CafetITO"
+brand_voice: "épico, segunda persona, energía alta, deportivo"
+color: "#6f4e37"
+tagline: "Que tu reflejo gane el clutch."
+tracking_url: "https://cafetito.demo/addie"
+description: "Café premium argentino. Mostrá este ad cuando el speaker mencione café, cafetito, espresso, o cuando hable de momentos épicos, clutchs, comebacks técnicos o breakthroughs en vivo con energía alta."
+match_keywords: ["café", "cafe", "cafetito", "cargado", "espresso"]
+
+# ─── BrandMandate (legal/financial → mandates.payload jsonb) ─────────
+daily_cap_usdc: 50
+min_bid_usdc: 0.50
+max_bid_usdc: 5.00
+always_bid_floor: false
+
+# Negotiation — consumido por C-10 cuando exista
+concession_step_pct: 10
+max_turns: 3
+
+# Zonas — consumido por C-08 cuando exista
+allowed_zones:
+  - lower_third
+  - bottom_right_corner
+preferred_zones:
+  - lower_third
+
+# Moods — espejo plano de targeting.moods (loader resuelve a BrandMandate.targeting)
+target_moods:
+  - high_energy
+  - celebration
+  - victory
+  - clutch
+  - comeback
+  - goal
+avoid_moods:
+  - toxic
+  - controversial
+  - boring
+  - idle
+
+# ─── Gate ladder (C-02b → MandateExtensions) ────────────────────────
+# NOTA post-pivote: el cron variant del manager (C-08m-cron) usa Stage1
+# semantic filter (audio_intent + audio_mentions) + Stage2 Claude. NO evalúa
+# required_any_tag. Estos tags quedan para cuando C-08a..d (gate ladder) se
+# implemente — por ahora son referencia de targeting.
+event_filters:
+  required_any_tag:
+    - high_energy
+    - celebration
+    - victory
+    - clutch
+    - comeback
+    - peak_moment
+  preferred_categories:
+    - gaming
+    - just_chatting
+    - tech-pitch
+  # C-08a calibración 2026-05-09 (Franco): 50 → 2. Audiencia demo Twitch
+  # real son 5-10 viewers (jurados miran físico, no por stream). Con
+  # min_viewers=50 cafetito skipearía gate1 viewers_below_min al demo time
+  # y nunca matchearía el primer trigger del PITCH Bloque 3.
+  min_viewers: 2
+
+brand_safety:
+  blocked_keywords:
+    - muerte
+    - violencia
+    - droga
+    - suicidio
+    - "hijo de puta"
+    - "la concha"
+  blocked_categories:
+    - politics
+    - nsfw
+    - gambling
+  blocked_competitor_brands:
+    - redbull
+    - monster
+    - speed
+
+dayparts:
+  active:
+    # Calibrado para que CafetITO matchee en demo time (sáb 2026-05-10 12:00 ART, Bloque 3).
+    # Ventana ancha tarde-noche para preservar el spirit "premium episódico nocturno" del pitch.
+    - "11:00-23:59 ART"
+
+ideal_contexts:
+  - "Speaker menciona café/cafetito explícitamente (audio_mentions match)"
+  - "Speaker hace analogía deportiva sobre tech: 'clutch técnico de cerrar una tx en segundos', 'comeback del build', 'breakthrough en vivo'"
+  - "audio_intent=reaction sostenido durante explicación de breakthrough — energía alta, foco intacto"
+  - "Speaker explica un avance técnico con voz épica/segunda persona (calza la persona de CafetITO)"
+
+# ─── Catálogo de creatives (D-10 lo lee para pregen con ElevenLabs) ──
+ad_variants:
+  - name: epic_goal_lower
+    zone: lower_third
+    duration_ms: 6000
+    mood_tags: [high_energy, celebration, victory]
+  - name: premium_takeover
+    zone: fullscreen_takeover
+    duration_ms: 30000
+    mood_tags: [storytelling, brand_moment]
+  - name: persistent_logo
+    zone: bottom_right_corner
+    duration_ms: 60000
+    mood_tags: [any]
+  - name: clutch_lower
+    zone: lower_third
+    duration_ms: 5000
+    mood_tags: [clutch, comeback]
+
+# ─── BrandPrompt (C-02 → mandates.prompt jsonb) ──────────────────────
+prompt:
+  system_persona: >
+    Sos el brand-agent de CafetITO. Voz épica, segunda persona, energía alta,
+    deportivo. Tu mandate: máxima atención a clutchs, comebacks y celebraciones
+    sostenidas. Hablás directo al streamer en tono motivacional. Valorás la
+    autenticidad del momento — solo entrás cuando hay energía real, no en
+    momentos manufacturados. Negociás con firmeza pero respetás al streamer:
+    no pisás el flow, no bajás del piso, no te pelés con otras marcas.
+  voice_examples:
+    - "Ese clutch merece un CafetITO bien cargado. Calzo $1.80 por 6s en lower."
+    - "Comeback épico, lo banco. Cierro a $2.40, banner abajo, 6 segundos."
+    - "Energía alta sostenida — esto es nuestro. Mantengo $1.50 en lower."
+  dont_say:
+    - barato
+    - promo
+    - descuento
+    - oferta especial
+    - "gratis"
+  dont_do:
+    - mencionar precios competidores
+    - tono formal corporativo
+    - prometer descuentos
+    - hablar de subasta o puja

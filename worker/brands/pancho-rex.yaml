@@ -1,0 +1,134 @@
+# 🌭 Pancho Rex — niche time-of-day (almuerzo + late-night)
+# Rol en el demo: SKIPea las menciones del Bloque 3.
+#   - Mención de café (12:00 ART, audio_mentions=[café]): SKIP gate1 daypart
+#     (active a partir de 13:00).
+#   - Mención de mate/equipo en intent=discussion (casual_chat semántico):
+#     SKIP gate1 daypart o brand_match bajo.
+# El SKIP es didáctico — el log muestra al jurado por qué una marca no calza
+# un momento. Fictional brand — ver docs/PITCH.md, docs/GATES.md §4.3.
+
+brand_id: pancho-rex
+display_name: "🌭 Pancho Rex"
+brand_voice: "humorístico, late-night, charlatán, hambriento"
+color: "#d2691e"
+tagline: "El pancho que se anima."
+tracking_url: "https://panchorex.demo/addie"
+description: "Pancho late-night. Mostrá este ad cuando el speaker mencione pancho, choripán, hambre, comida, almuerzo o cena. También calza en momentos relajados, pausas entre partidas, y charla casual de late-night. NO en momentos épicos ni de alta energía."
+match_keywords: ["pancho", "choripán", "hambre", "comer", "almuerzo", "cena"]
+
+# ─── BrandMandate (legal/financial → mandates.payload jsonb) ─────────
+daily_cap_usdc: 35
+min_bid_usdc: 0.25
+max_bid_usdc: 2.50
+always_bid_floor: false
+
+concession_step_pct: 18
+max_turns: 3
+
+allowed_zones:
+  - lower_third
+  - bottom_right_corner
+preferred_zones:
+  - bottom_right_corner
+
+target_moods:
+  - calm
+  - chat_active
+  - idle
+  - between_games
+  - social
+  - late_night
+  - hambre
+avoid_moods:
+  - high_intensity
+  - tense
+  - clutch
+
+# ─── Gate ladder (C-02b) ─────────────────────────────────────────────
+event_filters:
+  required_any_tag:
+    - calm
+    - chat_active
+    - idle
+    - between_games
+    - social
+    - late_night
+  preferred_categories:
+    - just_chatting
+    - gaming
+  # C-08a calibración 2026-05-09 (Franco): 30 → 0. PITCH Bloque 3 trigger 1
+  # dice literal "Pancho Rex porque no es lunch" (daypart). Con min_viewers=30
+  # y audiencia demo 5-10, pancho-rex skipearía por viewers_below_min ANTES
+  # de evaluar daypart (gate1 order spec en docs/GATES.md §8.1). Bajando a 0,
+  # daypart se convierte en la causa del SKIP — alineado a la narrativa.
+  min_viewers: 0
+
+brand_safety:
+  blocked_keywords:
+    - vegetariano
+    - vegano
+    - dieta
+    - droga
+    - violencia
+    - "hijo de puta"
+  blocked_categories:
+    - politics
+    - nsfw
+    - gambling
+  blocked_competitor_brands:
+    - mostaza
+    - mcdonalds
+    - "burger king"
+
+dayparts:
+  active:
+    # CALIBRADO PARA EL DEMO: arranca 13:00 ART para que SKIPee a las 12:00 (Bloque 3 trigger 1).
+    # GATES.md §4.3 usaba 12:00 — descartado: hace al pancho matchear durante el demo y rompe la narrativa "no es lunch".
+    - "13:00-15:00 ART"     # almuerzo (corrido, no entra al inicio del lunch)
+    - "20:00-02:00 ART"     # cena tarde + late-night gaming hambre
+
+ideal_contexts:
+  - "Speaker menciona pancho/choripán/hambre explícitamente (audio_mentions match)"
+  - "Pausa larga post-deploy, audio_intent=discussion, bajón de energía"
+  - "Late night, viewer count bajando, ambiente íntimo, charla casual"
+  - "Speaker dice tener hambre o pregunta qué cenar (audio_intent=question + topic 'comida')"
+
+# ─── Catálogo de creatives (D-10) ────────────────────────────────────
+ad_variants:
+  - name: late_night_corner
+    zone: bottom_right_corner
+    duration_ms: 45000
+    mood_tags: [late_night, hambre, idle]
+  - name: lunch_lower
+    zone: lower_third
+    duration_ms: 6000
+    mood_tags: [calm, chat_active, social]
+  - name: between_games_corner
+    zone: bottom_right_corner
+    duration_ms: 30000
+    mood_tags: [between_games, idle]
+
+# ─── BrandPrompt (C-02 → mandates.prompt jsonb) ──────────────────────
+prompt:
+  system_persona: >
+    Sos el brand-agent de Pancho Rex. Voz humorística, late-night, charlatán
+    argentino. Sólo entrás en momentos relajados, charlas entre partidas,
+    horarios de almuerzo o late-night. NO bideas en clutchs ni momentos
+    épicos — esos no son tuyos y lo sabés. Si el momento no calza, decís SKIP
+    sin drama. Si calza, hablás como un amigo que tira un comentario suelto
+    a la hora del bajón.
+  voice_examples:
+    - "Bajón post-partida — Pancho Rex te banca. Calzo $0.45 corner 30s."
+    - "Late night, chat tranqui, hambre real. Mando $0.60 lower 6s."
+    - "Pausa larga, perfecto para un pancho. $0.40 corner 30s, sin pisar."
+  dont_say:
+    - dieta
+    - saludable
+    - "bajo en calorías"
+    - light
+    - fit
+  dont_do:
+    - bidear en momentos épicos o de alta energía
+    - tono solemne o serio
+    - hablar de subasta o puja
+    - competir con CafetITO en clutchs
