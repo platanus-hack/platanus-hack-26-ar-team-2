@@ -55,10 +55,12 @@ export async function managerTick(
       return { decision: "no_chunks", stream_key: config.streamKey };
     }
 
-    // 1b. Dedup — skip if this chunk was already processed
+    // 1b. Dedup — skip if this chunk was already turned into an OFFER.
+    // Post-0012 el worker emite kind='offer' (no 'brand'). El dedup mira
+    // offers existentes, no brand events (que ahora son derivados del accept).
     const alreadyProcessed = await client.query<{ id: string }>(
       `select id from render_events
-        where creator_id = $1 and kind = 'brand'
+        where creator_id = $1 and kind = 'offer'
           and payload::jsonb ->> 'chunk_id' = $2
         limit 1`,
       [config.creatorId, String(chunk.id)],
@@ -93,22 +95,37 @@ export async function managerTick(
       : undefined;
     const hasAsset = matchedBrand?.ad.asset_url;
 
-    const payload: Record<string, unknown> = { chunk_id: chunk.id };
+    // Construir payload del offer. Incluye chunk_id (audit dedup), brand info
+    // para el dock, y placement visual si el YAML tiene ad_asset_url.
+    const payload: Record<string, unknown> = {
+      kind: "offer",
+      status: "pending",
+      chunk_id: chunk.id,
+      brand_id: pick.brand_id,
+      brand_label: matchedBrand?.display_name ?? pick.brand_id,
+      moment_quality: pick.moment_quality,
+      brand_match: pick.brand_match,
+      reason: pick.reason,
+      // Default para text-only — overrideado abajo si la brand tiene asset.
+      zone_id: matchedBrand?.ad.zone ?? "lower_third",
+      duration_ms: matchedBrand?.ad.duration_ms ?? 8000,
+    };
     if (hasAsset) {
       payload.asset_url = matchedBrand.ad.asset_url;
       payload.asset_type = matchedBrand.ad.asset_type ?? "video";
       payload.zone_id = matchedBrand.ad.zone ?? "fullscreen_takeover";
       payload.duration_ms = matchedBrand.ad.duration_ms ?? 8000;
-      payload.brand_id = matchedBrand.slug;
       payload.audio = true;
     }
 
-    // 4. Insert brand render_event + pg_notify
+    // 4. Insert OFFER render_event (status='pending') + pg_notify. La row
+    // kind='brand' SOLO se inserta cuando el streamer ✅ desde el endpoint
+    // POST /api/creators/[id]/offers/[event_id]/accept (ver apps/web).
     const insert = await client.query<{ id: string; created_at: string }>(
-      `insert into render_events (creator_id, message, kind, payload)
-       values ($1, $2, 'brand', $3)
+      `insert into render_events (creator_id, message, kind, status, payload)
+       values ($1, $2, 'offer', 'pending', $3)
        returning id, created_at`,
-      [config.creatorId, message.slice(0, 280), Object.keys(payload).length > 0 ? JSON.stringify(payload) : null],
+      [config.creatorId, message.slice(0, 280), JSON.stringify(payload)],
     );
     const event_id = insert.rows[0]!.id;
 
@@ -116,7 +133,6 @@ export async function managerTick(
       id: event_id,
       creator_id: config.creatorId,
       created_at: insert.rows[0]!.created_at,
-      kind: "brand",
       message,
       ...payload,
     };
@@ -138,6 +154,7 @@ export async function managerTick(
       tag: "worker:tick_done",
       stream_key: config.streamKey,
       chunk_id: chunk.id,
+      kind: "offer",
       brand_id: pick.brand_id ?? null,
       has_asset: !!hasAsset,
       dry_run: config.dryRun,
