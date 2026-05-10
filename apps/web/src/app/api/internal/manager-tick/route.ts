@@ -22,6 +22,8 @@
  * Returns array of TickResults — Vercel function logs are the audit trail.
  */
 
+import { randomUUID } from "node:crypto";
+
 import { NextResponse } from "next/server";
 
 import { configFromEnv, managerTick } from "@/lib/manager/tick";
@@ -41,6 +43,12 @@ function envNum(name: string, fallback: number, min = 0): number {
 }
 
 export async function GET(req: Request) {
+  // invocation_id correlaciona todos los logs de una sola corrida del cron
+  // (~11 ticks internos a 5s gap). Buscalo en Vercel logs para reconstruir
+  // qué decidió cada tick dentro de un mismo minuto.
+  const invocationId = randomUUID().slice(0, 8);
+  const invocationStartedAt = Date.now();
+
   const url = new URL(req.url);
   // ?once=1 → single-tick mode (mock page / manual trigger), skips auth
   const singleTick = url.searchParams.get("once") === "1";
@@ -60,7 +68,18 @@ export async function GET(req: Request) {
   const gapMs = envNum("MANAGER_INTERNAL_GAP_MS", 5_000);
   // Stop new ticks once we're within ~6s of maxDuration to leave room for
   // the last tick + response serialization. maxDuration=60s → deadline=54s.
-  const deadlineMs = Date.now() + envNum("MANAGER_RUN_BUDGET_MS", 54_000);
+  const deadlineMs = invocationStartedAt + envNum("MANAGER_RUN_BUDGET_MS", 54_000);
+
+  console.log(
+    JSON.stringify({
+      tag: "cron:invocation_start",
+      invocation_id: invocationId,
+      stream_key: streamKey,
+      gap_ms: gapMs,
+      budget_ms: deadlineMs - invocationStartedAt,
+      single_tick: singleTick,
+    }),
+  );
 
   const ticks: TickResult[] = [];
   try {
@@ -72,6 +91,7 @@ export async function GET(req: Request) {
       console.log(
         JSON.stringify({
           route: "manager-tick",
+          invocation_id: invocationId,
           phase: ticks.length,
           ...result,
         }),
@@ -86,20 +106,45 @@ export async function GET(req: Request) {
       if (Date.now() + gapMs < deadlineMs) await sleep(gapMs);
     }
 
-    return NextResponse.json({ ticks, count: ticks.length, gap_ms: gapMs });
+    console.log(
+      JSON.stringify({
+        tag: "cron:invocation_end",
+        invocation_id: invocationId,
+        stream_key: streamKey,
+        total_ticks: ticks.length,
+        decisions: ticks.map((t) => t.decision),
+        elapsed_ms: Date.now() - invocationStartedAt,
+      }),
+    );
+
+    return NextResponse.json({
+      invocation_id: invocationId,
+      ticks,
+      count: ticks.length,
+      gap_ms: gapMs,
+    });
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     console.error(
       JSON.stringify({
+        tag: "cron:invocation_error",
+        invocation_id: invocationId,
         route: "manager-tick",
         decision: "error",
         stream_key: streamKey,
         error,
         ticks_completed: ticks.length,
+        elapsed_ms: Date.now() - invocationStartedAt,
       }),
     );
     return NextResponse.json(
-      { decision: "error" as const, stream_key: streamKey, error, ticks },
+      {
+        invocation_id: invocationId,
+        decision: "error" as const,
+        stream_key: streamKey,
+        error,
+        ticks,
+      },
       { status: 500 },
     );
   }

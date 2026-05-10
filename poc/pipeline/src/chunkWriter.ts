@@ -170,9 +170,42 @@ export function startChunkWriter(sources: ChunkSources): ChunkWriterHandle {
     );
 
     if (supabase) {
-      const { error } = await supabase.from('context_chunks').insert(chunk);
+      const insertStartedAt = Date.now();
+      const { data, error } = await supabase
+        .from('context_chunks')
+        .insert(chunk)
+        .select('id, ts_start')
+        .single();
+      const insertMs = Date.now() - insertStartedAt;
       if (error) {
         log.warn(`[chunk ${sources.streamKey}] insert failed: ${error.message}`);
+        console.log(
+          JSON.stringify({
+            tag: 'pipeline:chunk_insert_error',
+            stream_key: sources.streamKey,
+            ts_start: tsStart,
+            duration_s: durationS,
+            insert_ms: insertMs,
+            error: error.message,
+          }),
+        );
+      } else {
+        // Structured log con chunk_id para correlacionar con manager-tick logs
+        // (manager:claim_acquired tiene chunk_id matching).
+        console.log(
+          JSON.stringify({
+            tag: 'pipeline:chunk_inserted',
+            stream_key: sources.streamKey,
+            chunk_id: data?.id ?? null,
+            ts_start: data?.ts_start ?? tsStart,
+            duration_s: durationS,
+            audio_intent: chunk.audio_intent,
+            audio_summary_preview: (chunk.audio_summary ?? '').slice(0, 80),
+            audio_mentions: chunk.audio_mentions ?? [],
+            viewers: chunk.viewers,
+            insert_ms: insertMs,
+          }),
+        );
       }
     } else {
       // Log a consola para visibilidad sin DB.

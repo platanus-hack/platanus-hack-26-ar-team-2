@@ -1,9 +1,12 @@
 /**
  * managerTick — single cron tick worth of work.
  *
- * 1. Fetch latest context_chunks row for stream_key.
- * 2. Emit raw firehose event.
- * 3. Apply gate1 (C-08a) — filter brands deterministically; emit
+ * 1. Atomic claim de la última row no procesada de context_chunks vía
+ *    `FOR UPDATE SKIP LOCKED` + setea `processing_locked_until = now()+TTL`.
+ *    Si dos ticks corren en paralelo, solo uno gana la row; el otro recibe
+ *    0 rows y devuelve `skip:already_processed` o `no_chunks`.
+ * 2. Emit raw firehose event (dentro de la tx).
+ * 3. Apply gate1 (C-08a) — filter brands deterministicamente; emit
  *    structured `gate1:eval` log lines + accumulate skips for the brand
  *    event payload.
  * 4. Claude (or stub) picker analyses audio_text against the SURVIVING
@@ -11,9 +14,23 @@
  * 5. ALWAYS emit to SSE: brand display_name if match, "..." if not. The
  *    brand event payload carries `gate_skips[]` so the D-09a feed (and
  *    the C-08test harness) can verify per-brand reasoning.
+ * 6. UPDATE processed_at = now() en la misma tx → COMMIT atómico.
+ *
+ * Concurrency contract:
+ *   - Todo el tick va en una tx (BEGIN..COMMIT). Si crashea o el LLM tira,
+ *     ROLLBACK revierte el claim, los render_events y los pg_notify (los
+ *     notifies se entregan recién en COMMIT). Garantiza que no haya brand
+ *     event sin processed_at = no hay puerta para re-emisión ni doble pago.
+ *   - Lock TTL (`processing_locked_until`) es defensa secundaria si la tx
+ *     queda idle-in-transaction sin error. Configurable: MANAGER_CHUNK_LOCK_TTL_S.
+ *   - Pagos on-chain (C-12) van AFUERA de esta tx — el broadcast a Base no
+ *     es transaccional. Para idempotency ahí: usar `event_id` (render_events.id)
+ *     como nonce contra el escrow contract.
  *
  * No HTTP roundtrip — we hit the DB directly via the shared pg pool.
  */
+
+import { randomUUID } from "node:crypto";
 
 import { transactPool } from "@/lib/pg";
 
@@ -45,6 +62,8 @@ export type ManagerConfig = {
   dryRun: boolean;
   anthropicKey: string;
   anthropicModel: string;
+  /** TTL del processing_locked_until en segundos. Default 14s (< 15s del chunk emit). */
+  chunkLockTtlS: number;
 };
 
 export function configFromEnv(streamKey: string): ManagerConfig {
@@ -68,67 +87,131 @@ export function configFromEnv(streamKey: string): ManagerConfig {
     dryRun: bool("MANAGER_DRY_RUN", false),
     anthropicKey: process.env.ANTHROPIC_API_KEY ?? "",
     anthropicModel: process.env.ANTHROPIC_MODEL ?? "claude-haiku-4-5",
+    chunkLockTtlS: num("MANAGER_CHUNK_LOCK_TTL_S", 14),
   };
 }
 
 export async function managerTick(config: ManagerConfig): Promise<TickResult> {
+  const tickId = randomUUID().slice(0, 8);
   const t0 = Date.now();
   const elapsed = () => Date.now() - t0;
 
+  console.log(
+    JSON.stringify({
+      tag: "manager:tick_start",
+      tick_id: tickId,
+      stream_key: config.streamKey,
+      lock_ttl_s: config.chunkLockTtlS,
+    }),
+  );
+
   const client = await transactPool().connect();
   const tPool = elapsed();
-  try {
-    // 1. Latest chunk
-    const chunkRes = await client.query<ContextChunk>(
-      `select * from context_chunks
-        where stream_key = $1
-        order by ts_start desc
-        limit 1`,
-      [config.streamKey],
-    );
-    const tChunkQuery = elapsed();
-    const chunk = chunkRes.rows[0];
-    if (!chunk) {
-      console.log(
-        JSON.stringify({
-          tag: "manager:no_chunks",
-          stream_key: config.streamKey,
-          hint: "verify pipeline is writing context_chunks for this stream_key",
-          timing_ms: { pool: tPool, chunk_query: tChunkQuery - tPool, total: elapsed() },
-        }),
-      );
-      return { decision: "no_chunks", stream_key: config.streamKey };
-    }
 
-    // 1b. Skip if we already processed this exact chunk
-    const alreadyProcessed = await client.query<{ id: string }>(
-      `select id from render_events
-        where creator_id = $1 and kind = 'raw'
-          and message::jsonb -> 'chunk' ->> 'id' = $2
-        limit 1`,
-      [config.creatorId, String(chunk.id)],
+  let txOpen = false;
+  let claimedChunkId: string | null = null;
+
+  try {
+    await client.query("begin");
+    txOpen = true;
+
+    // 1. Atomic claim: SELECT...FOR UPDATE SKIP LOCKED + UPDATE locked_until,
+    //    en una sola CTE. Si otro tick tiene la row lockeada (FOR UPDATE) o
+    //    el column-lock no expiró todavía, esto retorna 0 rows.
+    const claimRes = await client.query<ContextChunk>(
+      `with claim as (
+         select id from context_chunks
+          where stream_key = $1
+            and processed_at is null
+            and (processing_locked_until is null or processing_locked_until < now())
+          order by ts_start desc
+          limit 1
+          for update skip locked
+       )
+       update context_chunks c
+          set processing_locked_until = now() + ($2::int * interval '1 second')
+         from claim
+        where c.id = claim.id
+        returning c.*`,
+      [config.streamKey, config.chunkLockTtlS],
     );
-    const tDedupQuery = elapsed();
-    if (alreadyProcessed.rows.length > 0) {
+    const tClaimQuery = elapsed();
+
+    if (claimRes.rows.length === 0) {
+      // No hay chunk claimable. Distinguimos: ¿no hay chunks en absoluto,
+      // o el latest está procesado/lockeado por otro tick? Probe rápido
+      // (read-only, dentro de la misma tx) para log diagnóstico.
+      const probe = await client.query<{
+        id: string;
+        processed_at: string | null;
+        processing_locked_until: string | null;
+      }>(
+        `select id, processed_at, processing_locked_until
+           from context_chunks
+          where stream_key = $1
+          order by ts_start desc
+          limit 1`,
+        [config.streamKey],
+      );
+      await client.query("commit"); // close tx (read-only, nothing to persist)
+      txOpen = false;
+
+      if (probe.rows.length === 0) {
+        console.log(
+          JSON.stringify({
+            tag: "manager:no_chunks",
+            tick_id: tickId,
+            stream_key: config.streamKey,
+            hint: "verify pipeline is writing context_chunks for this stream_key",
+            timing_ms: { pool: tPool, claim_query: tClaimQuery - tPool, total: elapsed() },
+          }),
+        );
+        return { decision: "no_chunks", stream_key: config.streamKey };
+      }
+
+      const latest = probe.rows[0]!;
+      const skipReason = latest.processed_at
+        ? "already_processed"
+        : "locked_by_other_tick";
       console.log(
         JSON.stringify({
-          tag: "manager:skip_already_processed",
+          tag: "manager:skip_no_claim",
+          tick_id: tickId,
           stream_key: config.streamKey,
-          chunk_id: chunk.id,
-          timing_ms: { pool: tPool, chunk_query: tChunkQuery - tPool, dedup_query: tDedupQuery - tChunkQuery, total: elapsed() },
+          chunk_id: latest.id,
+          skip_reason: skipReason,
+          processed_at: latest.processed_at,
+          locked_until: latest.processing_locked_until,
+          timing_ms: { pool: tPool, claim_query: tClaimQuery - tPool, total: elapsed() },
         }),
       );
       return {
         decision: "skip:already_processed",
         stream_key: config.streamKey,
-        chunk_id: chunk.id,
+        chunk_id: latest.id,
       };
     }
 
+    const chunk = claimRes.rows[0]!;
+    claimedChunkId = chunk.id;
     const ageS = Math.round((Date.now() - new Date(chunk.ts_start).getTime()) / 1000);
+
+    console.log(
+      JSON.stringify({
+        tag: "manager:claim_acquired",
+        tick_id: tickId,
+        stream_key: config.streamKey,
+        chunk_id: chunk.id,
+        chunk_ts_start: chunk.ts_start,
+        chunk_age_s: ageS,
+        lock_ttl_s: config.chunkLockTtlS,
+      }),
+    );
+
     console.log(
       JSON.stringify({
         tag: "manager:chunk_loaded",
+        tick_id: tickId,
         stream_key: config.streamKey,
         chunk_id: chunk.id,
         chunk_ts_start: chunk.ts_start,
@@ -141,7 +224,7 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
       }),
     );
 
-    // Emit raw firehose event
+    // Emit raw firehose event (dentro de la tx → notify se entrega en COMMIT)
     const rawPayload = {
       type: "raw_chunk",
       tick_at: new Date().toISOString(),
@@ -196,6 +279,9 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
     const tGate1 = elapsed();
 
     // 3. Claude (or stub) picker decides among surviving brands.
+    //    OJO: la LLM call dura 2-5s y mantiene la tx abierta. La row queda
+    //    lockeada (FOR UPDATE) durante todo ese tiempo → ningún tick paralelo
+    //    la toca. El pool es max=5 conexiones, suficiente para el cron actual.
     const picker: Picker = config.dryRun
       ? makeStubPicker()
       : (() => {
@@ -256,9 +342,26 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
     ]);
     const tBrandEmit = elapsed();
 
+    // 4. Marcar como procesado en la MISMA tx. COMMIT abajo hace todo atómico.
+    //    Garantía: no hay brand event sin processed_at → no hay puerta para
+    //    re-emitir el mismo chunk → no doble pago downstream.
+    await client.query(
+      `update context_chunks
+          set processed_at = now(),
+              processing_locked_until = null
+        where id = $1`,
+      [chunk.id],
+    );
+
+    await client.query("commit");
+    txOpen = false;
+
     // C-14 dispatch: fire-and-forget auction run for moments where Stage 2
-    // emitted a brand. Gated by MANAGER_AUCTION_DISPATCH so Andy's mock-page
-    // / smoke flows that just want the brand event keep working unchanged.
+    // emitted a brand. POST-COMMIT a propósito — la subasta no es transaccional
+    // con el claim del chunk; si runAuction falla, el processed_at sigue
+    // marcado y el chunk no se re-procesa (idempotency vía render_events.id
+    // como nonce on-chain, ver C-12 nota). Gateado por MANAGER_AUCTION_DISPATCH
+    // para no romper flow text-only actual hasta F-05.
     if (
       pick.should_emit &&
       pick.brand_id &&
@@ -280,21 +383,22 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
 
     const timing = {
       pool_ms: tPool,
-      chunk_query_ms: tChunkQuery - tPool,
-      dedup_query_ms: tDedupQuery - tChunkQuery,
-      raw_emit_ms: tRawEmit - tDedupQuery,
+      claim_query_ms: tClaimQuery - tPool,
+      raw_emit_ms: tRawEmit - tClaimQuery,
       gate1_ms: tGate1 - tRawEmit,
       picker_ms: tPicker - tGate1,
       brand_emit_ms: tBrandEmit - tPicker,
-      total_ms: tBrandEmit,
+      total_ms: elapsed(),
     };
     console.log(
       JSON.stringify({
-        tag: "manager:tick_timing",
+        tag: "manager:claim_released",
+        tick_id: tickId,
         stream_key: config.streamKey,
         chunk_id: chunk.id,
         decision: "emit",
         brand_id: pick.brand_id ?? null,
+        event_id,
         has_asset: !!hasAsset,
         dry_run: config.dryRun,
         surviving_count: ladder.surviving.length,
@@ -311,6 +415,25 @@ export async function managerTick(config: ManagerConfig): Promise<TickResult> {
       event_id,
       gate_skips: ladder.skips,
     };
+  } catch (err) {
+    if (txOpen) {
+      await client.query("rollback").catch(() => {});
+    }
+    // Lock se libera vía rollback (locked_until vuelve a NULL). Si la tx ya
+    // commiteó pero algo más arriba en la stack falló, el chunk queda
+    // processed=true → no se reprocesa (correcto).
+    console.error(
+      JSON.stringify({
+        tag: "manager:tick_error",
+        tick_id: tickId,
+        stream_key: config.streamKey,
+        chunk_id: claimedChunkId,
+        tx_rolled_back: txOpen,
+        error: err instanceof Error ? err.message : String(err),
+        elapsed_ms: elapsed(),
+      }),
+    );
+    throw err;
   } finally {
     client.release();
   }
