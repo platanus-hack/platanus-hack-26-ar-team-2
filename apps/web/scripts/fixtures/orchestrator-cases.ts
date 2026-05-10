@@ -287,7 +287,7 @@ export const CASES: OrchestratorCase[] = [
     title: "cafetito-vs-termoflex",
     enabled: false,
     pending_reason:
-      "Necesita C-10 + C-12 + C-14 (orquestador multi-turno + settlement + endpoint). managerTick devuelve un único brand pick, no una subasta.",
+      "C-10 ✅ disponible (`pnpm smoke:negotiation` lo cubre standalone). F-06 sigue dormant porque sim:orch corre `managerTick()` directo (1 brand pick), no la subasta multi-brand. Habilitar cuando C-14 wire el trigger a `POST /api/auctions/run` + sumar C-12 settlement.",
     pitch_ref:
       "Subasta: chunk matchea cafetito (mention 'café') Y termoflex (always_bid_floor). Esperamos winner=cafetito por bid > floor.",
     chunk: {
