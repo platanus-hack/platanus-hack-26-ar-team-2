@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useReducer, useRef } from "react";
-import { truncateTxHash } from "@/lib/format";
+import { basescanUrl, truncateTxHash } from "@/lib/format";
 import { getBrand } from "@/lib/brands";
 
 export type AuctionStatus = "idle" | "running" | "settled";
@@ -145,10 +145,15 @@ export default function DemoDisplay({ hooks }: { hooks?: DemoDisplayHooks }) {
 
       {/* Bottom: TX feed */}
       <section className="border-t border-[var(--line)] bg-[var(--card)] px-4 py-2 flex gap-4 overflow-x-auto min-h-[52px] items-center">
-        <span className="text-[10px] uppercase tracking-wider text-[var(--text-3)] shrink-0">On-chain</span>
+        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--text-3)] shrink-0">
+          On-chain · USDC
+        </span>
+        <span className="h-3 w-px bg-[var(--line)] shrink-0" aria-hidden />
         <AnimatePresence>
           {state.txs.length === 0 ? (
-            <span className="text-xs text-[var(--text-5)]">No transactions yet</span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--text-5)]">
+              awaiting settlement
+            </span>
           ) : (
             state.txs.map((tx) => <TxChip key={tx.id} tx={tx} />)
           )}
@@ -251,23 +256,40 @@ function ChatBubble({ msg }: { msg: NegotiationMessage }) {
 }
 
 function TxChip({ tx }: { tx: TxEntry }) {
-  const styles = {
-    lock:    { icon: "🔒", color: "text-[#f59e0b]", bg: "bg-[#f59e0b]/10 border-[#f59e0b]/20" },
-    release: { icon: "✅", color: "text-[#22c55e]", bg: "bg-[#22c55e]/10 border-[#22c55e]/20" },
-    refund:  { icon: "↩️", color: "text-[#ef4444]", bg: "bg-[#ef4444]/10 border-[#ef4444]/20" },
+  // Single accent per type — dot only, no fill. Editorial brutalist:
+  // hairline border, mono uppercase label, tabular figures, hash linkea
+  // a basescan. Mantiene contrato del reducer/data shape intacto.
+  const accent = {
+    lock:    "var(--warn)", // ochre — pago firmado, esperando confirm
+    release: "var(--ok)",   // green — settlement final
+    refund:  "var(--err)",  // red — refund
   }[tx.type];
 
   return (
-    <motion.div
+    <motion.a
+      href={basescanUrl(tx.tx_hash, "tx")}
+      target="_blank"
+      rel="noopener noreferrer"
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0 }}
-      className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs shrink-0 ${styles.bg}`}
+      className="group flex items-center gap-2.5 border border-[var(--line)] hover:border-[var(--text-3)] transition-colors px-3 py-1.5 shrink-0 text-xs"
     >
-      <span>{styles.icon}</span>
-      <span className={`font-medium ${styles.color}`}>{tx.brand}</span>
-      <span className="text-[var(--text)]">${tx.amount_usdc.toFixed(2)}</span>
-      <span className="text-[var(--text-3)] font-mono">{truncateTxHash(tx.tx_hash)}</span>
-    </motion.div>
+      <span
+        className="w-1.5 h-1.5 rounded-full shrink-0"
+        style={{ background: accent }}
+        aria-hidden
+      />
+      <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--text-3)]">
+        {tx.type}
+      </span>
+      <span className="text-[var(--text)] truncate max-w-[140px]">{tx.brand}</span>
+      <span className="font-mono tabular-nums text-[var(--text)]">
+        ${tx.amount_usdc.toFixed(2)}
+      </span>
+      <span className="font-mono text-[var(--text-3)] group-hover:text-[var(--text-2)] transition-colors">
+        {truncateTxHash(tx.tx_hash)}
+      </span>
+    </motion.a>
   );
 }
