@@ -40,19 +40,30 @@ type Args = {
   brandSlug: string;
   creatorSlug: string;
   cleanup: boolean;
+  /** USD override del bid del picker (decimal, ej 0.10). Null = usar lo que emitió el picker. */
+  bidOverrideUsdc: number | null;
 };
 
 function parseArgs(argv: string[]): Args {
   let brandSlug = "cafetito";
   let creatorSlug = "streamer-team";
   let cleanup = true;
+  let bidOverrideUsdc: number | null = null;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--brand") brandSlug = argv[++i] ?? brandSlug;
     else if (a === "--creator") creatorSlug = argv[++i] ?? creatorSlug;
     else if (a === "--no-cleanup") cleanup = false;
+    else if (a === "--bid") {
+      const raw = argv[++i];
+      const n = raw != null ? Number(raw) : NaN;
+      if (!Number.isFinite(n) || n <= 0) {
+        fail(`--bid: expected positive number USDC, got "${raw ?? "(empty)"}"`);
+      }
+      bidOverrideUsdc = n;
+    }
   }
-  return { brandSlug, creatorSlug, cleanup };
+  return { brandSlug, creatorSlug, cleanup, bidOverrideUsdc };
 }
 
 async function main(): Promise<void> {
@@ -72,6 +83,9 @@ async function main(): Promise<void> {
   console.log(`  creator   : ${args.creatorSlug}`);
   console.log(`  picker    : ${dryRunPicker ? "stub (MANAGER_DRY_RUN=true)" : "Claude live"}`);
   console.log(`  payment   : ${live ? "LIVE — broadcasteará tx en Base mainnet" : "MOCK (CHAIN_LIVE_TXS=false)"}`);
+  if (args.bidOverrideUsdc != null) {
+    console.log(`  bid       : OVERRIDE ${args.bidOverrideUsdc} USDC (skip picker amount)`);
+  }
   console.log("");
 
   // 1. Validar wallets pre-broadcast.
@@ -109,6 +123,24 @@ async function main(): Promise<void> {
     console.warn(
       `! ojo: ganador=${tickResult.pick.brand_id} ≠ brand del smoke=${args.brandSlug}. ` +
       `El pago va a salir con ${tickResult.pick.brand_id}, no con ${args.brandSlug}.`,
+    );
+  }
+
+  // 3b. Bid override (opcional). Mutamos el row del offer ANTES del accept
+  //     para que el accept handler firme con el monto que pasamos por flag.
+  //     Útil para reducir el costo del live test (ej --bid 0.10 en vez del
+  //     ~$2.75 que sale del picker stub).
+  if (args.bidOverrideUsdc != null) {
+    const newCents = Math.round(args.bidOverrideUsdc * 100);
+    await pool().query(
+      `update render_events
+          set bid_usdc_cents = $1,
+              payload = jsonb_set(jsonb_set(payload, '{bid_usdc}', to_jsonb($2::numeric)), '{bid_usdc_cents}', to_jsonb($1::int))
+        where id = $3`,
+      [newCents, args.bidOverrideUsdc, offerEventId],
+    );
+    console.log(
+      `▶ bid override       offer ${offerEventId} → ${args.bidOverrideUsdc} USDC (${newCents}¢)`,
     );
   }
 
