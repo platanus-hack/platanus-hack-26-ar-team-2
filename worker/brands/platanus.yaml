@@ -9,10 +9,10 @@ color: "#f5c400"
 tagline: "Build it in 24hs."
 tracking_url: "https://platanus.demo/addie"
 description: "Platanus Hack — la hackathon donde las mejores ideas se construyen en 24hs. Mostrá este ad cuando el speaker diga banana, platanus, hackathon, o hack. Builder culture, energía comunitaria."
-# El matcher normaliza acentos (pick.ts) — "platanús", "plátano" matchean
-# automáticamente. Listamos solo plurales y typos no-acentuales que Scribe
-# v2 genera con frecuencia ("hackaton" sin "th" es típico).
-match_keywords: ["banana", "bananas", "platanus", "platano", "platanos", "hackathon", "hackaton", "hack"]
+# El matcher normaliza acentos (pick.ts). Solo typos + sinónimos directos:
+# "hackathon" es la categoría del brand (Platanus Hack), "banana" es
+# sinónimo directo de plátano. Plurales y diminutivos de la fruta también.
+match_keywords: ["banana", "bananas", "platanus", "platano", "platanos", "hackathon", "hackaton", "hack", "platanito", "platanitos"]
 ad_asset_url: "https://tcbljbmedl5ntsz1.public.blob.vercel-storage.com/banana.mp4"
 ad_asset_type: "video"
 ad_zone: "lower_third"

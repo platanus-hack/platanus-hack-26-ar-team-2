@@ -14,8 +14,10 @@ color: "#d2691e"
 tagline: "El pancho que se anima."
 tracking_url: "https://panchorex.demo/addie"
 description: "Pancho late-night. Mostrá este ad cuando el speaker mencione pancho, choripán, hambre, comida, almuerzo o cena. También calza en momentos relajados, pausas entre partidas, y charla casual de late-night. NO en momentos épicos ni de alta energía."
-# Normalize en pickBrand.ts → "choripán" matchea "choripan" automático.
-match_keywords: ["pancho", "panchos", "pancho rex", "panchorex", "choripan", "choripanes", "hambre", "hambriento", "comer", "comida", "almuerzo", "cena", "merienda", "morfar"]
+# Solo typos + sinónimos directos del producto. Sacamos "hambre", "comer",
+# "almuerzo", "cena", "morfar", etc — son contextos de cuándo se consume,
+# no el producto en sí.
+match_keywords: ["pancho", "panchos", "pancho rex", "panchorex", "choripan", "choripanes", "hot dog", "hot dogs", "salchicha", "salchichas"]
 
 # ─── BrandMandate (legal/financial → mandates.payload jsonb) ─────────
 daily_cap_usdc: 35

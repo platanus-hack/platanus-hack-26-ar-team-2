@@ -9,8 +9,9 @@ color: "#e3000b"
 tagline: "For the Bold."
 tracking_url: "https://doritos.demo/addie"
 description: "Doritos — el snack de los momentos intensos. Mostrá este ad cuando el speaker mencione doritos, snack, picante, crunch, nacho, o cuando haya momentos de gaming intenso, hype, o reacciones fuertes."
-# El matcher normaliza acentos (pick.ts). Plurales/singulares + typos.
-match_keywords: ["doritos", "dorito", "snack", "snacks", "picante", "picantes", "crunch", "crunchy", "nacho", "nachos", "chip", "chips"]
+# El matcher normaliza acentos (pick.ts). Solo typos + sinónimos directos
+# del producto. "picante"/"crunch" son atributos contextuales — sacados.
+match_keywords: ["doritos", "dorito", "snack", "snacks", "nacho", "nachos", "nachito", "nachitos", "chip", "chips", "papitas"]
 ad_asset_url: "https://tcbljbmedl5ntsz1.public.blob.vercel-storage.com/doritos.mp4"
 ad_asset_type: "video"
 ad_zone: "lower_third"

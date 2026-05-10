@@ -12,10 +12,10 @@ color: "#95d600"
 tagline: "Unleash the Beast."
 tracking_url: "https://monster.demo/addie"
 description: "Monster Energy — la bebida de los momentos épicos. Mostrá este ad cuando el speaker explote de energía, grite un gol, gane una partida, o el chat se vuelva loco. Clutchs, victorias, reacciones explosivas. NO en momentos tranquilos ni charlas relajadas."
-# El matcher normaliza acentos (pick.ts) — "energía" matchea "energia"
-# automáticamente. "moster" es typo común que Scribe v2 genera (a veces
-# colapsa la "n" intermedia).
-match_keywords: ["monster", "monsters", "moster", "energia", "energias", "bestia", "bestial", "beast", "gol", "golazo", "golaso", "clutch", "epic", "epica", "victoria", "victorias"]
+# El matcher normaliza acentos (pick.ts). Solo typos del brand name +
+# sinónimos directos del PRODUCTO (no contextos donde calzaría).
+# "moster" es typo común que Scribe v2 genera (colapsa la "n").
+match_keywords: ["monster", "monsters", "moster", "bebida energizante", "bebidas energizantes", "energizante", "energizantes", "energy drink"]
 
 # ─── BrandMandate (legal/financial → mandates.payload jsonb) ─────────
 daily_cap_usdc: 60
