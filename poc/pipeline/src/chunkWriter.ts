@@ -6,13 +6,58 @@ import type { ChatHandle } from './chat.js';
 import { summarizeAudio } from './audioSummary.js';
 import { log } from './log.js';
 
-// Default 15s — bajado desde 30s el 2026-05-09 para que el manager-worker
-// pueda decidir más rápido sobre placements (1 decisión / 15s en vez de / 30s).
-// Trade-off: duplica las calls a Gemini Flash-Lite del audio summary (4 RPM en
-// vez de 2). Suma a frame analysis (~12-15 RPM con FRAME_FPS=0.5) → estamos en
-// ~16-19 RPM, justo encima de 15 RPM del free tier de Google AI Studio. Si
-// chocás rate-limits, bajá FRAME_FPS a 0.33 o pagá credits.
+// Default 15s — bajado desde 30s el 2026-05-09. Es el techo del worst-case:
+// con instant-flush por keyword (abajo) la mayoría de los chunks salen mucho
+// más rápido. Trade-off vs RPM del provider: 15s + keyword flushes ocasionales
+// nos deja holgados con Anthropic tier 1 (50 RPM).
 const CHUNK_INTERVAL_MS = Number(process.env.CHUNK_INTERVAL_MS ?? 15_000);
+
+// Instant-flush keywords. Si una palabra de esta lista aparece en el partial
+// transcript (o en el audio committed de la ventana actual), gatillamos un
+// writeChunk() YA — sin esperar al próximo CHUNK_INTERVAL_MS. Idea: alinear
+// esto con los `audio_mentions` que les interesan a los mandates de los brands
+// (ej "quilmes,fernet,banana,messi"). Vacío → poll desactivado y vuelve al
+// comportamiento clásico cada 15s.
+//
+// Debounce per-keyword 30s (KEYWORD_DEBOUNCE_MS) — matchea el cooldown del
+// manager-tick. Una segunda mención dentro de 30s se ignora porque igual el
+// agent estaría en cooldown y no emitiría placement.
+const FLUSH_KEYWORDS = (process.env.INSTANT_FLUSH_KEYWORDS ?? '')
+  .split(',')
+  .map((s) => s.trim().toLowerCase())
+  .filter((s) => s.length > 0);
+const KEYWORD_POLL_MS = Number(process.env.KEYWORD_POLL_MS ?? 500);
+const KEYWORD_DEBOUNCE_MS = 30_000;
+
+// Webhook al manager-tick cuando un chunk acaba de insertarse. Push-based →
+// el agent corre 1-2s después del INSERT en lugar de esperar al próximo tick
+// del cron de Vercel (que tiene gaps de hasta 6s entre invocaciones). El cron
+// queda como safety net.
+//   MANAGER_WEBHOOK_URL    — base URL del deploy de apps/web (ej "https://web-x.vercel.app")
+//   MANAGER_WEBHOOK_SECRET — = CRON_SECRET en apps/web. Sin esto, el endpoint
+//                            queda público — el route lo permite si CRON_SECRET
+//                            no está seteado del lado server, así que tampoco
+//                            es estrictamente requerido para que funcione.
+function fireManagerWebhook(streamKey: string): void {
+  const base = process.env.MANAGER_WEBHOOK_URL;
+  if (!base) return;
+  const secret = process.env.MANAGER_WEBHOOK_SECRET;
+  const target = `${base.replace(/\/$/, '')}/api/internal/manager-tick?key=${encodeURIComponent(streamKey)}&single=1`;
+  // Fire-and-forget — no awaiteamos así no bloquea el próximo writeChunk si
+  // el manager está lento (ej una pickBrand tarda 2s con Claude Haiku). El
+  // .catch() previene unhandled rejection que mataría el pipeline.
+  fetch(target, {
+    method: 'GET',
+    headers: secret ? { Authorization: `Bearer ${secret}` } : {},
+  })
+    .then((r) => {
+      if (!r.ok) log.warn(`[chunk ${streamKey}] manager webhook → ${r.status}`);
+    })
+    .catch((e) => {
+      const msg = e instanceof Error ? e.message : String(e);
+      log.warn(`[chunk ${streamKey}] manager webhook error: ${msg}`);
+    });
+}
 
 export interface ChunkSources {
   streamKey: string;
@@ -83,10 +128,20 @@ export function startChunkWriter(sources: ChunkSources): ChunkWriterHandle {
   let lastFrameCount = 0;
   let lastViewers: number | null = null;
   let windowStartedAt = Date.now();
+  // Mutex — los dos triggers (setInterval CHUNK_INTERVAL_MS + keyword poll)
+  // pueden firear al mismo tiempo. Sin esto, dos writeChunk concurrentes
+  // duplicarían rows + romperían el cálculo de deltas (ticksAggregated etc).
+  let writing = false;
+  const lastKeywordFlushAt = new Map<string, number>();
 
-  const writeChunk = async (): Promise<void> => {
+  const writeChunk = async (trigger: 'interval' | 'keyword' | 'final' = 'interval'): Promise<void> => {
     if (!active && chunkCount > 0) return; // evita doble write en stop()
+    if (writing) return; // otro writeChunk en curso, este trigger se descarta
+    writing = true;
+    // Declarado fuera del try para que el webhook fire post-finally pueda leerlo.
+    let inserted = false;
 
+    try {
     chunkCount += 1;
     const now = Date.now();
     const tsStart = new Date(windowStartedAt).toISOString();
@@ -162,7 +217,7 @@ export function startChunkWriter(sources: ChunkSources): ChunkWriterHandle {
     };
 
     log.success(
-      `[chunk ${sources.streamKey}] #${chunkCount} · ${ticksAggregated} ticks · ${framesAggregated} frames · ` +
+      `[chunk ${sources.streamKey}] #${chunkCount} (${trigger}) · ${durationS}s · ${ticksAggregated} ticks · ${framesAggregated} frames · ` +
         `viewers=${viewers ?? '—'} (Δ${viewersDelta ?? '—'}) · ` +
         `chat=${chatMetrics ? `${chatMetrics.velocity_avg.toFixed(1)}msg/s ${chatMetrics.sentiment}` : '—'} · ` +
         `scene="${chunk.scene_type ?? '—'}" · ` +
@@ -173,24 +228,71 @@ export function startChunkWriter(sources: ChunkSources): ChunkWriterHandle {
       const { error } = await supabase.from('context_chunks').insert(chunk);
       if (error) {
         log.warn(`[chunk ${sources.streamKey}] insert failed: ${error.message}`);
+      } else {
+        inserted = true;
       }
     } else {
       // Log a consola para visibilidad sin DB.
       console.log(`[chunk ${sources.streamKey}] payload:`, JSON.stringify(chunk, null, 2));
     }
+    } finally {
+      // Garantizá liberar el mutex incluso si algo throweó arriba (network blip,
+      // bug en summarizeAudio etc) — sin esto el flag queda colgado y nunca más
+      // se escriben chunks: silent dead pipeline.
+      writing = false;
+    }
+
+    // Push: notificá al manager-tick que hay un chunk nuevo. Solo si el INSERT
+    // efectivo pasó (sino el agent miraría la DB y no encontraría nada nuevo).
+    // Fire-and-forget — el próximo writeChunk no espera a esta call.
+    if (inserted) fireManagerWebhook(sources.streamKey);
   };
 
-  const interval = setInterval(writeChunk, CHUNK_INTERVAL_MS);
+  // Keyword poll — corre cada KEYWORD_POLL_MS si la lista no está vacía. Mira
+  // el partial actual + el committed audio de la ventana. Si encuentra una
+  // keyword no flusheada en los últimos 30s, dispara writeChunk('keyword').
+  const checkKeywords = (): void => {
+    if (!FLUSH_KEYWORDS.length) return;
+    const t = sources.transcribe();
+    if (!t) return;
+    const partial = (t.getPartial() || '').toLowerCase();
+    const committed = (t.getAudio30s() || '').toLowerCase();
+    const combined = `${committed} ${partial}`;
+    if (!combined.trim()) return;
+
+    const ts = Date.now();
+    for (const kw of FLUSH_KEYWORDS) {
+      if (!combined.includes(kw)) continue;
+      const last = lastKeywordFlushAt.get(kw) ?? 0;
+      if (ts - last < KEYWORD_DEBOUNCE_MS) continue;
+      lastKeywordFlushAt.set(kw, ts);
+      log.info(`[chunk ${sources.streamKey}] 🚨 keyword "${kw}" detectada → flush instantáneo`);
+      void writeChunk('keyword');
+      return; // un flush por cycle alcanza
+    }
+  };
+
+  const interval = setInterval(() => void writeChunk('interval'), CHUNK_INTERVAL_MS);
+  const keywordPoll = FLUSH_KEYWORDS.length
+    ? setInterval(checkKeywords, KEYWORD_POLL_MS)
+    : null;
+
+  const webhookHint = process.env.MANAGER_WEBHOOK_URL ? ' · webhook=on' : '';
+  const keywordHint = FLUSH_KEYWORDS.length
+    ? ` · keywords=[${FLUSH_KEYWORDS.join(',')}] poll=${KEYWORD_POLL_MS}ms`
+    : '';
   log.info(
-    `[chunk ${sources.streamKey}] writer arrancado · cada ${CHUNK_INTERVAL_MS}ms${supabase ? ' → Supabase' : ' → console'}`,
+    `[chunk ${sources.streamKey}] writer arrancado · cada ${CHUNK_INTERVAL_MS}ms${supabase ? ' → Supabase' : ' → console'}${webhookHint}${keywordHint}`,
   );
 
   return {
     stop: async () => {
       clearInterval(interval);
-      // Último chunk parcial al cerrar (puede ser <30s pero captura los últimos datos).
+      if (keywordPoll) clearInterval(keywordPoll);
+      // Último chunk parcial al cerrar (puede ser <CHUNK_INTERVAL_MS pero
+      // captura los últimos datos antes del session end).
       try {
-        await writeChunk();
+        await writeChunk('final');
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         log.warn(`[chunk ${sources.streamKey}] final write failed: ${msg}`);
