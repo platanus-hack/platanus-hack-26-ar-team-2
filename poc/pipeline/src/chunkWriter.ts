@@ -84,9 +84,9 @@ export interface ChunkWriterHandle {
 }
 
 // Schema reducido — del row anterior con 22 columnas, solo persistimos las
-// 7 que el agent realmente lee. El resto de las columnas en context_chunks
-// quedan en NULL (todas nullable salvo ticks/frame_aggregated que tienen
-// default 0 a nivel DB).
+// que el agent realmente lee + viewers (importantes para Stage 1 fallback +
+// para mostrar contexto al pitch). El resto de las columnas en context_chunks
+// quedan en NULL (todas nullable salvo ticks/frame_aggregated con default 0).
 //
 // Lo que NO escribimos y por qué:
 //   - stream_id              → siempre null en POC (no creamos fila en streams)
@@ -94,9 +94,9 @@ export interface ChunkWriterHandle {
 //   - audio_topics           → frame/summary apagados → nadie lo populate
 //   - scene_type, energy_level, mood_tags, on_screen_text → frame off
 //   - chat_velocity_*, chat_recent_keywords, sentiment_avg → chat off
-//   - viewers, viewers_delta_30s, game_category, stream_title → twitch off
-//   - duration_s             → tiene default 30 en DB, no nos importa el valor real
-//   - ticks_aggregated, frame_analyses_aggregated → tienen default 0 en DB
+//   - game_category, stream_title → no se usan downstream
+//   - duration_s             → tiene default 30 en DB
+//   - ticks_aggregated, frame_analyses_aggregated → default 0 en DB
 interface ChunkRow {
   stream_key: string;
   ts_start: string;
@@ -104,6 +104,11 @@ interface ChunkRow {
   audio_summary: string | null;
   audio_mentions: string[] | null;
   audio_intent: 'discussion' | 'recommendation' | 'complaint' | 'question' | 'reaction' | 'silence' | null;
+  // Viewers — lee Stage 1 (intensity.ts) como fallback signal: si delta>100
+  // gatea aun sin keyword match. Útil para captar momentos virales (raid,
+  // bombazo de viewers) sin necesitar trigger word del streamer.
+  viewers: number | null;
+  viewers_delta_30s: number | null;
 }
 
 /**
@@ -128,6 +133,10 @@ export function startChunkWriter(sources: ChunkSources): ChunkWriterHandle {
   let active = true;
   let chunkCount = 0;
   let windowStartedAt = Date.now();
+  // Viewers tracking entre chunks → calcula delta vs el chunk anterior. Reset
+  // a null al perder señal de twitch (offline, 401, etc) → el delta del próximo
+  // chunk es null tampoco y Stage 1 lo skipea graciosamente.
+  let lastViewers: number | null = null;
   // Mutex — los dos triggers (setInterval CHUNK_INTERVAL_MS + keyword poll)
   // pueden firear al mismo tiempo. Sin esto, dos writeChunk concurrentes
   // duplicarían rows + romperían el cálculo de deltas (ticksAggregated etc).
@@ -154,6 +163,14 @@ export function startChunkWriter(sources: ChunkSources): ChunkWriterHandle {
     const transcribe = sources.transcribe();
     const audio_text = transcribe?.getAudio30s() || null;
 
+    // Twitch Helix metrics — solo si TWITCH_POLL_ENABLED. Sino getter devuelve
+    // null y los campos quedan en null (Stage 1 los skipea graciosamente).
+    const tw = sources.twitch()?.getLatest();
+    const viewers = tw?.is_live ? tw.viewers : null;
+    const viewersDelta =
+      lastViewers !== null && viewers !== null ? viewers - lastViewers : null;
+    if (viewers !== null) lastViewers = viewers;
+
     // Sin LLM summary. Cuando el flush lo dispara una keyword, populamos
     // audio_mentions + audio_intent directo (Stage 1 los lee para gate).
     // Stage 2 (pickBrand) lee audio_text crudo así que no pierde info.
@@ -168,6 +185,8 @@ export function startChunkWriter(sources: ChunkSources): ChunkWriterHandle {
       audio_summary,
       audio_mentions,
       audio_intent,
+      viewers,
+      viewers_delta_30s: viewersDelta,
     };
 
     const textPreview = audio_text
@@ -175,6 +194,7 @@ export function startChunkWriter(sources: ChunkSources): ChunkWriterHandle {
       : '—';
     log.success(
       `[chunk ${sources.streamKey}] #${chunkCount} (${trigger}) · ${durationS}s · ` +
+        `viewers=${viewers ?? '—'}${viewersDelta != null ? ` (Δ${viewersDelta >= 0 ? '+' : ''}${viewersDelta})` : ''} · ` +
         `audio=${matchedKeyword ? `keyword="${matchedKeyword}" intent=recommendation` : '—'} · ` +
         `text="${textPreview}"`,
     );

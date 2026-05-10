@@ -205,11 +205,11 @@ export function startSession(session: StreamSession, opts?: StartSessionOptions)
     log.info(`[frame ${key}] disabled (FRAME_ANALYSIS_ENABLED!=true) — pipeline 100% audio-driven`);
   }
 
-  // Twitch Helix poll (viewers, game_category, stream_title) está apagado por
-  // default desde 2026-05-09. El chunkWriter ya no lee estos campos — Stage 1
-  // gatea por audio_mentions del keyword match, no por viewers_delta_30s.
-  // Encender:  TWITCH_POLL_ENABLED=true
-  if (process.env.TWITCH_POLL_ENABLED === 'true') {
+  // Twitch Helix poll (viewers, game_category, stream_title) — DEFAULT ON.
+  // Viewers + viewers_delta_30s son señal valiosa para Stage 1 (gatea ads en
+  // momentos virales: raid, bombazo de viewers, etc) y para el pitch.
+  // Apagar explícitamente:  TWITCH_POLL_ENABLED=false
+  if (process.env.TWITCH_POLL_ENABLED !== 'false') {
     startTwitchPoll(key, twitchChannel)
       .then((handle) => {
         const active = sessions.get(key);
@@ -217,7 +217,7 @@ export function startSession(session: StreamSession, opts?: StartSessionOptions)
       })
       .catch((e) => log.warn(`[twitch ${key}] start failed: ${e instanceof Error ? e.message : e}`));
   } else {
-    log.info(`[twitch ${key}] disabled (TWITCH_POLL_ENABLED!=true)`);
+    log.info(`[twitch ${key}] disabled (TWITCH_POLL_ENABLED=false)`);
   }
 
   // Chat (tmi.js IRC anonymous read-only) está apagado por default desde
