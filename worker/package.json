@@ -10,8 +10,10 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
+    "@privy-io/server-auth": "^1.32.5",
     "js-yaml": "^4.1.0",
-    "pg": "^8.13.1"
+    "pg": "^8.13.1",
+    "viem": "^2.48.11"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",

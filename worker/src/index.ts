@@ -21,6 +21,7 @@ import { fileURLToPath } from "node:url";
 import { Client, Pool } from "pg";
 import { loadBrands } from "./loader.js";
 import { managerTick, configFromEnv } from "./tick.js";
+import { startSettlementLoop } from "./settlement.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
 const rawDbUrl = process.env.DATABASE_URL;
@@ -155,6 +156,10 @@ async function main() {
     broadcastSSE(creatorId, "render", json);
   });
 
+  // 4b. Settlement loop — pollea kind='brand' status='accepted' con
+  //     payment_status='pending_settlement' y firma el transfer USDC.
+  const stopSettlement = startSettlementLoop(pool);
+
   // 5. HTTP server
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url!, `http://localhost:${PORT}`);
@@ -266,6 +271,7 @@ async function main() {
   // Graceful shutdown
   const shutdown = async () => {
     console.log("[worker] shutting down...");
+    stopSettlement();
     server.close();
     await chunkListener.end().catch(() => {});
     await renderListener.end().catch(() => {});

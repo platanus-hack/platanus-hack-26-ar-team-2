@@ -1,18 +1,19 @@
 /**
  * POST /api/creators/[creator_id]/offers/[event_id]/accept
  *
- * Streamer aprueba un offer pending desde el /dock. El endpoint:
+ * Streamer aprueba un offer pending desde el /dock. Endpoint thin:
  *   1. Valida que el offer existe, pertenece a este creator, y status='pending'.
  *   2. Verifica que no expiró (TTL desde MANAGER_OFFER_TTL_S, default 8s).
  *   3. UPDATE status='accepted' + responded_at=now() en el offer.
- *   4. INSERT un NUEVO render_event kind='brand' con el mismo payload del
- *      offer — esa row es la que el overlay (/o/<creator_id>) consume vía SSE
- *      para mostrar el ad real.
- *   5. pg_notify del brand event para push instantáneo.
+ *   4. INSERT un NUEVO render_event kind='brand' con payment_status='pending_settlement'.
+ *      El SETTLEMENT del pago USDC lo hace el worker en Fly (worker/src/settlement.ts):
+ *      pollea estas rows, firma el transfer brand→creator, y UPDATEa el payload con
+ *      payment + payment_status='settled' (o 'failed' + payment_error si rompe).
+ *   5. pg_notify del brand event para push instantáneo al overlay.
  *
- * Los retornos son explícitos para que el dock pueda dar feedback sin
- * polling: 200 OK con la row del brand event creado, 410 Gone si expiró,
- * 404 si no existe, 409 Conflict si ya tiene otro status (no-op safe).
+ * Retorno: 200 OK con la row del brand event creado (sin payment — el worker
+ * lo agrega async). 410 Gone si expiró, 404 si no existe, 409 Conflict si ya
+ * tiene otro status (no-op safe).
  */
 
 import { NextResponse } from "next/server";
@@ -22,17 +23,6 @@ import type { RenderEventPayload } from "@/lib/types/render";
 export const runtime = "nodejs";
 
 const OFFER_TTL_MS = Number(process.env.MANAGER_OFFER_TTL_S ?? 8) * 1000;
-
-type PaymentResult = {
-  tx_hash: string;
-  mode: "live" | "mock";
-  payer_address: string;
-  payer_brand_id: string;
-  payee_address: string;
-  amount_usdc_cents: number;
-  amount_usdc: number;
-  signed_at: string;
-};
 
 type OfferRow = {
   id: string;
@@ -110,11 +100,10 @@ export async function POST(
       [event_id],
     );
 
-    // 4. Emit derived brand event. Reusamos el payload del offer (zone, bid,
-    //    duration, brand_label, etc) — el overlay lo lee igual que un render
-    //    normal vía SSE. Destructuramos `kind` y `status` del payload original
-    //    porque vamos a reescribirlos a 'brand' y 'accepted' respectivamente
-    //    (sin destructure, TS nos rompe por "specified more than once").
+    // 4. Emit derived brand event con payment_status='pending_settlement'.
+    //    El worker en Fly va a pollear esta row, firmar el USDC transfer
+    //    brand→creator, y UPDATEar el payload con el resultado. Mantenemos el
+    //    accept thin: cero await on-chain acá, response al dock en <100ms.
     const offerPayload = (offer.payload ?? {}) as Record<string, unknown>;
     const {
       kind: _ignoreKind,
@@ -124,103 +113,11 @@ export async function POST(
     void _ignoreKind;
     void _ignoreStatus;
 
-    // 4a. Emisión del pago — direct USDC transfer brand → streamer. Sin
-    //     escrow ni refunds (decisión de Franco 2026-05-10): el accept del
-    //     streamer es el commit. Si CHAIN_LIVE_TXS=false la firma se mockea
-    //     pero se persiste igual en payload para que /demo-display vea el
-    //     pago fluyendo durante rehearsal sin gastar USDC.
-    //
-    //     Va ANTES del INSERT brand para que el tx_hash quede en la primera
-    //     row del overlay (no necesitamos un UPDATE post-hoc). Si la firma
-    //     tira, devolvemos 502 y NO insertamos el brand event — el offer
-    //     queda en 'accepted' (UPDATE arriba) pero el pago falló: el streamer
-    //     ve el error en el dock y puede reintentar manualmente.
-    const brandSlug =
-      typeof offerPayload.brand_id === "string"
-        ? (offerPayload.brand_id as string)
-        : null;
-    const bidUsdcCents = offer.bid_usdc_cents ?? 0;
-
-    let payment: PaymentResult | null = null;
-    let paymentError: string | null = null;
-    if (brandSlug && bidUsdcCents > 0) {
-      try {
-        const { signTransferUsdc, getCreatorWallet } = await import(
-          "@/lib/chain/privy"
-        );
-        const { usdcAmount } = await import("@/lib/chain/escrow");
-
-        const creatorWallet = await getCreatorWallet(creator_id);
-        const amountUsdc = bidUsdcCents / 100;
-        const result = await signTransferUsdc({
-          brandSlug,
-          to: creatorWallet.address,
-          amount: usdcAmount(amountUsdc.toFixed(6)),
-        });
-        payment = {
-          tx_hash: result.txHash,
-          mode: result.mode,
-          payer_address: result.payer.address,
-          payer_brand_id: result.payer.slug,
-          payee_address: result.payee_address,
-          amount_usdc_cents: bidUsdcCents,
-          amount_usdc: amountUsdc,
-          signed_at: new Date().toISOString(),
-        };
-        console.log(
-          JSON.stringify({
-            tag: "accept:payment_emitted",
-            creator_id,
-            offer_id: offer.id,
-            brand_slug: brandSlug,
-            tx_hash: result.txHash,
-            mode: result.mode,
-            amount_usdc: amountUsdc,
-            payer_address: result.payer.address,
-            payee_address: result.payee_address,
-          }),
-        );
-      } catch (err) {
-        paymentError = err instanceof Error ? err.message : String(err);
-        console.error(
-          JSON.stringify({
-            tag: "accept:payment_error",
-            creator_id,
-            offer_id: offer.id,
-            brand_slug: brandSlug,
-            error: paymentError,
-          }),
-        );
-        return NextResponse.json(
-          {
-            ok: false,
-            error: `payment failed: ${paymentError}`,
-            offer_id: offer.id,
-            stage: "payment",
-          },
-          { status: 502 },
-        );
-      }
-    } else {
-      console.warn(
-        JSON.stringify({
-          tag: "accept:payment_skipped",
-          creator_id,
-          offer_id: offer.id,
-          reason: !brandSlug
-            ? "missing brand_id in offer payload"
-            : "bid_usdc_cents=0",
-          brand_slug: brandSlug,
-          bid_usdc_cents: bidUsdcCents,
-        }),
-      );
-    }
-
     const brandPayload = {
       ...inheritedPayload,
       kind: "brand" as const,
       from_offer_id: offer.id,
-      ...(payment ? { payment } : {}),
+      payment_status: "pending_settlement" as const,
     };
     const brandInsert = await client.query<{ id: string; created_at: string }>(
       `insert into render_events (creator_id, message, kind, status, bid_usdc_cents, payload)
@@ -231,10 +128,9 @@ export async function POST(
     const brandId = brandInsert.rows[0]!.id;
     const brandCreatedAt = brandInsert.rows[0]!.created_at;
 
-    // 5. pg_notify con payload completo — el SSE del overlay agarra esto
-    //    al toque. Mismo formato que /api/creators/[id]/render.
-    // Spreadeamos brandPayload PRIMERO (que ya incluye kind:'brand') y
-    // después overrideamos los campos server-set para que prevalezcan.
+    // 5. pg_notify con payload completo. El SSE del overlay agarra esto al
+    //    toque. payment va a aparecer ~2s después cuando el worker emita su
+    //    propio pg_notify post-settlement.
     const sseEvent: RenderEventPayload = {
       ...brandPayload,
       id: brandId,
@@ -253,7 +149,7 @@ export async function POST(
       brand_event_id: brandId,
       brand_created_at: brandCreatedAt,
       latency_ms: ageMs,
-      payment,
+      payment_status: "pending_settlement",
     });
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);

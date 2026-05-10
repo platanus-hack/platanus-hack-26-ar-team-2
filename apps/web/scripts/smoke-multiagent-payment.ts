@@ -160,15 +160,7 @@ async function main(): Promise<void> {
     ok: boolean;
     error?: string;
     brand_event_id?: string;
-    payment?: {
-      tx_hash: string;
-      mode: "live" | "mock";
-      payer_address: string;
-      payer_brand_id: string;
-      payee_address: string;
-      amount_usdc_cents: number;
-      amount_usdc: number;
-    };
+    payment_status?: string;
   };
 
   if (!body.ok) {
@@ -177,20 +169,81 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  console.log(`✓ accept ok          brand_event=${body.brand_event_id} ${acceptMs}ms`);
-
-  // 5. Verify payment payload.
-  if (!body.payment) {
-    console.error("✗ accept response missing `payment` — pago no se firmó.");
-    if (args.cleanup) await cleanupChunk(chunkId);
+  console.log(
+    `✓ accept ok          brand_event=${body.brand_event_id} ${acceptMs}ms (status=${body.payment_status})`,
+  );
+  if (body.payment_status !== "pending_settlement") {
+    console.error(
+      `✗ esperaba payment_status='pending_settlement' (settlement async via worker), got=${body.payment_status}`,
+    );
+    if (args.cleanup) await cleanupChunk(chunkId, body.brand_event_id);
     process.exit(1);
   }
-  const p = body.payment;
-  console.log(`✓ payment            mode=${p.mode}`);
-  console.log(`  tx_hash            ${p.tx_hash}`);
-  console.log(`  amount             ${p.amount_usdc} USDC (${p.amount_usdc_cents}¢)`);
-  console.log(`  ${p.payer_brand_id.padEnd(16)} ${p.payer_address}`);
-  console.log(`  → creator          ${p.payee_address}`);
+
+  // 5. Polleamos render_events.payload->'payment' hasta que el WORKER
+  //    settlement-eé. El loop del worker corre cada SETTLEMENT_INTERVAL_MS
+  //    (default 2s) — con 15s de timeout cubrimos hasta 7 ticks + RPC slop.
+  const settlementTimeoutMs = live ? 30_000 : 15_000;
+  const pollStart = Date.now();
+  type SettledPayment = {
+    tx_hash: string;
+    mode: "live" | "mock";
+    payer_address: string;
+    payer_brand_id: string;
+    payee_address: string;
+    amount_usdc_cents: number;
+    amount_usdc: number;
+    signed_at: string;
+  };
+  let payment: SettledPayment | null = null;
+  let lastStatus: string | null = null;
+  while (Date.now() - pollStart < settlementTimeoutMs) {
+    const r = await pool().query<{
+      payment: SettledPayment | null;
+      payment_status: string | null;
+      payment_error: string | null;
+    }>(
+      `select payload->'payment' as payment,
+              payload->>'payment_status' as payment_status,
+              payload->>'payment_error' as payment_error
+         from render_events
+        where id = $1`,
+      [body.brand_event_id],
+    );
+    const row = r.rows[0];
+    if (row?.payment_status && row.payment_status !== lastStatus) {
+      console.log(`  [${(Date.now() - pollStart) / 1000}s] payment_status=${row.payment_status}`);
+      lastStatus = row.payment_status;
+    }
+    if (row?.payment_status === "settled" && row.payment) {
+      payment = row.payment;
+      break;
+    }
+    if (row?.payment_status === "failed") {
+      console.error(`✗ settlement failed: ${row.payment_error ?? "unknown"}`);
+      if (args.cleanup) await cleanupChunk(chunkId, body.brand_event_id);
+      process.exit(1);
+    }
+    await sleep(500);
+  }
+  if (!payment) {
+    console.error(
+      `✗ settlement timeout (>${settlementTimeoutMs}ms) — el worker no firmó. ¿Está corriendo? Revisá logs del worker.`,
+    );
+    if (args.cleanup) await cleanupChunk(chunkId, body.brand_event_id);
+    process.exit(1);
+  }
+  const settleMs = Date.now() - pollStart;
+
+  console.log(`✓ settled (worker)   ${settleMs}ms`);
+  console.log(`✓ payment            mode=${payment.mode}`);
+  console.log(`  tx_hash            ${payment.tx_hash}`);
+  console.log(
+    `  amount             ${payment.amount_usdc} USDC (${payment.amount_usdc_cents}¢)`,
+  );
+  console.log(`  ${payment.payer_brand_id.padEnd(16)} ${payment.payer_address}`);
+  console.log(`  → creator          ${payment.payee_address}`);
+  const p = payment;
 
   if (live && p.mode !== "live") {
     console.error(`✗ CHAIN_LIVE_TXS=true pero mode=${p.mode} — el kill-switch no se prendió.`);
@@ -201,16 +254,6 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // 6. Persistencia: brand event row con payment en payload.
-  const dbCheck = await pool().query<{ payment: unknown }>(
-    `select payload->'payment' as payment from render_events where id = $1`,
-    [body.brand_event_id],
-  );
-  if (!dbCheck.rows[0] || dbCheck.rows[0].payment == null) {
-    console.error("✗ brand event row sin payload.payment — no persistió.");
-    if (args.cleanup) await cleanupChunk(chunkId, body.brand_event_id);
-    process.exit(1);
-  }
   console.log(`✓ db row             render_events.payload.payment ✓`);
 
   // 7. Verify on-chain delta si --live.
