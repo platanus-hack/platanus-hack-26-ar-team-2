@@ -1,5 +1,6 @@
 {
   "project-name": "Addie",
   "project-oneliner-spanish": "Agentes de IA negocian en tiempo real por segundos de publicidad en tu stream y pagan en USDC on-chain.",
-  "project-description-spanish": "Addie es una plataforma de ad-tech agentic para streamers en vivo. Brand-agents autónomos (Claude 4.6 Sonnet) compiten en lenguaje natural por momentos épicos del stream — un gol, un rage-quit, un clutch — y pagan al creator en USDC directamente en Base. El streamer-agent defiende el mandate del creator: floor price, zonas, brands aprobadas y keywords de brand-safety. Cuando se cierra el deal, el escrow se lockea on-chain, el ad pre-producido de la marca aparece como overlay en OBS y, al terminar, el pago se libera automáticamente. Todo verificable en basescan. Sin intermediarios, sin CPMs opacos, sin contratos a 30 días."
+  "project-description-spanish": "Addie es una plataforma de ad-tech agentic para streamers en vivo. Brand-agents autónomos (Claude 4.6 Sonnet) compiten en lenguaje natural por momentos épicos del stream — un gol, un rage-quit, un clutch — y pagan al creator en USDC directamente en Base. El streamer-agent defiende el mandate del creator: floor price, zonas, brands aprobadas y keywords de brand-safety. Cuando se cierra el deal, el escrow se lockea on-chain, el ad pre-producido de la marca aparece como overlay en OBS y, al terminar, el pago se libera automáticamente. Todo verificable en basescan. Sin intermediarios, sin CPMs opacos, sin contratos a 30 días.",
+  "deploy-url": "https://web-arvenz0210s-projects.vercel.app"
 }
