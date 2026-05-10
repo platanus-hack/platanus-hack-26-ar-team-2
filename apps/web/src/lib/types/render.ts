@@ -67,6 +67,25 @@ export interface RenderEventPayload {
   brand_id?: string;
   /** Vertical position of the ad: top, center, or bottom. */
   ad_position?: "top" | "center" | "bottom";
+
+  // ─── opcional · payment metadata (kind='brand' post-accept) ───────
+  /**
+   * Resultado de la transferencia USDC directa brand → creator firmada cuando
+   * el streamer aprobó el offer.
+   *   - mode='live' → tx broadcasteada en Base mainnet (CHAIN_LIVE_TXS=true).
+   *   - mode='mock' → CHAIN_LIVE_TXS=false; tx_hash sintético para que el
+   *                   demo / dock muestre el flow del pago sin gastar USDC.
+   */
+  payment?: {
+    tx_hash: string;
+    mode: "live" | "mock";
+    payer_address: string;
+    payer_brand_id: string;
+    payee_address: string;
+    amount_usdc_cents: number;
+    amount_usdc: number;
+    signed_at: string;
+  };
 }
 
 /**

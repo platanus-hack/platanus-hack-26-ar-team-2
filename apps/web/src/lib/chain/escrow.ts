@@ -144,6 +144,16 @@ export const USDC_ABI = [
   },
   {
     type: "function",
+    name: "transfer",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "to", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    type: "function",
     name: "allowance",
     stateMutability: "view",
     inputs: [
@@ -226,6 +236,25 @@ export async function approveUsdcForEscrow(
     abi: USDC_ABI,
     functionName: "approve",
     args: [ESCROW_ADDRESS, args.amount],
+  });
+}
+
+/**
+ * Brand transfers USDC directly to recipient (no escrow). Used por el accept
+ * endpoint del dock cuando el streamer aprueba el offer — sin refunds, sin
+ * lock, solo pago directo brand → streamer.
+ */
+export async function transferUsdc(
+  walletClient: AddieWalletClient,
+  args: { to: Address; amount: bigint },
+): Promise<Hash> {
+  return walletClient.writeContract({
+    account: walletClient.account,
+    chain: walletClient.chain,
+    address: USDC_ADDRESS_BASE_MAINNET,
+    abi: USDC_ABI,
+    functionName: "transfer",
+    args: [args.to, args.amount],
   });
 }
 

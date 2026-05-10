@@ -20,13 +20,15 @@
  * outside Privy; plug viem's `privateKeyToAccount` when that flow lands.
  */
 
+import { randomUUID } from "node:crypto";
+
 import { PrivyClient } from "@privy-io/server-auth";
 import { createViemAccount } from "@privy-io/server-auth/viem";
 import type { Address, Hash, Hex } from "viem";
 
 import { supabaseAdmin } from "../supabase";
-import { assertChainLiveTxsEnabled } from "./env.ts";
-import { approveUsdcForEscrow, lockEscrow } from "./escrow.ts";
+import { assertChainLiveTxsEnabled, isChainLiveTxsEnabled } from "./env.ts";
+import { approveUsdcForEscrow, lockEscrow, transferUsdc } from "./escrow.ts";
 import { getWalletClient, type AddieWalletClient } from "./viem.ts";
 
 // ====== Types ======
@@ -139,6 +141,114 @@ export async function signApproveUsdc(args: {
   const { wallet, client } = await getBrandWalletClient(args.brandSlug);
   const txHash = await approveUsdcForEscrow(client, { amount: args.amount });
   return { wallet, txHash };
+}
+
+// ====== Streamer/creator wallet lookup ======
+
+export type CreatorWalletRecord = {
+  account_id: string;
+  slug: string;
+  display_name: string;
+  address: Address;
+};
+
+/**
+ * Look up a creator's wallet by slug (matches accounts.metadata.slug or
+ * the legacy display_name). Solo necesita la dirección (no firma server-side
+ * con la wallet del creator, solo recibe pagos).
+ */
+export async function getCreatorWallet(
+  slug: string,
+): Promise<CreatorWalletRecord> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("accounts")
+    .select("id, display_name, wallet_address, metadata")
+    .eq("type", "creator")
+    .or(`metadata->>slug.eq.${slug},display_name.eq.${slug}`)
+    .maybeSingle();
+
+  if (error) throw new Error(`getCreatorWallet(${slug}): ${error.message}`);
+  if (!data) {
+    throw new Error(
+      `Creator wallet not seeded for slug "${slug}". Re-run seed-wallets (A-05).`,
+    );
+  }
+  if (!data.wallet_address) {
+    throw new Error(
+      `Creator "${slug}" missing wallet_address (account ${data.id}).`,
+    );
+  }
+
+  return {
+    account_id: data.id as string,
+    slug,
+    display_name: data.display_name as string,
+    address: data.wallet_address as Address,
+  };
+}
+
+// ====== Direct USDC transfer (brand → recipient) ======
+
+export type TransferOutcome = {
+  /** Tx hash real on-chain, o un mock hash si CHAIN_LIVE_TXS=false. */
+  txHash: Hash;
+  /** "live" si broadcasteó on-chain; "mock" si el kill-switch está apagado. */
+  mode: "live" | "mock";
+  /** Brand wallet desde donde se hubiera firmado. */
+  payer: BrandWalletRecord;
+  /** Destinatario. */
+  payee_address: Address;
+  /** Cantidad transferida (USDC base units, 6 decimals). */
+  amount: bigint;
+};
+
+function mockTxHash(): Hash {
+  // Synthetic tx hash que mantiene el shape `0x` + 64 hex. Los UUIDs sin
+  // guiones tienen 32 hex; concatenamos dos para llegar a 64.
+  const a = randomUUID().replace(/-/g, "");
+  const b = randomUUID().replace(/-/g, "");
+  return `0x${a}${b}` as Hash;
+}
+
+/**
+ * Transferencia directa USDC desde la wallet de la brand a una dirección
+ * destino (típicamente el creator). NO usa escrow — sin refunds, sin lock,
+ * pago atómico al accept del offer.
+ *
+ * Comportamiento del kill-switch (CHAIN_LIVE_TXS):
+ *   - true  → broadcast real on-chain Base mainnet, devuelve hash real.
+ *   - false → NO broadcastea, devuelve un mock hash (`mode: 'mock'`) para
+ *             que el flow downstream (UI / DB / SSE) vea el pago "fluyendo"
+ *             en demos sin gastar USDC real. Pensado para rehearsal.
+ */
+export async function signTransferUsdc(args: {
+  brandSlug: string;
+  to: Address;
+  amount: bigint;
+}): Promise<TransferOutcome> {
+  if (!isChainLiveTxsEnabled()) {
+    // Mock path: resolvemos la brand wallet igual (para que el payload
+    // refleje datos reales de payer) pero NO firmamos ni broadcasteamos.
+    const wallet = await getBrandWallet(args.brandSlug);
+    return {
+      txHash: mockTxHash(),
+      mode: "mock",
+      payer: wallet,
+      payee_address: args.to,
+      amount: args.amount,
+    };
+  }
+
+  const { wallet, client } = await getBrandWalletClient(args.brandSlug);
+  const txHash = await transferUsdc(client, { to: args.to, amount: args.amount });
+  return {
+    txHash,
+    mode: "live",
+    payer: wallet,
+    payee_address: args.to,
+    amount: args.amount,
+  };
 }
 
 /**
