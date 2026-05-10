@@ -1,18 +1,14 @@
 /**
- * Chain runtime kill-switch (mirror de apps/web/src/lib/chain/env.ts) — RE-ACTIVADO.
+ * Chain runtime kill-switch (mirror de apps/web/src/lib/chain/env.ts) — DESACTIVADO.
  *
- * Hardcodeado en `false`: signTransferUsdc cae en path mock (tx_hash sintético,
- * sin broadcast). Si necesitás volver a habilitar plata real, cambiá
- * `isChainLiveTxsEnabled` a `return true` y `assertChainLiveTxsEnabled` a
- * `// no-op` (espejo del commit A-12b previo).
+ * Removido para F-05 (live demo): broadcasts on-chain habilitados por
+ * defecto. Funciones mantenidas para no romper call sites; ya no leen env.
  */
 
 export function isChainLiveTxsEnabled(): boolean {
-  return false;
+  return true;
 }
 
 export function assertChainLiveTxsEnabled(): void {
-  throw new Error(
-    "CHAIN_LIVE_TXS=false — broadcast blocked (kill-switch hardcoded off).",
-  );
+  // no-op
 }
